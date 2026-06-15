@@ -1,0 +1,36 @@
+# Development Dockerfile (hot reload + Prisma)
+#
+# - Node 20 Alpine
+# - pnpm for package management
+# - POSIX sh only (no bash dependency)
+# - OpenSSL + postgresql-client for Prisma and wait-for-db
+
+FROM node:20-alpine
+
+RUN apk add --no-cache \
+  openssl \
+  libc6-compat \
+  postgresql-client \
+  curl
+
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+WORKDIR /app
+
+COPY package.json ./
+RUN pnpm install
+
+COPY . .
+
+# Ensure scripts are executable and normalized (LF enforced via .gitattributes)
+RUN chmod +x scripts/*.sh
+
+EXPOSE 3100
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV CHOKIDAR_USEPOLLING=1
+ENV WATCHPACK_POLLING=true
+
+# Invoke via sh explicitly (avoids shebang/CRLF issues from bind mounts on Windows)
+CMD ["/bin/sh", "/app/scripts/entrypoint-web.sh"]

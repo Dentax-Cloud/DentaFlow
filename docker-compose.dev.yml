@@ -1,0 +1,184 @@
+name: dentaflow-dev
+
+networks:
+  dentalflow_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  redis_data:
+  pnpm_store:
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dentaflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dentaflow
+      POSTGRES_USER: dentaflow
+      POSTGRES_PASSWORD: dentaflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentaflow -d dentaflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - dentalflow_net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dentaflow-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CHOKIDAR_USEPOLLING: "1"
+      WATCHPACK_POLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+      CLERK_WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER}
+      STRIPE_PRICE_PROFESSIONAL: ${STRIPE_PRICE_PROFESSIONAL}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PUSHER_APP_ID: ${PUSHER_APP_ID}
+      PUSHER_SECRET: ${PUSHER_SECRET}
+      NEXT_PUBLIC_PUSHER_KEY: ${NEXT_PUBLIC_PUSHER_KEY}
+      NEXT_PUBLIC_PUSHER_CLUSTER: ${NEXT_PUBLIC_PUSHER_CLUSTER}
+      UPLOADTHING_TOKEN: ${UPLOADTHING_TOKEN}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      TENANT_APPROVAL_REQUIRED: ${TENANT_APPROVAL_REQUIRED}
+      SUPER_ADMIN_CLERK_USER_IDS: ${SUPER_ADMIN_CLERK_USER_IDS}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-DentaFlow <no-reply@dentaflow.local>}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+    ports:
+      - "3100:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - pnpm_store:/root/.local/share/pnpm/store
+      - /app/.next
+    command: ["/bin/sh", "/app/scripts/entrypoint-web.sh"]
+    networks:
+      - dentalflow_net
+
+  studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dentaflow-studio
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["/bin/sh", "/app/scripts/entrypoint-studio.sh"]
+    ports:
+      - "5555:5555"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - pnpm_store:/root/.local/share/pnpm/store
+    networks:
+      - dentalflow_net
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: dentaflow-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - dentalflow_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: dentaflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dentalflow_net
+
+  # MinIO S3-compatible object storage (SERVER image — not minio/mc)
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    container_name: dentaflow-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - dentalflow_net
+
+  # One-shot bucket bootstrap using minio/mc client
+  minio_init:
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    container_name: dentaflow-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-dentaflow}
+    volumes:
+      - ./scripts/init-minio.sh:/init-minio.sh:ro
+    entrypoint: ["/bin/sh", "/init-minio.sh"]
+    networks:
+      - dentalflow_net
+    restart: "no"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dentaflow-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["/bin/sh", "/app/scripts/entrypoint-worker.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - pnpm_store:/root/.local/share/pnpm/store
+    networks:
+      - dentalflow_net

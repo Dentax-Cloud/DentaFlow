@@ -1,0 +1,5 @@
+# Force Unix LF for shell scripts (prevents BusyBox "set: -" errors on Windows)
+*.sh text eol=lf
+scripts/** text eol=lf
+Dockerfile* text eol=lf
+docker-compose*.yml text eol=lf

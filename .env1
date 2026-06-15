@@ -1,0 +1,58 @@
+# Docker dev environment variables
+#
+# This file is loaded by docker-compose.dev.yml via `env_file: .env.docker`
+# Do not commit secrets in real projects; keep this for local dev only.
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3100
+
+# Tenant lifecycle
+TENANT_APPROVAL_REQUIRED=false
+SUPER_ADMIN_CLERK_USER_IDS=superadmin_123
+NODE_ENV=development
+NEXT_TELEMETRY_DISABLED=1
+
+# Postgres (inside docker network)
+DATABASE_URL=postgresql://dentaflow:dentaflow@db:5432/dentaflow?schema=public
+
+# Clerk (set these from your Clerk dashboard)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_ZXBpYy1zdGluZ3JheS0wLmNsZXJrLmFjY291bnRzLmRldiQ
+CLERK_SECRET_KEY=sk_test_3ySTaFal9hEceQWg3jDZVtCeENWswq1l4m5TxkAXLf
+CLERK_WEBHOOK_SECRET=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/sign-up
+
+# OpenAI
+OPENAI_API_KEY=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
+
+# Stripe (test keys)
+STRIPE_SECRET_KEY=sk_test_51TeD2cC67mkvhdN1VFxyynJbW0zxb1TIQ727Mes0jH1NBK6PRNgyFiDLaXM9pvceFxd6p8nmS7vQzoazu4WEn0gH00WCrO1tvI
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_STARTER=
+STRIPE_PRICE_PROFESSIONAL=
+STRIPE_PRICE_ENTERPRISE=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_51TeD2cC67mkvhdN1bNzaIwQJQA1Dzhk5T4kBZZ41qnlNdrdxbflicCpDsL6v1rk0dhizztm4PZYm7nCwDOFtsMrm00wWtDjuZ2
+
+# Pusher (optional for realtime)
+PUSHER_APP_ID=2162856
+PUSHER_SECRET=9db795bc37a90c4ba16c
+NEXT_PUBLIC_PUSHER_KEY=ee6aa0e08e3476f2b6b7
+NEXT_PUBLIC_PUSHER_CLUSTER=ap2
+
+# MailHog (SMTP)
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+SMTP_FROM="DentaFlow <no-reply@dentaflow.local>"
+
+# MinIO (S3-compatible local storage)
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+MINIO_ENDPOINT=http://minio:9000
+MINIO_BUCKET=dentaflow
+MINIO_REGION=us-east-1
+
+# Redis (optional)
+REDIS_URL=redis://redis:6379
+
