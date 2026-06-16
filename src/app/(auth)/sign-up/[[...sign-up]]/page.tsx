@@ -2,8 +2,8 @@ export const runtime = "nodejs";
 
 import Link from "next/link";
 import { Suspense } from "react";
-import { auth } from "@clerk/nextjs/server";
-import { AuthenticateWithRedirectCallback } from "@clerk/nextjs";
+import { auth } from "@/lib/auth/stubs/server";
+import { AuthenticateWithRedirectCallback } from "@/lib/auth/stubs/client";
 import { Loader2 } from "lucide-react";
 import { SignUpShell } from "@/components/auth/sign-up-shell";
 import { ClinicRegistrationWizard } from "@/components/auth/clinic-registration-wizard";

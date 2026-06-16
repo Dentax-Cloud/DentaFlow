@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { redirect } from "next/navigation";
 import { resolvePortalPatients } from "@/lib/portal/resolve-portal-patient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { getTenantContext } from "@/lib/tenant/context";
 import { getPusherServer } from "@/lib/pusher";
 import { isPusherServerConfigured, tenantChannel } from "@/lib/pusher-env";

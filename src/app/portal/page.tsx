@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Calendar, Receipt, FileText } from "lucide-react";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { resolvePortalPatients } from "@/lib/portal/resolve-portal-patient";
 import { Badge } from "@/components/ui/badge";
 import { getPortalPreferredPatientId } from "@/lib/portal/portal-session";

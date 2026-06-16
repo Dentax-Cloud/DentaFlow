@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { NextResponse } from "next/server";
 import { resolvePortalPatients } from "@/lib/portal/resolve-portal-patient";
 import { setPortalPreferredPatientId } from "@/lib/portal/portal-session";

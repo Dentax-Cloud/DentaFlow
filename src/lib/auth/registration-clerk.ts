@@ -1,4 +1,4 @@
-import { clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@/lib/auth/stubs/server";
 
 /**
  * Clerk-only helpers safe for Edge middleware (no Prisma).

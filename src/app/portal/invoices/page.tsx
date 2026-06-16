@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { db } from "@/lib/db";
 import { resolvePortalPatientOrThrow } from "@/lib/portal/resolve-portal-patient";
 import { formatCurrency, formatDate } from "@/lib/utils";

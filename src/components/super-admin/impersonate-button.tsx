@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useOrganizationList } from "@clerk/nextjs";
+import { useOrganizationList } from "@/lib/auth/stubs/client";
 import { UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

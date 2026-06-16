@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton } from "@/lib/auth/stubs/client";
 import {
   LayoutDashboard,
   Building2,

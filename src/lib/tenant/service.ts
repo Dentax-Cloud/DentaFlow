@@ -1,4 +1,4 @@
-import { clerkClient, currentUser } from "@clerk/nextjs/server";
+import { clerkClient, currentUser } from "@/lib/auth/stubs/server";
 import { db } from "@/lib/db";
 import type { Tenant, User } from "@prisma/client";
 import { UserRole, TenantStatus, SubscriptionStatus } from "@prisma/client";

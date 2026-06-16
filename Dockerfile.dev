@@ -4,6 +4,9 @@
 # - pnpm for package management
 # - POSIX sh only (no bash dependency)
 # - OpenSSL + postgresql-client for Prisma and wait-for-db
+#
+# At runtime, docker-compose bind-mounts the repo to /app (live source sync).
+# node_modules and .next use named volumes — see docker-compose.dev.yml.
 
 FROM node:20-alpine
 
@@ -17,20 +20,18 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
 
-COPY package.json ./
-RUN pnpm install
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# Ensure scripts are executable and normalized (LF enforced via .gitattributes)
 RUN chmod +x scripts/*.sh
 
-EXPOSE 3100
+EXPOSE 3000
 
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV CHOKIDAR_USEPOLLING=1
 ENV WATCHPACK_POLLING=true
 
-# Invoke via sh explicitly (avoids shebang/CRLF issues from bind mounts on Windows)
 CMD ["/bin/sh", "/app/scripts/entrypoint-web.sh"]

@@ -1,5 +1,5 @@
 /** Node.js runtime only — consumed by layouts/pages that export `runtime = "nodejs"`. */
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import type { Tenant, User } from "@prisma/client";
 import { provisionTenantForSession, syncTrialExpiry } from "./service";
 import { getActiveTenantOrThrow } from "./isolation";

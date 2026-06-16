@@ -1,6 +1,6 @@
 # DentaFlow
 
-Production-ready, multi-tenant **Dental Clinic Management SaaS** built with Next.js 15, TypeScript, Prisma, Clerk, Stripe, and Vercel AI SDK.
+Production-ready, multi-tenant **Dental Clinic Management SaaS** built with Next.js 15, TypeScript, Prisma, Stripe, and Vercel AI SDK.
 
 ## Features
 
@@ -18,7 +18,7 @@ Production-ready, multi-tenant **Dental Clinic Management SaaS** built with Next
 |-------|------------|
 | Frontend | Next.js 15 App Router, Tailwind, shadcn-style UI, TanStack Query |
 | Backend | Server Actions, Route Handlers, Prisma + PostgreSQL |
-| Auth | Clerk (organizations = tenants) |
+| Auth | Auth provider migration in progress (stubs in `src/lib/auth/stubs/`) |
 | Billing | Stripe subscriptions |
 | AI | Vercel AI SDK + OpenAI (abstracted in `/src/lib/ai/`) |
 | Files | UploadThing |
@@ -48,13 +48,28 @@ Services started:
 
 ### Environment variables
 
-Copy and edit the Docker env file:
+Edit `.env.docker` in the project root (loaded automatically by `docker-compose.dev.yml` for `web`, `studio`, and `worker`).
 
-```bash
-cp .env.docker .env.docker
+Fill in Stripe, OpenAI, and Pusher values as needed. `DATABASE_URL` is preconfigured for the Docker network (`db:5432`).
+
+Optional NextAuth placeholders (warn-only until auth is wired):
+
+```env
+AUTH_SECRET=          # openssl rand -base64 32
+NEXTAUTH_URL=http://localhost:3100
 ```
 
-Then fill in Clerk/Stripe/OpenAI/Pusher values as needed. `DATABASE_URL` is already set for Docker.
+### Reset app dependencies or Next.js cache
+
+After `package.json` changes, entrypoints run `pnpm install` on start. If you still see stale packages or build artifacts, recreate **app-only** named volumes (does not touch Postgres/MinIO/Redis data):
+
+```bash
+docker compose -f docker-compose.dev.yml down
+docker volume rm dentaflow-dev_web_node_modules dentaflow-dev_web_next
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Do **not** use `docker compose down -v` unless you intend to wipe database volumes.
 
 ### Prisma in Docker
 
@@ -105,7 +120,6 @@ docker pull minio/mc:RELEASE.2025-01-17T23-25-50Z
 
 - Node.js 20+
 - PostgreSQL database
-- Clerk application with **Organizations** enabled
 - Stripe account (optional for billing)
 - OpenAI API key (optional for AI)
 - Pusher app (optional for real-time)
@@ -125,22 +139,9 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### 3. Clerk setup
+### 3. Auth
 
-1. Enable Organizations in Clerk Dashboard.
-2. Add custom roles: `org:dentist`, `org:hygienist`, `org:manager`, `org:accountant` (optional).
-3. Configure webhook → `POST /api/webhooks/clerk` with `organizationMembership.created` events.
-4. **Disable Web3 / MetaMask** (required for DentaFlow — we use email/password + Google only):
-   - Open [Clerk Dashboard](https://dashboard.clerk.com) → select your DentaFlow application.
-   - In the left sidebar, go to **Configure** → **Web3** (or **User & Authentication** → **Web3**, depending on dashboard version).
-   - You should see a list of providers: **MetaMask**, **Base**, **Coinbase Wallet**, **OKX Wallet**, **Solana**.
-   - Toggle **off** every Web3 provider (especially **MetaMask**). Each row shows a provider name and an enable/disable switch on the right.
-   - Click **Save** if prompted.
-   - **Expected result:** On `/sign-in`, the Clerk `<SignIn />` card shows only email/password and Google — no “Sign in with MetaMask” or wallet buttons. The browser console should not show “Failed to connect to MetaMask”.
-   - **If the error persists:** Hard-refresh `/sign-in`, disable or lock the MetaMask browser extension temporarily, and confirm you edited the same Clerk app whose keys are in `.env`.
-5. Set redirect URLs in `.env` (see `.env.example`):
-   - `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard`
-   - `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard` (registration wizard provisions the tenant and skips `/onboarding`; legacy org-only sign-ups still use `/select-org` → `/onboarding`).
+Authentication provider integration is in progress. Clerk has been removed; compile-safe stubs live in `src/lib/auth/stubs/`. Wire up your chosen provider (e.g. NextAuth) there.
 
 ### 4. Stripe setup
 
@@ -177,7 +178,7 @@ src/
 
 ## Multi-tenant security
 
-- `getTenantContext()` resolves tenant from Clerk `orgId`.
+- `getTenantContext()` resolves tenant from session `orgId` (auth provider TBD).
 - All queries include `tenantId` via `tenantWhere()`.
 - Server actions use `createAction()` with permission checks.
 - Cross-tenant access is rejected at the application layer.

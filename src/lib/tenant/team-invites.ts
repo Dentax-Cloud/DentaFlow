@@ -77,7 +77,7 @@ export async function readRoleFromClerkInvitation(
   organizationId: string,
   email: string,
 ): Promise<UserRole | null> {
-  const { clerkClient } = await import("@clerk/nextjs/server");
+  const { clerkClient } = await import("@/lib/auth/stubs/server");
   const { readDentaflowRoleFromMetadata } = await import("./clerk-roles");
   const client = await clerkClient();
   const normalized = normalizeEmail(email);

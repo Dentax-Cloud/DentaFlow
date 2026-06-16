@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@/lib/auth/stubs/server";
 import { NextResponse } from "next/server";
 import { userHasOrganizationMembership } from "@/lib/auth/registration-clerk";
 import { isSuperAdmin } from "@/lib/tenant/config";

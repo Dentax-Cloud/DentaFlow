@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { isSuperAdmin } from "@/lib/tenant/config";
 import { getUploadthingToken } from "@/lib/uploadthing-env";
 import { getUTApi } from "@/lib/uploadthing-server";

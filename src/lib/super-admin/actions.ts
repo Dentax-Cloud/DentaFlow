@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@/lib/auth/stubs/server";
 import { revalidatePath } from "next/cache";
 import { TenantStatus } from "@prisma/client";
 import { db } from "@/lib/db";

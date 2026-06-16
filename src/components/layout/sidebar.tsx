@@ -12,7 +12,7 @@ import { Shield, LogOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { SignOutButton } from "@clerk/nextjs";
+import { SignOutButton } from "@/lib/auth/stubs/client";
 
 import type { UserRole } from "@prisma/client";
 

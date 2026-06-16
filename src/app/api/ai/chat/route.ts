@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { streamText } from "ai";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { getTenantContext } from "@/lib/tenant/context";
 import { chatWithStaffOrPatient } from "@/lib/ai";
 import { canUseFeature } from "@/lib/features/plans";

@@ -1,6 +1,6 @@
 "use client";
 
-import { SignOutButton, useUser } from "@clerk/nextjs";
+import { SignOutButton, useUser } from "@/lib/auth/stubs/client";
 import { Button } from "@/components/ui/button";
 
 type Props = {

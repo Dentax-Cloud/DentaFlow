@@ -1,6 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { z } from "zod";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { db } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";

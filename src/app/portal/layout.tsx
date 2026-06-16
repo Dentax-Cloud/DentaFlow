@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { redirect } from "next/navigation";
 import { resolvePortalPatients } from "@/lib/portal/resolve-portal-patient";
 import { getPortalPreferredPatientId } from "@/lib/portal/portal-session";

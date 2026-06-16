@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/stubs/server";
 import { isSuperAdmin } from "@/lib/tenant/config";
 
 type SuperAdminGuardProps = {
