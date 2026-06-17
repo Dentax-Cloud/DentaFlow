@@ -208,6 +208,14 @@ AI never gives medical advice; outputs require dentist review for clinical use.
 | `npm test` | Run Vitest unit tests |
 | `pnpm worker` | Run background worker (dev) |
 
+## VPS deployment (production)
+
+1. Copy env: `cp .env.production.example .env.production` and fill values on the server.
+2. Build and run: `docker compose -f docker-compose.prod.yml up --build -d`
+3. Health check: `curl http://localhost:3000/api/health`
+
+The local git repository is the single source of truth — avoid manual edits on the VPS.
+
 ## License
 
 Private — All rights reserved.

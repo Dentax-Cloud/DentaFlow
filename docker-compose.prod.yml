@@ -1,0 +1,49 @@
+name: dentaflow
+
+networks:
+  dentalflow_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dentaflow-db
+    restart: always
+    environment:
+      POSTGRES_DB: dentaflow
+      POSTGRES_USER: dentaflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dentaflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentaflow -d dentaflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - dentalflow_net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dentaflow-web
+    restart: always
+    env_file:
+      - .env.production
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dentalflow_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
