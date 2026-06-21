@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth/stubs/server";
+import { requireSuperAdmin as requireSuperAdminAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Tenant } from "@prisma/client";
 import { TenantStatus } from "@prisma/client";
@@ -41,11 +41,7 @@ export function getActiveTenantOrThrow(tenant: Tenant, clerkUserId: string): Ten
 }
 
 export async function requireSuperAdmin() {
-  const { userId } = await auth();
-  if (!userId || !isSuperAdmin(userId)) {
-    throw new Error("FORBIDDEN");
-  }
-  return userId;
+  return requireSuperAdminAuth();
 }
 
 export function resolveInitialTenantStatus(): TenantStatus {

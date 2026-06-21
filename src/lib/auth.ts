@@ -1,0 +1,148 @@
+import type { NextAuthOptions } from "next-auth";
+import { getServerSession } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { compare } from "bcryptjs";
+import { TenantRole } from "@prisma/client";
+import { db } from "@/lib/db";
+
+function parseSuperAdminIds(): string[] {
+  return (process.env.SUPER_ADMIN_AUTH_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+export function resolveIsSuperAdmin(
+  userId: string,
+  membershipRole: TenantRole | null,
+): boolean {
+  if (membershipRole === TenantRole.SUPERADMIN) return true;
+  return parseSuperAdminIds().includes(userId);
+}
+
+async function loadMembershipContext(userId: string, preferredTenantId?: string | null) {
+  const memberships = await db.tenant_memberships.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const active =
+    memberships.find((m) => m.tenantId === preferredTenantId) ?? memberships[0] ?? null;
+
+  return {
+    activeTenantId: active?.tenantId ?? null,
+    role: active?.role ?? null,
+    isSuperAdmin: resolveIsSuperAdmin(userId, active?.role ?? null),
+  };
+}
+
+const providers: NextAuthOptions["providers"] = [
+  CredentialsProvider({
+    name: "credentials",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) return null;
+
+      const user = await db.auth_users.findUnique({
+        where: { email: credentials.email.toLowerCase().trim() },
+      });
+      if (!user?.passwordHash) return null;
+
+      const valid = await compare(credentials.password, user.passwordHash);
+      if (!valid) return null;
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+      };
+    },
+  }),
+];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
+  );
+}
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(db),
+  session: { strategy: "jwt" },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+    newUser: "/onboarding",
+  },
+  providers,
+  callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      const userId = (user?.id ?? token.userId) as string;
+      if (!userId) return token;
+
+      token.userId = userId;
+
+      const preferredTenantId =
+        trigger === "update" && session?.activeTenantId !== undefined
+          ? (session.activeTenantId as string | null)
+          : (token.activeTenantId as string | null);
+
+      const ctx = await loadMembershipContext(userId, preferredTenantId);
+      token.activeTenantId = ctx.activeTenantId;
+      token.role = ctx.role;
+      token.isSuperAdmin = ctx.isSuperAdmin;
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.userId;
+        session.user.activeTenantId = token.activeTenantId;
+        session.user.role = token.role;
+        session.user.isSuperAdmin = token.isSuperAdmin;
+      }
+      return session;
+    },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
+    },
+  },
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+};
+
+export async function getServerAuthSession() {
+  return getServerSession(authOptions);
+}
+
+export async function requireAuth() {
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) {
+    throw new Error("UNAUTHENTICATED");
+  }
+  return session;
+}
+
+export async function requireSuperAdmin(): Promise<string> {
+  const session = await requireAuth();
+  if (!session.user.isSuperAdmin) {
+    throw new Error("FORBIDDEN");
+  }
+  return session.user.id;
+}
+
+export async function getCurrentUser() {
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) return null;
+  return db.auth_users.findUnique({ where: { id: session.user.id } });
+}

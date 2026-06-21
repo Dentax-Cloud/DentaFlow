@@ -6,7 +6,7 @@ import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
-import { generatePatientNumber } from "@/lib/utils";
+import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { AuditAction } from "@prisma/client";
 import { createPatientSchema, updatePatientSchema } from "./schemas";
 
@@ -14,6 +14,11 @@ export const createPatient = createAction({
   schema: createPatientSchema,
   permission: () => requirePermission(PERMISSIONS.patients.write),
   handler: async (input, ctx) => {
+    await requireActiveSubscription();
+    if (!ctx.isSuperAdmin) {
+      await checkPatientLimit(ctx.tenant.id);
+    }
+
     const count = await db.patient.count({ where: { tenantId: ctx.tenant.id } });
     const patient = await db.patient.create({
       data: {

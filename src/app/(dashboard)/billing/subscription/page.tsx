@@ -9,7 +9,7 @@ import { getPublicSubscriptionPlans } from "@/lib/subscription/plans-display";
 export default async function SubscriptionManagementPage() {
   const ctx = await requireRouteAccess("admin", "read");
   const [usage, billingHistory, plans] = await Promise.all([
-    getSubscriptionUsage(ctx.tenant.id, ctx.tenant.subscriptionPlan),
+    getSubscriptionUsage(ctx.tenant.id),
     getStripeBillingHistory(ctx.tenant.stripeCustomerId),
     getPublicSubscriptionPlans(),
   ]);

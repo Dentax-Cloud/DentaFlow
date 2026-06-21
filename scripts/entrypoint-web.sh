@@ -1,55 +1,78 @@
 #!/bin/sh
+# scripts/entrypoint-web.sh
+#
+# FIX B8: Stripe, OpenAI, Pusher are OPTIONAL in development.
+# Only DATABASE_URL, NEXTAUTH_URL, and an auth secret are truly required.
+# Services fail gracefully if keys are missing rather than killing startup.
+
 set -e
 cd /app
 
-# Validate required environment (loaded from .env.docker via docker-compose env_file)
-echo "Validating environment variables..."
-missing=""
-for var in \
-  DATABASE_URL \
-  STRIPE_SECRET_KEY \
-  OPENAI_API_KEY \
-  PUSHER_APP_ID \
-  PUSHER_SECRET \
-  NEXT_PUBLIC_PUSHER_KEY \
-  NEXT_PUBLIC_PUSHER_CLUSTER
-do
-  eval "val=\$$var"
+echo "🦷 DentaFlow web service starting..."
+
+# ── Required in all environments ────────────────────────────
+MISSING=""
+for VAR in DATABASE_URL NEXTAUTH_URL; do
+  eval "val=\$$VAR"
   if [ -z "$val" ]; then
-    missing="$missing $var"
-    echo "  MISSING: $var"
-  else
-    echo "  OK: $var"
+    MISSING="$MISSING $VAR"
   fi
 done
 
-if [ -z "$UPLOADTHING_TOKEN" ]; then
-  echo "  WARN: UPLOADTHING_TOKEN not set — file uploads disabled"
-else
-  echo "  OK: UPLOADTHING_TOKEN"
+if [ -z "$AUTH_SECRET" ] && [ -z "$NEXTAUTH_SECRET" ]; then
+  MISSING="$MISSING AUTH_SECRET(or NEXTAUTH_SECRET)"
 fi
 
-if [ -z "$AUTH_SECRET" ]; then
-  echo "  WARN: AUTH_SECRET not set — required when NextAuth is wired up"
-else
-  echo "  OK: AUTH_SECRET"
-fi
-
-if [ -z "$NEXTAUTH_URL" ]; then
-  echo "  WARN: NEXTAUTH_URL not set — defaults may be wrong behind Docker port mapping"
-else
-  echo "  OK: NEXTAUTH_URL"
-fi
-
-if [ -n "$missing" ]; then
-  echo "ERROR: Required env vars are empty.$missing" >&2
-  echo "Ensure .env.docker exists and docker-compose uses env_file: [.env.docker]" >&2
+if [ -n "$MISSING" ]; then
+  echo "❌ ERROR: Required environment variables are not set:$MISSING" >&2
+  echo "" >&2
+  echo "Set them in .env.docker or the docker-compose environment section." >&2
   exit 1
+fi
+
+# ── Optional services — warn but don't block ─────────────────
+warn_missing() {
+  echo "⚠️  $1 not set — $2 will be disabled"
+}
+
+if [ -z "$STRIPE_SECRET_KEY" ]; then
+  warn_missing "STRIPE_SECRET_KEY" "Billing/subscriptions"
+fi
+
+if [ -z "$STRIPE_WEBHOOK_SECRET" ]; then
+  warn_missing "STRIPE_WEBHOOK_SECRET" "Stripe webhook verification"
+fi
+
+if [ -z "$OPENAI_API_KEY" ]; then
+  warn_missing "OPENAI_API_KEY" "AI assistant"
+fi
+
+if [ -z "$PUSHER_APP_ID" ] || [ -z "$PUSHER_SECRET" ]; then
+  warn_missing "PUSHER_APP_ID / PUSHER_SECRET" "Real-time notifications"
+fi
+
+if [ -z "$NEXT_PUBLIC_PUSHER_KEY" ] || [ -z "$NEXT_PUBLIC_PUSHER_CLUSTER" ]; then
+  warn_missing "NEXT_PUBLIC_PUSHER_KEY / NEXT_PUBLIC_PUSHER_CLUSTER" "Pusher client"
+fi
+
+if [ -z "$UPLOADTHING_TOKEN" ]; then
+  warn_missing "UPLOADTHING_TOKEN" "File uploads"
 fi
 
 echo "Installing dependencies (sync with bind-mounted package.json)..."
 pnpm install
 
+echo "⏳ Waiting for database..."
 sh ./scripts/wait-for-db.sh
+
+echo "📦 Running Prisma migrations..."
+pnpm prisma migrate deploy
+
+echo "⚙️  Generating Prisma client..."
 pnpm prisma generate
+
+echo "🚀 Starting Next.js..."
+if [ $# -gt 0 ]; then
+  exec "$@"
+fi
 exec pnpm dev

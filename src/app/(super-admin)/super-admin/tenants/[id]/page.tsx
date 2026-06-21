@@ -33,7 +33,7 @@ export default async function TenantDetailPage({ params }: Props) {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Active Users", value: tenant._count.users },
+          { label: "Active Users", value: tenant._count.staffMembers },
           { label: "Patients", value: tenant._count.patients },
           { label: "Appointments", value: tenant._count.appointments },
           {
@@ -102,7 +102,7 @@ export default async function TenantDetailPage({ params }: Props) {
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {tenant.users.map((u) => (
+              {tenant.staffMembers.map((u) => (
                 <li key={u.id} className="flex items-center justify-between text-sm">
                   <span>
                     {u.firstName} {u.lastName}
@@ -110,7 +110,7 @@ export default async function TenantDetailPage({ params }: Props) {
                   <Badge variant="outline">{u.role}</Badge>
                 </li>
               ))}
-              {tenant.users.length === 0 && (
+              {tenant.staffMembers.length === 0 && (
                 <p className="text-sm text-muted-foreground">No users yet.</p>
               )}
             </ul>

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generatePatientNumber } from "@/lib/utils";
 import { splitList } from "@/lib/import/csv";
@@ -29,6 +30,8 @@ export const importPatients = createAction({
   schema: importPatientsSchema,
   permission: () => requirePermission(PERMISSIONS.patients.write),
   handler: async (input, ctx) => {
+    await requireActiveSubscription();
+
     const result = emptyResult();
     let sequence = await db.patient.count({ where: { tenantId: ctx.tenant.id } });
 
@@ -76,6 +79,9 @@ export const importPatients = createAction({
           await db.patient.update({ where: { id: existing.id }, data });
           result.updated++;
         } else {
+          if (!ctx.isSuperAdmin) {
+            await checkPatientLimit(ctx.tenant.id);
+          }
           await db.patient.create({
             data: {
               tenantId: ctx.tenant.id,

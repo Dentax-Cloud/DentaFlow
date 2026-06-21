@@ -1,6 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { z } from "zod";
-import { auth } from "@/lib/auth/stubs/server";
+import { getServerAuthSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
@@ -8,17 +8,44 @@ import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 
 const f = createUploadthing();
 
+function assertUploadthingConfigured() {
+  if (!isUploadthingConfigured()) {
+    throw new Error("UploadThing is not configured");
+  }
+}
+
+async function requireAuthenticatedSession() {
+  assertUploadthingConfigured();
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  return session;
+}
+
+/** Tenant-scoped upload metadata (H4 / B10). */
+async function requireTenantUpload() {
+  const session = await requireAuthenticatedSession();
+  const ctx = await getTenantContext();
+  if (!ctx) throw new Error("Unauthorized");
+
+  const staffMemberId = ctx.staffMember?.id ?? null;
+
+  return {
+    authUserId: session.user.id,
+    tenantId: ctx.tenantId,
+    staffMemberId,
+    userId: staffMemberId ?? session.user.id,
+  };
+}
+
 export const ourFileRouter = {
+  /** Pre-registration clinic logo — no session required during sign-up wizard. */
   registrationLogo: f({
     image: { maxFileSize: "2MB", maxFileCount: 1 },
   })
     .middleware(async () => {
-      if (!isUploadthingConfigured()) {
-        throw new Error("UploadThing is not configured");
-      }
-      const { userId } = await auth();
-      if (!userId) throw new Error("Unauthorized");
-      return { userId };
+      assertUploadthingConfigured();
+      const session = await getServerAuthSession();
+      return { userId: session?.user?.id ?? "registration" };
     })
     .onUploadComplete(async ({ file }) => ({
       url: file.ufsUrl ?? file.url,
@@ -27,22 +54,7 @@ export const ourFileRouter = {
   clinicLogo: f({
     image: { maxFileSize: "2MB", maxFileCount: 1 },
   })
-    .middleware(async () => {
-      if (!isUploadthingConfigured()) {
-        throw new Error("UploadThing is not configured");
-      }
-
-      const { userId } = await auth();
-      if (!userId) throw new Error("Unauthorized");
-
-      const ctx = await getTenantContext();
-      if (!ctx) throw new Error("Unauthorized");
-
-      return {
-        tenantId: ctx.tenant.id,
-        userId: ctx.user.id,
-      };
-    })
+    .middleware(async () => requireTenantUpload())
     .onUploadComplete(async ({ metadata, file }) => {
       const url = file.ufsUrl ?? file.url;
       await db.tenant.update({
@@ -58,24 +70,15 @@ export const ourFileRouter = {
   })
     .input(z.object({ patientId: z.string().min(1) }))
     .middleware(async ({ input }) => {
-      if (!isUploadthingConfigured()) {
-        throw new Error("UploadThing is not configured");
-      }
-
-      const { userId } = await auth();
-      if (!userId) throw new Error("Unauthorized");
-
-      const ctx = await getTenantContext();
-      if (!ctx) throw new Error("Unauthorized");
+      const metadata = await requireTenantUpload();
 
       const patient = await db.patient.findFirst({
-        where: tenantWhere(ctx.tenant.id, { id: input.patientId, deletedAt: null }),
+        where: tenantWhere(metadata.tenantId, { id: input.patientId, deletedAt: null }),
       });
       if (!patient) throw new Error("Patient not found");
 
       return {
-        tenantId: ctx.tenant.id,
-        userId: ctx.user.id,
+        ...metadata,
         patientId: patient.id,
       };
     })

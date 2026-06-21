@@ -22,12 +22,9 @@ export default async function AdminPage() {
 
   const [users, auditLogs, settings, pendingInvitations] = await Promise.all([
 
-    db.user.findMany({
-
+    db.staffMember.findMany({
       where: { tenantId: ctx.tenant.id, deletedAt: null },
-
       orderBy: { createdAt: "desc" },
-
     }),
 
     db.auditLog.findMany({
@@ -44,7 +41,7 @@ export default async function AdminPage() {
 
     db.settings.findUnique({ where: { tenantId: ctx.tenant.id } }),
 
-    canManageTeam ? getPendingInvitations(ctx.orgId) : Promise.resolve([]),
+    canManageTeam ? getPendingInvitations(ctx.tenant.id) : Promise.resolve([]),
 
   ]);
 

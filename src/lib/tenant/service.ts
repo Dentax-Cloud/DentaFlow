@@ -1,7 +1,12 @@
 import { clerkClient, currentUser } from "@/lib/auth/stubs/server";
 import { db } from "@/lib/db";
-import type { Tenant, User } from "@prisma/client";
-import { UserRole, TenantStatus, SubscriptionStatus } from "@prisma/client";
+import type { StaffMember, Tenant } from "@prisma/client";
+import {
+  UserRole,
+  TenantStatus,
+  SubscriptionStatus,
+  TenantRole,
+} from "@prisma/client";
 import { slugify } from "@/lib/utils/slugify";
 import { tenantConfig } from "./config";
 import { resolveInitialTenantStatus } from "./isolation";
@@ -18,7 +23,166 @@ import {
 } from "./team-invites";
 import { sendProvisionWelcomeEmail } from "@/lib/mail";
 
-export type ProvisionResult = { tenant: Tenant; user: User; created: boolean };
+export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: boolean };
+
+/** Upsert tenant membership for NextAuth user (C6). */
+export async function createTenantMembership(input: {
+  tenantId: string;
+  authUserId: string;
+  role?: TenantRole;
+}) {
+  const role = input.role ?? TenantRole.ADMIN;
+  return db.tenantMembership.upsert({
+    where: {
+      userId_tenantId: { userId: input.authUserId, tenantId: input.tenantId },
+    },
+    update: { role },
+    create: {
+      userId: input.authUserId,
+      tenantId: input.tenantId,
+      role,
+    },
+  });
+}
+
+/** Upsert staff row for a tenant (C5 — replaces db.user staff writes). */
+export async function upsertStaffMember(input: {
+  tenantId: string;
+  clerkUserId: string;
+  authUserId?: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+  role: UserRole;
+}) {
+  return db.staffMember.upsert({
+    where: {
+      tenantId_clerkUserId: { tenantId: input.tenantId, clerkUserId: input.clerkUserId },
+    },
+    create: {
+      tenantId: input.tenantId,
+      clerkUserId: input.clerkUserId,
+      authUserId: input.authUserId,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      avatarUrl: input.avatarUrl,
+      role: input.role,
+      isActive: true,
+    },
+    update: {
+      authUserId: input.authUserId ?? undefined,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      avatarUrl: input.avatarUrl,
+      role: input.role,
+    },
+  });
+}
+
+async function linkAuthUserToTenant(params: {
+  tenantId: string;
+  email: string;
+  staffMemberId: string;
+  membershipRole?: TenantRole;
+}) {
+  const authUser = await db.user.findUnique({
+    where: { email: params.email.toLowerCase().trim() },
+  });
+  if (!authUser) return null;
+
+  await createTenantMembership({
+    tenantId: params.tenantId,
+    authUserId: authUser.id,
+    role: params.membershipRole ?? TenantRole.ADMIN,
+  });
+
+  await db.staffMember.update({
+    where: { id: params.staffMemberId },
+    data: { authUserId: authUser.id },
+  });
+
+  return authUser;
+}
+
+/**
+ * NextAuth-native provisioning: tenant + membership + staff + default branch.
+ */
+export async function provisionTenant(input: {
+  ownerAuthUserId: string;
+  ownerName: string;
+  ownerEmail: string;
+  clinicName: string;
+  clinicEmail: string;
+  phone?: string;
+  address?: string;
+  timezone?: string;
+}) {
+  const initialStatus = resolveInitialTenantStatus();
+  const now = new Date();
+  const trialDefaults = getDefaultTrialSubscriptionFields(now);
+  const nameParts = input.ownerName.trim().split(/\s+/);
+  const firstName = nameParts[0];
+  const lastName = nameParts.slice(1).join(" ") || undefined;
+
+  const tenant = await syncTrialExpiry(
+    await db.tenant.create({
+      data: {
+        name: input.clinicName,
+        slug: slugify(input.clinicName, input.ownerAuthUserId),
+        email: input.clinicEmail,
+        phone: input.phone ?? null,
+        address: input.address ?? null,
+        timezone: input.timezone ?? tenantConfig.defaultTimezone,
+        locale: tenantConfig.defaultLocale,
+        status: initialStatus,
+        onboardingCompleted: false,
+        featureFlags: {},
+        metadata: {},
+        ...trialDefaults,
+        settings: { create: {} },
+      },
+    }),
+  );
+
+  const [membership, staffMember] = await Promise.all([
+    createTenantMembership({
+      tenantId: tenant.id,
+      authUserId: input.ownerAuthUserId,
+      role: TenantRole.ADMIN,
+    }),
+    db.staffMember.create({
+      data: {
+        tenantId: tenant.id,
+        authUserId: input.ownerAuthUserId,
+        email: input.ownerEmail,
+        firstName,
+        lastName,
+        role: UserRole.ADMIN,
+        isActive: true,
+      },
+    }),
+  ]);
+
+  const branch = await db.branch.create({
+    data: {
+      tenantId: tenant.id,
+      name: "Main Office",
+      address: input.address ?? null,
+      phone: input.phone ?? null,
+      isPrimary: true,
+    },
+  });
+
+  if (tenant.status === TenantStatus.ACTIVE) {
+    await ensureStripeCustomer(tenant);
+    await ensureMinioBucket(tenant);
+  }
+
+  return { tenant, membership, staffMember, branch };
+}
 
 /**
  * Idempotent tenant + default admin user provisioning (fixes P2002 races).
@@ -75,28 +239,24 @@ export async function provisionTenantForSession(
     pendingInviteRole: invitationRole,
   });
 
-  const user = await db.user.upsert({
-    where: {
-      tenantId_clerkUserId: { tenantId: tenant.id, clerkUserId },
-    },
-    create: {
-      tenantId: tenant.id,
-      clerkUserId,
-      email,
-      firstName: clerkUser?.firstName ?? undefined,
-      lastName: clerkUser?.lastName ?? undefined,
-      avatarUrl: clerkUser?.imageUrl,
-      role: created ? UserRole.ADMIN : role,
-      isActive: true,
-    },
-    update: {
-      email,
-      firstName: clerkUser?.firstName ?? undefined,
-      lastName: clerkUser?.lastName ?? undefined,
-      avatarUrl: clerkUser?.imageUrl,
-      role,
-    },
+  const user = await upsertStaffMember({
+    tenantId: tenant.id,
+    clerkUserId,
+    email,
+    firstName: clerkUser?.firstName ?? undefined,
+    lastName: clerkUser?.lastName ?? undefined,
+    avatarUrl: clerkUser?.imageUrl,
+    role: created ? UserRole.ADMIN : role,
   });
+
+  if (email) {
+    await linkAuthUserToTenant({
+      tenantId: tenant.id,
+      email,
+      staffMemberId: user.id,
+      membershipRole: TenantRole.ADMIN,
+    });
+  }
 
   if (invitationRole && email) {
     await clearPendingTeamInvite(tenant.id, email);
@@ -157,6 +317,10 @@ export async function provisionTenantFromWebhook(params: {
   clerkOrgId: string;
   orgName?: string;
   clerkUserId?: string;
+  authUserId?: string;
+  ownerEmail?: string;
+  ownerFirstName?: string;
+  ownerLastName?: string;
 }) {
   const orgName = params.orgName ?? "New Clinic";
   const initialStatus = resolveInitialTenantStatus();
@@ -185,22 +349,30 @@ export async function provisionTenantFromWebhook(params: {
   );
 
   if (params.clerkUserId) {
-    await db.user.upsert({
-      where: {
-        tenantId_clerkUserId: {
-          tenantId: tenant.id,
-          clerkUserId: params.clerkUserId,
-        },
-      },
-      create: {
-        tenantId: tenant.id,
-        clerkUserId: params.clerkUserId,
-        email: "",
-        role: UserRole.ADMIN,
-        isActive: true,
-      },
-      update: { tenantId: tenant.id },
+    const staffMember = await upsertStaffMember({
+      tenantId: tenant.id,
+      clerkUserId: params.clerkUserId,
+      authUserId: params.authUserId,
+      email: params.ownerEmail ?? "",
+      firstName: params.ownerFirstName,
+      lastName: params.ownerLastName,
+      role: UserRole.ADMIN,
     });
+
+    if (params.authUserId) {
+      await createTenantMembership({
+        tenantId: tenant.id,
+        authUserId: params.authUserId,
+        role: TenantRole.ADMIN,
+      });
+    } else if (params.ownerEmail) {
+      await linkAuthUserToTenant({
+        tenantId: tenant.id,
+        email: params.ownerEmail,
+        staffMemberId: staffMember.id,
+        membershipRole: TenantRole.ADMIN,
+      });
+    }
 
     if (tenantConfig.approvalRequired && tenant.status === TenantStatus.PENDING) {
       await createApprovalRequest(tenant.id, params.clerkUserId);

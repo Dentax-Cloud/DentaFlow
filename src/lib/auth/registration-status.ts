@@ -1,8 +1,6 @@
 import type { Tenant } from "@prisma/client";
-import { userHasOrganizationMembership } from "@/lib/auth/registration-clerk";
 import { getTenantFromClerkOrg } from "@/lib/tenant/isolation";
-import { getTenantContext } from "@/lib/tenant/context";
-import { getRoleHomePath } from "@/lib/rbac/routes";
+import { resolvePostLoginUrl } from "@/lib/auth/post-login-redirect";
 
 export type ClinicRegistrationStatus = {
   isComplete: boolean;
@@ -31,27 +29,15 @@ export async function getClinicRegistrationStatus(
 }
 
 /**
- * Post-auth redirects for sign-in and protected app routes (Node.js server).
- * Do not use on the public landing page — `/` must stay accessible to everyone.
+ * Post-auth redirect target (NextAuth-first).
  */
 export async function resolvePostAuthDestination(
   userId: string,
-  orgId: string | null | undefined,
+  _orgId?: string | null | undefined,
 ): Promise<string> {
-  if (!orgId) {
-    const hasMembership = await userHasOrganizationMembership(userId);
-    return hasMembership ? "/select-org" : "/sign-up";
-  }
-
-  const { isComplete } = await getClinicRegistrationStatus(orgId);
-  if (!isComplete) return "/sign-up";
-
-  const ctx = await getTenantContext();
-  if (ctx?.user.role) {
-    return getRoleHomePath(ctx.user.role);
-  }
-
-  return "/dashboard";
+  if (!userId) return "/login";
+  return resolvePostLoginUrl(userId);
 }
 
+/** @deprecated Clerk-era helper — prefer resolvePostLoginUrl */
 export { userHasOrganizationMembership } from "@/lib/auth/registration-clerk";

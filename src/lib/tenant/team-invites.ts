@@ -73,6 +73,17 @@ export async function clearPendingTeamInvite(
   });
 }
 
+export async function listPendingTeamInvitesFromMetadata(
+  tenantId: string,
+): Promise<Array<{ email: string; role: UserRole }>> {
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return [];
+
+  const metadata = parseTenantMetadata(tenant.metadata);
+  const pending = metadata.pendingTeamInvites ?? {};
+  return Object.entries(pending).map(([email, role]) => ({ email, role }));
+}
+
 export async function readRoleFromClerkInvitation(
   organizationId: string,
   email: string,

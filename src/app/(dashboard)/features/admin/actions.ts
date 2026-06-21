@@ -38,6 +38,7 @@ import {
 
 } from "@/lib/tenant/team-invites";
 
+import { checkStaffLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { tenantWhere } from "@/lib/tenant/scoped";
 
 import {
@@ -88,9 +89,14 @@ export const inviteTeamMember = createAction({
 
   handler: async (input, ctx) => {
 
+    await requireActiveSubscription();
+    if (!ctx.isSuperAdmin) {
+      await checkStaffLimit(ctx.tenant.id);
+    }
+
     const normalizedEmail = input.email.toLowerCase();
 
-    const existing = await db.user.findFirst({
+    const existing = await db.staffMember.findFirst({
 
       where: {
 
@@ -112,35 +118,22 @@ export const inviteTeamMember = createAction({
 
 
 
-    const client = await clerkClient();
-
     const clerkRole = mapUserRoleToClerkMembershipRole(input.role);
 
-
-
-    try {
-
-      await client.organizations.createOrganizationInvitation({
-
-        organizationId: ctx.orgId,
-
-        emailAddress: normalizedEmail,
-
-        role: clerkRole,
-
-        inviterUserId: ctx.clerkUserId,
-
-        publicMetadata: dentaflowRoleMetadata(input.role),
-
-      });
-
-    } catch (error) {
-
-      throw new Error(clerkErrorMessage(error));
-
+    if (ctx.tenant.clerkOrgId && ctx.clerkUserId) {
+      const client = await clerkClient();
+      try {
+        await client.organizations.createOrganizationInvitation({
+          organizationId: ctx.tenant.clerkOrgId,
+          emailAddress: normalizedEmail,
+          role: clerkRole,
+          inviterUserId: ctx.clerkUserId,
+          publicMetadata: dentaflowRoleMetadata(input.role),
+        });
+      } catch (error) {
+        throw new Error(clerkErrorMessage(error));
+      }
     }
-
-
 
     await storePendingTeamInvite(ctx.tenant.id, normalizedEmail, input.role);
 
@@ -180,7 +173,7 @@ export const updateTeamMemberRole = createAction({
 
   handler: async (input, ctx) => {
 
-    const member = await db.user.findFirst({
+    const member = await db.staffMember.findFirst({
 
       where: tenantWhere(ctx.tenant.id, { id: input.userId, deletedAt: null }),
 
@@ -206,7 +199,7 @@ export const updateTeamMemberRole = createAction({
 
 
 
-    const updated = await db.user.update({
+    const updated = await db.staffMember.update({
 
       where: { id: member.id },
 
@@ -217,37 +210,23 @@ export const updateTeamMemberRole = createAction({
 
 
     const client = await clerkClient();
-
     const clerkRole = mapUserRoleToClerkMembershipRole(input.role);
 
-
-
-    try {
-
-      await client.organizations.updateOrganizationMembership({
-
-        organizationId: ctx.orgId,
-
-        userId: member.clerkUserId,
-
-        role: clerkRole,
-
-      });
-
-      await client.organizations.updateOrganizationMembershipMetadata({
-
-        organizationId: ctx.orgId,
-
-        userId: member.clerkUserId,
-
-        publicMetadata: dentaflowRoleMetadata(input.role),
-
-      });
-
-    } catch (error) {
-
-      throw new Error(clerkErrorMessage(error));
-
+    if (ctx.tenant.clerkOrgId && member.clerkUserId) {
+      try {
+        await client.organizations.updateOrganizationMembership({
+          organizationId: ctx.tenant.clerkOrgId,
+          userId: member.clerkUserId,
+          role: clerkRole,
+        });
+        await client.organizations.updateOrganizationMembershipMetadata({
+          organizationId: ctx.tenant.clerkOrgId,
+          userId: member.clerkUserId,
+          publicMetadata: dentaflowRoleMetadata(input.role),
+        });
+      } catch (error) {
+        throw new Error(clerkErrorMessage(error));
+      }
     }
 
 
@@ -288,7 +267,7 @@ export const removeTeamMember = createAction({
 
   handler: async (input, ctx) => {
 
-    const member = await db.user.findFirst({
+    const member = await db.staffMember.findFirst({
 
       where: tenantWhere(ctx.tenant.id, { id: input.userId, deletedAt: null }),
 
@@ -316,20 +295,15 @@ export const removeTeamMember = createAction({
 
     const client = await clerkClient();
 
-    try {
-
-      await client.organizations.deleteOrganizationMembership({
-
-        organizationId: ctx.orgId,
-
-        userId: member.clerkUserId,
-
-      });
-
-    } catch {
-
-      // User may already be removed from Clerk org
-
+    if (ctx.tenant.clerkOrgId && member.clerkUserId) {
+      try {
+        await client.organizations.deleteOrganizationMembership({
+          organizationId: ctx.tenant.clerkOrgId,
+          userId: member.clerkUserId,
+        });
+      } catch {
+        // User may already be removed from Clerk org
+      }
     }
 
 
@@ -338,7 +312,7 @@ export const removeTeamMember = createAction({
 
 
 
-    await db.user.update({
+    await db.staffMember.update({
 
       where: { id: member.id },
 
@@ -470,36 +444,41 @@ export type PendingInvitation = {
 
 
 
-export async function getPendingInvitations(orgId: string): Promise<PendingInvitation[]> {
+export async function getPendingInvitations(tenantId: string): Promise<PendingInvitation[]> {
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return [];
 
-  const client = await clerkClient();
+  if (tenant.clerkOrgId) {
+    try {
+      const client = await clerkClient();
+      const list = await client.organizations.getOrganizationInvitationList({
+        organizationId: tenant.clerkOrgId,
+        status: ["pending"],
+      });
 
-  const list = await client.organizations.getOrganizationInvitationList({
+      if (list.data.length > 0) {
+        return list.data.map((inv) => ({
+          id: inv.id,
+          email: inv.emailAddress,
+          role:
+            readDentaflowRoleFromMetadata(inv.publicMetadata) ??
+            mapClerkRoleToUserRole(inv.role),
+          createdAt: new Date(inv.createdAt),
+        }));
+      }
+    } catch {
+      // Fall back to tenant metadata invites
+    }
+  }
 
-    organizationId: orgId,
-
-    status: ["pending"],
-
-  });
-
-
-
-  return list.data.map((inv) => ({
-
-    id: inv.id,
-
-    email: inv.emailAddress,
-
-    role:
-
-      readDentaflowRoleFromMetadata(inv.publicMetadata) ??
-
-      mapClerkRoleToUserRole(inv.role),
-
-    createdAt: new Date(inv.createdAt),
-
+  const { listPendingTeamInvitesFromMetadata } = await import("@/lib/tenant/team-invites");
+  const pending = await listPendingTeamInvitesFromMetadata(tenantId);
+  return pending.map(({ email, role }) => ({
+    id: `pending:${email}`,
+    email,
+    role,
+    createdAt: tenant.updatedAt,
   }));
-
 }
 
 

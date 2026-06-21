@@ -1,106 +1,48 @@
 export const runtime = "nodejs";
 
-
-
 import { redirect } from "next/navigation";
-
-import { auth } from "@/lib/auth/stubs/server";
-
+import { getServerAuthSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
-
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-
-import { resolvePostAuthDestination } from "@/lib/auth/registration-status";
-
 import { getTenantContext } from "@/lib/tenant/context";
 
-
-
 export default async function DashboardLayout({
-
   children,
-
 }: {
-
   children: React.ReactNode;
-
 }) {
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
 
-  const { userId, orgId } = await auth();
-
-  if (!userId) redirect("/sign-in");
-
-
-
-  if (!orgId) {
-
-    redirect(await resolvePostAuthDestination(userId, orgId));
-
-  }
-
-
+  if (session.user.isSuperAdmin) redirect("/superadmin/tenants");
 
   const ctx = await getTenantContext();
+  if (!ctx) redirect("/select-org");
 
-  if (ctx && !ctx.isSuperAdmin) {
+  if (!ctx.tenant.onboardingCompleted) redirect("/sign-up");
+  if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
+  if (ctx.tenant.status !== "ACTIVE") redirect("/pending-approval");
 
-    if (!ctx.tenant.onboardingCompleted) {
-
-      redirect("/sign-up");
-
-    }
-
-    if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
-
-    if (ctx.tenant.status !== "ACTIVE") redirect("/pending-approval");
-
-  }
-
-
-
-  const userRole = ctx?.user.role ?? UserRole.RECEPTIONIST;
-
-
+  const userRole = ctx.staffMember?.role ?? UserRole.RECEPTIONIST;
 
   return (
-
     <DashboardShell
-
       userRole={userRole}
-
       user={
-
-        ctx?.user
-
+        ctx.staffMember
           ? {
-
-              firstName: ctx.user.firstName,
-
-              lastName: ctx.user.lastName,
-
-              email: ctx.user.email,
-
-              avatarUrl: ctx.user.avatarUrl,
-
+              firstName: ctx.staffMember.firstName,
+              lastName: ctx.staffMember.lastName,
+              email: ctx.staffMember.email,
+              avatarUrl: ctx.staffMember.avatarUrl,
             }
-
           : undefined
-
       }
-
-      isSuperAdmin={ctx?.isSuperAdmin ?? false}
-
-      tenantName={ctx?.tenant.name}
-
-      tenantLogoUrl={ctx?.tenant.logoUrl}
-
+      isSuperAdmin={ctx.isSuperAdmin}
+      tenantName={ctx.tenant.name}
+      tenantLogoUrl={ctx.tenant.logoUrl}
     >
-
       {children}
-
     </DashboardShell>
-
   );
-
 }
-

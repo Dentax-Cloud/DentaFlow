@@ -23,6 +23,7 @@ import {
 type Usage = {
   patients: { used: number; limit: number };
   users: { used: number; limit: number };
+  branches: { used: number; limit: number };
   appointments: number;
   invoices: number;
 };

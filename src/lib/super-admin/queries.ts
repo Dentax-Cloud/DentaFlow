@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { SubscriptionStatus, TenantStatus } from "@prisma/client";
+import { TenantStatus, type SubscriptionStatus } from "@prisma/client";
 import type { SubscriptionPlan } from "@/lib/subscription/plan-types";
 
 export type TenantListItem = {
@@ -93,7 +93,7 @@ export async function listTenantsWithStats(): Promise<TenantListItem[]> {
   const stats = await Promise.all(
     tenants.map(async (tenant) => {
       const [activeUsers, totalPatients, totalAppointments, revenue] = await Promise.all([
-        db.user.count({ where: { tenantId: tenant.id, deletedAt: null, isActive: true } }),
+        db.staffMember.count({ where: { tenantId: tenant.id, deletedAt: null, isActive: true } }),
         db.patient.count({ where: { tenantId: tenant.id, deletedAt: null } }),
         db.appointment.count({ where: { tenantId: tenant.id, deletedAt: null } }),
         db.payment.aggregate({
@@ -120,13 +120,13 @@ export async function getTenantDetail(tenantId: string) {
     where: { id: tenantId },
     include: {
       settings: true,
-      users: { where: { deletedAt: null }, take: 20, orderBy: { createdAt: "desc" } },
+      staffMembers: { where: { deletedAt: null }, take: 20, orderBy: { createdAt: "desc" } },
       _count: {
         select: {
           patients: true,
           appointments: true,
           invoices: true,
-          users: true,
+          staffMembers: true,
         },
       },
     },
@@ -143,4 +143,28 @@ export async function getTenantDetail(tenantId: string) {
     ...tenant,
     totalRevenue: Number(revenue._sum.amount ?? 0),
   };
+}
+
+export async function updateTenantPlan(tenantId: string, plan: SubscriptionPlan) {
+  return db.tenant.update({
+    where: { id: tenantId },
+    data: { subscriptionPlan: plan },
+  });
+}
+
+export async function updateTenantStatus(
+  tenantId: string,
+  status: SubscriptionStatus,
+) {
+  return db.tenant.update({
+    where: { id: tenantId },
+    data: { subscriptionStatus: status },
+  });
+}
+
+export async function setTenantActive(tenantId: string, active: boolean) {
+  return db.tenant.update({
+    where: { id: tenantId },
+    data: { status: active ? TenantStatus.ACTIVE : TenantStatus.SUSPENDED },
+  });
 }

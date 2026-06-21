@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { auth } from "@/lib/auth/stubs/server";
+import { getServerAuthSession } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant/context";
 import { getPusherServer } from "@/lib/pusher";
 import { isPusherServerConfigured, tenantChannel } from "@/lib/pusher-env";
@@ -13,8 +13,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -55,10 +55,12 @@ export async function POST(req: Request) {
   }
 
   const authResponse = pusher.authorizeChannel(socketId, channelName, {
-    user_id: ctx.user.id,
+    user_id: ctx.staffMember?.id ?? session.user.id,
     user_info: {
       tenantId: ctx.tenant.id,
-      clerkUserId: ctx.clerkUserId,
+      authUserId: session.user.id,
+      email: session.user.email,
+      name: session.user.name ?? session.user.email,
     },
   });
 

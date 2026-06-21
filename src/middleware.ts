@@ -1,59 +1,55 @@
-import { clerkMiddleware, createRouteMatcher } from "@/lib/auth/stubs/server";
+/**
+ * NextAuth JWT middleware — single sign-in entry at /login (B9).
+ * Superadmin: /superadmin/* and legacy /super-admin/* (H7).
+ */
+import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
-import { userHasOrganizationMembership } from "@/lib/auth/registration-clerk";
-import { isSuperAdmin } from "@/lib/tenant/config";
+import { isPublicPath } from "@/lib/auth/middleware-helpers";
 
-/** Marketing and auth entry points — never redirect away in middleware. */
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/features(.*)",
-  "/api/health",
-  "/api/webhooks(.*)",
-  "/portal(.*)",
-]);
+export default withAuth(
+  function middleware(req) {
+    const { pathname } = req.nextUrl;
+    const token = req.nextauth.token;
 
-const isSuperAdminRoute = createRouteMatcher(["/super-admin(.*)"]);
-const isSelectOrgRoute = createRouteMatcher(["/select-org(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isPublicRoute(req)) {
-    return NextResponse.next();
-  }
-
-  const { userId, orgId } = await auth();
-  if (!userId) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
-  }
-
-  if (isSuperAdminRoute(req)) {
-    if (!isSuperAdmin(userId)) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+    // Legacy sign-in URL → /login
+    if (pathname.startsWith("/sign-in")) {
+      const loginUrl = new URL("/login", req.url);
+      const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") ?? "/dashboard";
+      loginUrl.searchParams.set("callbackUrl", callbackUrl);
+      return NextResponse.redirect(loginUrl);
     }
-    return NextResponse.next();
-  }
 
-  if (isSelectOrgRoute(req)) {
-    if (!orgId) {
-      const hasMembership = await userHasOrganizationMembership(userId);
-      if (!hasMembership) {
-        return NextResponse.redirect(new URL("/sign-up", req.url));
+    const isSuperAdminRoute =
+      pathname.startsWith("/superadmin") || pathname.startsWith("/super-admin");
+
+    if (isSuperAdminRoute) {
+      if (!token?.isSuperAdmin) {
+        if (token?.activeTenantId) {
+          return NextResponse.redirect(new URL("/dashboard", req.url));
+        }
+        return NextResponse.redirect(new URL("/login?error=Unauthorized", req.url));
+      }
+
+      if (pathname.startsWith("/super-admin")) {
+        const newPath = pathname.replace("/super-admin", "/superadmin");
+        return NextResponse.redirect(new URL(newPath, req.url));
       }
     }
+
     return NextResponse.next();
-  }
-
-  if (!orgId) {
-    const hasMembership = await userHasOrganizationMembership(userId);
-    return NextResponse.redirect(
-      new URL(hasMembership ? "/select-org" : "/sign-up", req.url),
-    );
-  }
-
-  // Registration completion is enforced in the dashboard layout (Node.js + Prisma).
-  return NextResponse.next();
-});
+  },
+  {
+    callbacks: {
+      authorized: ({ token, req }) => {
+        if (isPublicPath(req.nextUrl.pathname)) return true;
+        return !!token;
+      },
+    },
+    pages: {
+      signIn: "/login",
+    },
+  },
+);
 
 export const config = {
   matcher: [

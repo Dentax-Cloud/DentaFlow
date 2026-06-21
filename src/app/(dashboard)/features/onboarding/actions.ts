@@ -6,7 +6,7 @@ import { createAction } from "@/lib/actions/safe-action";
 import { SubscriptionPlan, subscriptionPlanSchema } from "@/lib/subscription/plan-types";
 import { sendWelcomeEmail } from "@/lib/mail";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
-import { formatAdminName } from "@/lib/auth/registration-schema";
+import { checkBranchLimit, requireActiveSubscription } from "@/lib/features/gate";
 
 const onboardingSchema = z.object({
   clinicName: z.string().min(1),
@@ -55,9 +55,13 @@ export const completeOnboarding = createAction({
       where: { tenantId: ctx.tenant.id, isPrimary: true },
     });
 
-    const branch =
-      existingBranch ??
-      (await db.branch.create({
+    let branch = existingBranch;
+    if (!branch) {
+      await requireActiveSubscription();
+      if (!ctx.isSuperAdmin) {
+        await checkBranchLimit(ctx.tenant.id);
+      }
+      branch = await db.branch.create({
         data: {
           tenantId: ctx.tenant.id,
           name: "Main Office",
@@ -65,7 +69,8 @@ export const completeOnboarding = createAction({
           phone: input.phone,
           isPrimary: true,
         },
-      }));
+      });
+    }
 
     const existingChairs = await db.chair.count({ where: { tenantId: ctx.tenant.id } });
     if (existingChairs === 0) {

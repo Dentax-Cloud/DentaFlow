@@ -10,8 +10,8 @@ import {
   stripe,
   PLAN_PRICE_IDS,
 } from "@/lib/stripe";
+import { getUsageSummary } from "@/lib/features/gate";
 import { getTenantMetrics } from "@/lib/tenant/metrics";
-import { getUsageLimits } from "@/lib/subscription/plans-display";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -93,13 +93,25 @@ export async function getStripeBillingHistory(
   }));
 }
 
-export async function getSubscriptionUsage(tenantId: string, plan: SubscriptionPlan) {
-  const metrics = await getTenantMetrics(tenantId);
-  const limits = getUsageLimits(plan);
+export async function getSubscriptionUsage(tenantId: string) {
+  const [summary, metrics] = await Promise.all([
+    getUsageSummary(tenantId),
+    getTenantMetrics(tenantId),
+  ]);
 
   return {
-    patients: { used: metrics.patients, limit: limits.maxPatients },
-    users: { used: metrics.users, limit: limits.maxUsers },
+    patients: {
+      used: summary.patients.current,
+      limit: summary.patients.unlimited ? -1 : summary.patients.limit,
+    },
+    users: {
+      used: summary.staff.current,
+      limit: summary.staff.unlimited ? -1 : summary.staff.limit,
+    },
+    branches: {
+      used: summary.branches.current,
+      limit: summary.branches.unlimited ? -1 : summary.branches.limit,
+    },
     appointments: metrics.appointments,
     invoices: metrics.invoices,
   };

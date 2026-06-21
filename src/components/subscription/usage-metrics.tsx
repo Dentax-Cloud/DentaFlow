@@ -1,9 +1,10 @@
-import { Users, UserCircle, Calendar, Receipt } from "lucide-react";
+import { Users, UserCircle, Building2, Receipt } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Usage = {
   patients: { used: number; limit: number };
   users: { used: number; limit: number };
+  branches: { used: number; limit: number };
   appointments: number;
   invoices: number;
 };
@@ -56,12 +57,11 @@ export function UsageMetrics({ usage }: { usage: Usage }) {
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Appointments</CardTitle>
-          <Calendar className="h-4 w-4 text-emerald-600" />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Branches</CardTitle>
+          <Building2 className="h-4 w-4 text-emerald-600" />
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold tabular-nums">{usage.appointments.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">Total scheduled</p>
+          <UsageBar used={usage.branches.used} limit={usage.branches.limit} label="Clinic locations" />
         </CardContent>
       </Card>
       <Card>

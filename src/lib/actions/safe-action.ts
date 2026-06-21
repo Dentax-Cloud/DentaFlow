@@ -1,4 +1,4 @@
-import { ZodSchema } from "zod";
+import { LimitExceededError } from "@/lib/features/gate";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { AuditAction } from "@prisma/client";
@@ -80,6 +80,11 @@ export function createAction<TInput, TOutput>(config: {
         return actionError("Upgrade your plan to use this feature");
       if (message === "SUBSCRIPTION_INACTIVE")
         return actionError("Your subscription is inactive. Please update billing.");
+      if (e instanceof LimitExceededError) {
+        return actionError(
+          `${e.resource} limit reached (${e.current}/${e.limit}). Upgrade your plan in billing.`,
+        );
+      }
       if (message === "TENANT_PENDING_APPROVAL")
         return actionError("Your clinic is pending approval");
       if (message === "TENANT_NOT_ACTIVE")

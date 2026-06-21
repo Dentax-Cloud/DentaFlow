@@ -6,6 +6,7 @@ export type WelcomeEmailData = {
   clinicName: string;
   trialDays?: number;
   dashboardUrl: string;
+  loginUrl?: string;
 };
 
 export function buildWelcomeEmail(data: WelcomeEmailData): { subject: string; text: string; html: string } {
@@ -37,7 +38,12 @@ export function buildWelcomeEmail(data: WelcomeEmailData): { subject: string; te
       <li>Explore billing, reports, and AI features</li>
     </ul>
     ${emailButton(data.dashboardUrl, "Open your dashboard")}
-    <p style="margin:0;color:#71717a;font-size:13px;">No credit card required during your trial.</p>
+    ${
+      data.loginUrl
+        ? `<p style="margin:0;color:#71717a;font-size:13px;">You can also sign in at <a href="${data.loginUrl}" style="color:#38bdf8;">${data.loginUrl}</a></p>`
+        : ""
+    }
+    <p style="margin:16px 0 0;color:#71717a;font-size:13px;">No credit card required during your trial.</p>
   `);
 
   return { subject, text, html };

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useAuth, useSignUp, useUser } from "@/lib/auth/stubs/client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -316,11 +317,30 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
         return;
       }
 
-      await activateOrganization(result.clerkOrgId);
       sessionStorage.removeItem(PENDING_REGISTRATION_KEY);
       toast.success(`Welcome to DentaFlow! ${step2.clinicName} is ready.`);
-      // Full navigation so Clerk org session + tenant branding load reliably.
-      window.location.assign("/dashboard");
+
+      if (result.clerkOrgId) {
+        await activateOrganization(result.clerkOrgId);
+        window.location.assign("/dashboard");
+        return;
+      }
+
+      // NextAuth registration: sign in then open tenant dashboard
+      const signInResult = await signIn("credentials", {
+        email: step1.email,
+        password: step1.password,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
+        window.location.assign(
+          `/login?callbackUrl=${encodeURIComponent(`/t/${result.tenantSlug}/dashboard`)}`,
+        );
+        return;
+      }
+
+      window.location.assign(`/t/${result.tenantSlug}/dashboard`);
     } catch (err) {
       toast.error(clerkErrorMessage(err));
       setSubmitting(false);

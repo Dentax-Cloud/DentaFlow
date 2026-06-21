@@ -164,7 +164,18 @@ export async function createStripePaymentLink(tenantId: string, invoiceId: strin
         quantity: 1,
       },
     ],
-    metadata: { tenantId, invoiceId },
+    metadata: {
+      type: "clinic_invoice",
+      tenantId,
+      invoiceId,
+    },
+    payment_intent_data: {
+      metadata: {
+        type: "clinic_invoice",
+        tenantId,
+        invoiceId,
+      },
+    },
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing?paid=1`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
   });

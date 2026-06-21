@@ -1,4 +1,4 @@
-import { connect } from "net";
+import type { Transporter } from "nodemailer";
 import { getMailConfig, isMailConfigured } from "./config";
 
 export type SendMailParams = {
@@ -8,95 +8,46 @@ export type SendMailParams = {
   html?: string;
 };
 
-function extractEmail(addr: string): string {
-  const match = addr.match(/<([^>]+)>/);
-  return match ? match[1] : addr;
-}
+let cachedTransport: Transporter | null = null;
 
-function buildRawMessage(from: string, params: SendMailParams): string {
-  const html = params.html ?? params.text.replace(/\n/g, "<br>");
-  const boundary = "dentaflow-mail-boundary";
-  return [
-    `From: ${from}`,
-    `To: ${params.to}`,
-    `Subject: ${params.subject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "",
-    params.text,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "",
-    html,
-    "",
-    `--${boundary}--`,
-    "",
-  ].join("\r\n");
-}
+function createTransport(): Transporter | null {
+  let nodemailer: typeof import("nodemailer") | null = null;
+  try {
+    nodemailer = require("nodemailer");
+  } catch {
+    return null;
+  }
 
-/** Minimal SMTP client for MailHog and simple relays. */
-async function sendViaSmtp(
-  host: string,
-  port: number,
-  from: string,
-  params: SendMailParams,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const socket = connect(port, host);
-    let buffer = "";
-    let step = 0;
-    const commands = [
-      `EHLO dentaflow\r\n`,
-      `MAIL FROM:<${extractEmail(from)}>\r\n`,
-      `RCPT TO:<${params.to}>\r\n`,
-      `DATA\r\n`,
-      buildRawMessage(from, params),
-      `.\r\n`,
-      `QUIT\r\n`,
-    ];
-
-    socket.setEncoding("utf8");
-
-    socket.on("data", (chunk: string) => {
-      buffer += chunk;
-      const lines = buffer.split("\r\n").filter(Boolean);
-      const lastLine = lines[lines.length - 1] ?? "";
-      if (!/^\d{3}/.test(lastLine)) return;
-
-      const code = Number(lastLine.slice(0, 3));
-      if (code >= 400) {
-        socket.destroy();
-        reject(new Error(`SMTP error: ${lastLine}`));
-        return;
-      }
-
-      if (step < commands.length) {
-        socket.write(commands[step]);
-        step++;
-        if (step === commands.length) {
-          socket.end();
-          resolve();
-        }
-      }
-    });
-
-    socket.on("error", reject);
+  const config = getMailConfig();
+  return nodemailer.createTransport({
+    host: config.smtpHost ?? "localhost",
+    port: config.smtpPort,
+    secure: config.smtpSecure,
+    auth:
+      config.smtpUser && config.smtpPassword
+        ? { user: config.smtpUser, pass: config.smtpPassword }
+        : undefined,
   });
 }
 
+function getTransport(): Transporter | null {
+  if (!cachedTransport) {
+    cachedTransport = createTransport();
+  }
+  return cachedTransport;
+}
+
 /**
- * Sends email via configured SMTP (MailHog in dev).
- * Logs to console when SMTP is not configured.
+ * Sends email via configured SMTP (MailHog in dev, SendGrid/Postmark in prod).
+ * Logs to console when SMTP is not configured or nodemailer is unavailable.
  */
 export async function sendMail(params: SendMailParams): Promise<void> {
   const config = getMailConfig();
 
-  if (!isMailConfigured()) {
-    if (process.env.NODE_ENV === "development") {
+  const transport = getTransport();
+
+  if (!transport || !isMailConfigured()) {
+    if (process.env.NODE_ENV !== "production") {
       console.info("[mail:fallback]", {
         from: config.from,
         to: params.to,
@@ -108,15 +59,25 @@ export async function sendMail(params: SendMailParams): Promise<void> {
   }
 
   try {
-    await sendViaSmtp(config.smtpHost!, config.smtpPort, config.from, params);
+    const info = await transport.sendMail({
+      from: config.from,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html ?? params.text.replace(/\n/g, "<br>"),
+    });
+    console.log(`[mail] sent "${params.subject}" to ${params.to}`, info.messageId);
   } catch (err) {
-    console.error("[mail:smtp-error]", err);
+    console.error(`[mail] failed "${params.subject}" to ${params.to}:`, err);
     if (process.env.NODE_ENV === "development") {
       console.info("[mail:fallback]", {
         from: config.from,
         to: params.to,
         subject: params.subject,
+        text: params.text,
       });
+      return;
     }
+    throw err;
   }
 }
