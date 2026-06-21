@@ -1,9 +1,3 @@
--- prisma/auth_migration.sql
--- Manual NextAuth / multi-tenant auth bootstrap (run via psql or Docker exec).
---
--- Example:
---   docker exec -i dentaflow-db psql -U dentaflow -d dentaflow < prisma/auth_migration.sql
-
 CREATE TABLE IF NOT EXISTS auth_users (
   id TEXT NOT NULL,
   name TEXT,
@@ -37,5 +31,5 @@ CREATE TABLE IF NOT EXISTS tenant_memberships (
 
 CREATE UNIQUE INDEX IF NOT EXISTS tm_user_tenant_key ON tenant_memberships("userId", "tenantId");
 
--- StaffMember model is mapped to legacy table "User" (not "StaffMember")
+-- Prisma StaffMember model maps to physical table "User"
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "authUserId" TEXT;
