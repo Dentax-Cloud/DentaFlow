@@ -1,70 +1,83 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Sidebar, type SidebarUser } from "./sidebar";
-
 import { RoleRouteGuard } from "./role-route-guard";
-
 import type { UserRole } from "@prisma/client";
 
-
-
 export function DashboardShell({
-
   children,
-
   userRole,
-
   user,
-
   isSuperAdmin = false,
-
   tenantName,
-
   tenantLogoUrl,
-
 }: {
-
   children: React.ReactNode;
-
   userRole: UserRole;
-
   user?: SidebarUser;
-
   isSuperAdmin?: boolean;
-
   tenantName?: string;
-
   tenantLogoUrl?: string | null;
-
 }) {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   return (
-
-    <div className="flex h-screen overflow-hidden bg-background">
-
+    <div className="flex h-screen flex-col overflow-hidden bg-background md:flex-row">
       <RoleRouteGuard role={userRole} isSuperAdmin={isSuperAdmin} />
+      <div className="flex items-center border-b px-4 py-3 md:hidden">
+        <button
+          type="button"
+          aria-label="Toggle menu"
+          onClick={() => setMobileOpen((o) => !o)}
+          className="rounded-md p-2 hover:bg-accent"
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+        <span className="ml-3 font-semibold">{tenantName ?? "DentaFlow"}</span>
+        {isSuperAdmin && (
+          <Link href="/superadmin/tenants" className="ml-auto text-xs text-violet-600">
+            Platform admin
+          </Link>
+        )}
+      </div>
 
-      <Sidebar
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-64 transform transition-transform md:relative md:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <Sidebar
+          userRole={userRole}
+          user={user}
+          isSuperAdmin={isSuperAdmin}
+          tenantName={tenantName}
+          tenantLogoUrl={tenantLogoUrl}
+        />
+      </div>
 
-        userRole={userRole}
-
-        user={user}
-
-        isSuperAdmin={isSuperAdmin}
-
-        tenantName={tenantName}
-
-        tenantLogoUrl={tenantLogoUrl}
-
-      />
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
       <main className="flex-1 overflow-y-auto">
-
-        <div className="container mx-auto max-w-7xl p-6">{children}</div>
-
+        <div className="container mx-auto max-w-7xl p-4 md:p-6">{children}</div>
       </main>
-
     </div>
-
   );
-
 }
-

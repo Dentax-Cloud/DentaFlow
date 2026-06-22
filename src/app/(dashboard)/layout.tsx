@@ -14,16 +14,20 @@ export default async function DashboardLayout({
   const session = await getServerAuthSession();
   if (!session?.user?.id) redirect("/login");
 
-  if (session.user.isSuperAdmin) redirect("/superadmin/tenants");
+  if (session.user.isSuperAdmin && !session.user.activeTenantId) {
+    redirect("/superadmin/tenants");
+  }
 
   const ctx = await getTenantContext();
   if (!ctx) redirect("/select-org");
 
-  if (!ctx.tenant.onboardingCompleted) redirect("/sign-up");
-  if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
-  if (ctx.tenant.status !== "ACTIVE") redirect("/pending-approval");
+  if (!session.user.isSuperAdmin) {
+    if (!ctx.tenant.onboardingCompleted) redirect("/sign-up");
+    if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
+    if (ctx.tenant.status !== "ACTIVE") redirect("/pending-approval");
+  }
 
-  const userRole = ctx.staffMember?.role ?? UserRole.RECEPTIONIST;
+  const userRole = ctx.staffMember?.role ?? UserRole.ADMIN;
 
   return (
     <DashboardShell

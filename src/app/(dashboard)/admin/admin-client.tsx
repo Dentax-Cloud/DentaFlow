@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Badge } from "@/components/ui/badge";
 
-import type { User, AuditLog, Settings } from "@prisma/client";
+import type { Branch, StaffMember, AuditLog, Settings } from "@prisma/client";
 
 import type { PermissionKey } from "@/lib/rbac/permissions";
 
@@ -18,7 +18,7 @@ import { formatDate } from "@/lib/utils";
 
 import Link from "next/link";
 
-import { Shield, ScrollText, Upload, Building2 } from "lucide-react";
+import { Shield, Upload, Building2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -27,21 +27,31 @@ import { TeamManagementSection } from "./components/team-management-section";
 import { ClinicSettingsForm } from "./components/clinic-settings-form";
 
 import { RecallSettingsSection } from "./components/recall-settings-section";
-
+import { AuditLogSection } from "./components/audit-log-section";
+import { BranchesSection } from "./components/branches-section";
 import type { PendingInvitation } from "@/app/(dashboard)/features/admin/actions";
 import type { RecallSettings } from "@/lib/recall/helpers";
 
 
 
-type AuditWithUser = AuditLog & { user: User | null };
+type AuditWithUser = AuditLog & { user: StaffMember | null };
 
 
+
+type BranchRow = Branch & {
+  _count: { chairs: number; appointments: number };
+  staffCount: number;
+};
 
 export function AdminClient({
 
   users,
 
   auditLogs,
+
+  auditLogTotal,
+
+  branches,
 
   settings,
 
@@ -55,11 +65,17 @@ export function AdminClient({
 
   recallSettings,
 
+  tenantId,
+
 }: {
 
-  users: User[];
+  users: StaffMember[];
 
   auditLogs: AuditWithUser[];
+
+  auditLogTotal: number;
+
+  branches: BranchRow[];
 
   settings: Settings | null;
 
@@ -72,6 +88,8 @@ export function AdminClient({
   permissions: PermissionKey[];
 
   recallSettings: RecallSettings;
+
+  tenantId: string;
 
 }) {
 
@@ -179,53 +197,9 @@ export function AdminClient({
 
       <RecallSettingsSection settings={recallSettings} canEdit={canEditSettings} />
 
+      <BranchesSection branches={branches} canEdit={canEditSettings} />
 
-
-      <Card>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <ScrollText className="h-4 w-4" />
-
-            Audit log
-
-          </CardTitle>
-
-        </CardHeader>
-
-        <CardContent className="max-h-96 space-y-2 overflow-y-auto">
-
-          {auditLogs.length === 0 ? (
-
-            <p className="text-sm text-muted-foreground">No audit events yet.</p>
-
-          ) : (
-
-            auditLogs.map((log) => (
-
-              <div key={log.id} className="flex justify-between border-b pb-2 text-xs">
-
-                <span>
-
-                  {log.action} {log.entity}
-
-                  {log.user && ` by ${log.user.firstName ?? log.user.email}`}
-
-                </span>
-
-                <span className="text-muted-foreground">{formatDate(log.createdAt)}</span>
-
-              </div>
-
-            ))
-
-          )}
-
-        </CardContent>
-
-      </Card>
+      <AuditLogSection logs={auditLogs} totalCount={auditLogTotal} tenantId={tenantId} />
 
     </div>
 

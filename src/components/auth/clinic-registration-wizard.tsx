@@ -724,7 +724,7 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
 
       <p className="text-center text-sm text-zinc-500">
         Already have an account?{" "}
-        <Link href="/sign-in" className="font-medium text-sky-400 hover:text-sky-300">
+        <Link href="/login" className="font-medium text-sky-400 hover:text-sky-300">
           Sign in
         </Link>
       </p>

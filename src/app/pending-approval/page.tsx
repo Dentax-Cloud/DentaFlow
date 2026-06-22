@@ -5,7 +5,7 @@ import { TenantStatus } from "@prisma/client";
 
 export default async function PendingApprovalPage() {
   const ctx = await getTenantContext();
-  if (!ctx) redirect("/sign-in");
+  if (!ctx) redirect("/login");
   if (ctx.tenant.status === TenantStatus.ACTIVE) redirect("/dashboard");
   if (ctx.isSuperAdmin) redirect("/super-admin");
 

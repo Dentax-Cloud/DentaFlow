@@ -27,35 +27,20 @@ import { Button } from "@/components/ui/button";
 
 
 const superAdminItems: NavItem[] = [
-
   {
-
-    href: "/super-admin",
-
-    label: "Super Admin",
-
+    href: "/superadmin",
+    label: "Platform overview",
     icon: Shield,
-
     resource: "admin",
-
     action: "write",
-
   },
-
   {
-
-    href: "/admin/tenant-approvals",
-
-    label: "Tenant Approvals",
-
+    href: "/superadmin/tenants",
+    label: "Manage tenants",
     icon: Shield,
-
     resource: "admin",
-
     action: "write",
-
   },
-
 ];
 
 
@@ -210,7 +195,7 @@ export function Sidebar({
 
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
 
-                item.href === "/super-admin" && "text-violet-600 dark:text-violet-400",
+                item.href.startsWith("/superadmin") && "text-violet-600 dark:text-violet-400",
 
               )}
 

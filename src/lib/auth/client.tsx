@@ -50,7 +50,9 @@ export function UserButton(_props?: { afterSignOutUrl?: string }) {
       .map((n) => n[0])
       .join("")
       .toUpperCase()
-      .slice(0, 2) ?? "?";
+      .slice(0, 2) ??
+    session?.user?.email?.charAt(0).toUpperCase() ??
+    "?";
 
   return (
     <div

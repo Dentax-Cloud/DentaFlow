@@ -13,11 +13,22 @@ export async function GET(req: NextRequest) {
   const switchTo = req.nextUrl.searchParams.get("switchTo");
 
   if (switchTo) {
-    const membership = await db.tenant_memberships.findFirst({
-      where: { userId: session.user.id, tenantId: switchTo, isActive: true },
-    });
-    if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const isSuperAdmin = session.user.isSuperAdmin === true;
+
+    if (!isSuperAdmin) {
+      const membership = await db.tenant_memberships.findFirst({
+        where: { userId: session.user.id, tenantId: switchTo, isActive: true },
+      });
+      if (!membership) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else {
+      const tenant = await db.tenant.findFirst({
+        where: { id: switchTo, deletedAt: null },
+      });
+      if (!tenant) {
+        return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+      }
     }
 
     await db.auth_users.update({

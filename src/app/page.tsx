@@ -60,7 +60,7 @@ export default async function LandingPage() {
                 className="h-12 rounded-xl border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
                 asChild
               >
-                <Link href="/sign-in">Sign In</Link>
+                <Link href="/login">Sign In</Link>
               </Button>
               <Button
                 size="lg"
@@ -243,7 +243,7 @@ export default async function LandingPage() {
                 className="h-12 rounded-xl border-white/20 bg-transparent px-10 text-white hover:bg-white/5"
                 asChild
               >
-                <Link href="/sign-in">Sign In to Your Clinic</Link>
+                <Link href="/login">Sign In to Your Clinic</Link>
               </Button>
             </div>
           </div>

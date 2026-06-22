@@ -683,17 +683,18 @@ model Settings {
 }
 
 model AuditLog {
-  id        String       @id @default(cuid())
-  tenantId  String
-  userId    String?
-  action    AuditAction
-  entity    String
-  entityId  String?
-  metadata  Json?
-  ipAddress String?
-  createdAt DateTime     @default(now())
-  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      StaffMember? @relation(fields: [userId], references: [id])
+  id             String       @id @default(cuid())
+  tenantId       String
+  userId         String?
+  performedById  String?
+  action         AuditAction
+  entity         String
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           StaffMember? @relation(fields: [userId], references: [id])
 
   @@index([tenantId, createdAt])
   @@index([tenantId, entity])
@@ -746,12 +747,17 @@ enum SubscriptionStatus {
 
 enum UserRole {
   OWNER
+  ADMIN
   DENTIST
+  DOCTOR
   HYGIENIST
   RECEPTIONIST
   MANAGER
   ACCOUNTANT
-  ADMIN
+  FINANCE
+  STORE
+  NURSE
+  STAFF
 }
 
 enum TenantStatus {

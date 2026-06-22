@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
+import { generatePatientNumber } from "@/lib/utils";
 import { AuditAction } from "@prisma/client";
 import { createPatientSchema, updatePatientSchema } from "./schemas";
 
@@ -20,29 +21,35 @@ export const createPatient = createAction({
     }
 
     const count = await db.patient.count({ where: { tenantId: ctx.tenant.id } });
-    const patient = await db.patient.create({
-      data: {
+    try {
+      const patient = await db.patient.create({
+        data: {
+          tenantId: ctx.tenant.id,
+          patientNumber: generatePatientNumber(count + 1),
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          email: input.email?.trim() || null,
+          phone: input.phone?.trim() || null,
+          dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
+          gender: input.gender?.trim() || null,
+          address: input.address?.trim() || null,
+          allergies: input.allergies ?? [],
+          notes: input.notes?.trim() || null,
+        },
+      });
+      await createAuditLog({
         tenantId: ctx.tenant.id,
-        patientNumber: generatePatientNumber(count + 1),
-        firstName: input.firstName,
-        lastName: input.lastName,
-        email: input.email || null,
-        phone: input.phone,
-        dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
-        gender: input.gender,
-        address: input.address,
-        allergies: input.allergies ?? [],
-        notes: input.notes,
-      },
-    });
-    await createAuditLog({
-      tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
-      action: AuditAction.CREATE,
-      entity: "Patient",
-      entityId: patient.id,
-    });
-    return patient;
+        userId: ctx.staffMember?.id ?? ctx.user?.id,
+        action: AuditAction.CREATE,
+        entity: "Patient",
+        entityId: patient.id,
+        metadata: { patientName: `${patient.firstName} ${patient.lastName}` },
+      });
+      return patient;
+    } catch (err) {
+      console.error("[createPatient]", err);
+      throw err;
+    }
   },
 });
 

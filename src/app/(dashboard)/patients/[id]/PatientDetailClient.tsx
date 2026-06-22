@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { toast } from "sonner";
 import {
   Activity,
@@ -225,6 +224,12 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
 
   return (
     <div className="space-y-6 pb-10">
+      <Breadcrumbs
+        items={[
+          { label: "Patients", href: "/patients" },
+          { label: fullName },
+        ]}
+      />
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-50 via-white to-cyan-50/80 p-6 shadow-sm dark:from-slate-900 dark:via-slate-900 dark:to-cyan-950/30">
         <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-primary/5 blur-2xl" />

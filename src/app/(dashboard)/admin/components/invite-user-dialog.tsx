@@ -86,8 +86,8 @@ export function InviteUserDialog() {
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {INVITABLE_ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
+                  {INVITABLE_ROLES.map((r, index) => (
+                    <SelectItem key={`role-${r}-${index}`} value={r}>
                       {getRoleLabel(r)}
                     </SelectItem>
                   ))}

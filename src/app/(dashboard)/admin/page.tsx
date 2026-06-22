@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getRolePermissions, hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 
 import { getPendingInvitations } from "@/app/(dashboard)/features/admin/actions";
+import { getBranches, getAuditLogs, countAuditLogs } from "@/app/(dashboard)/features/admin/branch-actions";
 
 import { AdminClient } from "./admin-client";
 import { parseRecallSettings } from "@/lib/recall/helpers";
@@ -21,7 +22,7 @@ export default async function AdminPage() {
 
 
 
-  const [users, auditLogs, settings, pendingInvitations, tenant] = await Promise.all([
+  const [users, auditLogs, auditLogTotal, branches, settings, pendingInvitations, tenant] = await Promise.all([
 
     db.staffMember.findMany({
       where: { tenantId: ctx.tenant.id, deletedAt: null },
@@ -34,11 +35,15 @@ export default async function AdminPage() {
 
       orderBy: { createdAt: "desc" },
 
-      take: 50,
+      take: 20,
 
       include: { user: true },
 
     }),
+
+    countAuditLogs(ctx.tenant.id),
+
+    getBranches(ctx.tenant.id),
 
     db.settings.findUnique({ where: { tenantId: ctx.tenant.id } }),
 
@@ -62,6 +67,10 @@ export default async function AdminPage() {
 
       auditLogs={auditLogs}
 
+      auditLogTotal={auditLogTotal}
+
+      branches={branches}
+
       settings={settings}
 
       pendingInvitations={pendingInvitations}
@@ -73,6 +82,8 @@ export default async function AdminPage() {
       permissions={getRolePermissions(ctx.user.role)}
 
       recallSettings={recallSettings}
+
+      tenantId={ctx.tenant.id}
 
     />
 

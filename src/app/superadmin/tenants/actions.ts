@@ -6,9 +6,11 @@ import {
   updateTenantStatus,
   setTenantActive,
 } from "@/lib/super-admin/queries";
-import { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
+import { SubscriptionPlan, SubscriptionStatus, TenantStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { isSubscriptionPlan } from "@/lib/subscription/plan-types";
+import { db } from "@/lib/db";
+import { sendMail, sendWelcomeEmail } from "@/lib/mail";
 
 export async function updatePlanAction(tenantId: string, plan: SubscriptionPlan) {
   await requireSuperAdmin();
@@ -61,4 +63,58 @@ export async function updateTenantStatusForm(tenantId: string, formData: FormDat
     throw new Error("INVALID_STATUS");
   }
   return updateStatusAction(tenantId, status as SubscriptionStatus);
+}
+
+export async function approveTenantAction(tenantId: string) {
+  await requireSuperAdmin();
+
+  const tenant = await db.tenant.update({
+    where: { id: tenantId },
+    data: { status: TenantStatus.ACTIVE },
+    select: { id: true, name: true, email: true },
+  });
+
+  await db.tenantApprovalRequest.updateMany({
+    where: { tenantId, status: "PENDING" },
+    data: { status: "APPROVED" },
+  });
+
+  if (tenant.email) {
+    await sendWelcomeEmail({
+      to: tenant.email,
+      clinicName: tenant.name,
+      adminName: tenant.name,
+      trialDays: 14,
+    }).catch((err) => console.error("[approveTenant] welcome email failed:", err));
+  }
+
+  revalidatePath("/superadmin/tenants");
+  revalidatePath(`/superadmin/tenants/${tenantId}`);
+  return { success: true };
+}
+
+export async function rejectTenantAction(tenantId: string, notes?: string) {
+  await requireSuperAdmin();
+
+  const tenant = await db.tenant.update({
+    where: { id: tenantId },
+    data: { status: TenantStatus.CLOSED },
+    select: { id: true, name: true, email: true },
+  });
+
+  await db.tenantApprovalRequest.updateMany({
+    where: { tenantId, status: "PENDING" },
+    data: { status: "REJECTED", notes },
+  });
+
+  if (tenant.email) {
+    await sendMail({
+      to: tenant.email,
+      subject: `DentaFlow registration — ${tenant.name}`,
+      text: `Thank you for your interest in DentaFlow. Unfortunately we were unable to approve ${tenant.name} at this time.${notes ? `\n\nReason: ${notes}` : ""}`,
+    }).catch((err) => console.error("[rejectTenant] email failed:", err));
+  }
+
+  revalidatePath("/superadmin/tenants");
+  return { success: true };
 }

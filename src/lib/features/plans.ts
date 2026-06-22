@@ -2,8 +2,8 @@ import type { SubscriptionPlan } from "@/lib/subscription/plan-types";
 
 export const PLAN_FEATURES = {
   STARTER: {
-    maxPatients: 500,
-    maxUsers: 3,
+    maxPatients: 200,
+    maxUsers: 5,
     aiEnabled: false,
     patientPortal: false,
     inventory: true,
@@ -11,8 +11,8 @@ export const PLAN_FEATURES = {
     multiBranch: false,
   },
   PROFESSIONAL: {
-    maxPatients: 5000,
-    maxUsers: 15,
+    maxPatients: 1000,
+    maxUsers: 20,
     aiEnabled: true,
     patientPortal: true,
     inventory: true,

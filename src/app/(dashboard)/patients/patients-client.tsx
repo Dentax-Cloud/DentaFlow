@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { createPatient } from "@/app/(dashboard)/features/patients/actions";
 import { createPatientSchema, type CreatePatientInput } from "@/app/(dashboard)/features/patients/schemas";
 import type { Patient } from "@prisma/client";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users } from "lucide-react";
 
 export function PatientsClient({ initialPatients }: { initialPatients: Patient[] }) {
   const router = useRouter();
@@ -70,14 +70,29 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
               <div>
                 <Label>First name</Label>
                 <Input {...form.register("firstName")} />
+                {form.formState.errors.firstName && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {form.formState.errors.firstName.message}
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Last name</Label>
                 <Input {...form.register("lastName")} />
+                {form.formState.errors.lastName && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {form.formState.errors.lastName.message}
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Email</Label>
                 <Input type="email" {...form.register("email")} />
+                {form.formState.errors.email && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {form.formState.errors.email.message}
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Phone</Label>
@@ -127,7 +142,21 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
           </Link>
         ))}
         {filtered.length === 0 && (
-          <p className="text-center text-muted-foreground py-12">No patients found</p>
+          <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-12 text-center">
+            <Users className="h-10 w-10 text-muted-foreground" />
+            <div>
+              <p className="font-medium">No patients found</p>
+              <p className="text-sm text-muted-foreground">
+                {search ? "Try a different search term" : "Add your first patient to get started"}
+              </p>
+            </div>
+            {!search && (
+              <Button onClick={() => setShowForm(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add first patient
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

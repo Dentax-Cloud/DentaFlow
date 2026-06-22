@@ -39,6 +39,7 @@ export async function createAuditLog(params: {
     data: {
       tenantId: params.tenantId,
       userId: params.userId,
+      performedById: params.userId,
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,

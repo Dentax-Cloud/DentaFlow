@@ -4,10 +4,11 @@ import { INVITABLE_ROLES } from "@/lib/tenant/team-roles";
 
 const invitableRoleSchema = z.enum([
   UserRole.ADMIN,
-  UserRole.DOCTOR,
+  UserRole.DENTIST,
+  UserRole.HYGIENIST,
   UserRole.RECEPTIONIST,
-  UserRole.FINANCE,
-  UserRole.STORE,
+  UserRole.ACCOUNTANT,
+  UserRole.MANAGER,
 ]);
 
 export const inviteTeamMemberSchema = z.object({

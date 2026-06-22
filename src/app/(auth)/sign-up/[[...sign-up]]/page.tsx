@@ -61,7 +61,7 @@ export default async function SignUpPage({ params }: Props) {
       </Suspense>
       <p className="mt-6 text-center text-sm text-zinc-500">
         Already have an account?{" "}
-        <Link href="/sign-in" className="font-medium text-sky-400 hover:text-sky-300">
+        <Link href="/login" className="font-medium text-sky-400 hover:text-sky-300">
           Sign in
         </Link>
       </p>

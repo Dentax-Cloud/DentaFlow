@@ -3,10 +3,11 @@ import { UserRole } from "@prisma/client";
 /** Roles that admins can assign when inviting or updating team members. */
 export const INVITABLE_ROLES = [
   UserRole.ADMIN,
-  UserRole.DOCTOR,
+  UserRole.DENTIST,
+  UserRole.HYGIENIST,
   UserRole.RECEPTIONIST,
-  UserRole.FINANCE,
-  UserRole.STORE,
+  UserRole.ACCOUNTANT,
+  UserRole.MANAGER,
 ] as const;
 
 export type InvitableRole = (typeof INVITABLE_ROLES)[number];
