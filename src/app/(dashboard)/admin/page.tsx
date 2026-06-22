@@ -7,6 +7,7 @@ import { getRolePermissions, hasPermission, PERMISSIONS } from "@/lib/rbac/permi
 import { getPendingInvitations } from "@/app/(dashboard)/features/admin/actions";
 
 import { AdminClient } from "./admin-client";
+import { parseRecallSettings } from "@/lib/recall/helpers";
 
 
 
@@ -20,7 +21,7 @@ export default async function AdminPage() {
 
 
 
-  const [users, auditLogs, settings, pendingInvitations] = await Promise.all([
+  const [users, auditLogs, settings, pendingInvitations, tenant] = await Promise.all([
 
     db.staffMember.findMany({
       where: { tenantId: ctx.tenant.id, deletedAt: null },
@@ -43,7 +44,13 @@ export default async function AdminPage() {
 
     canManageTeam ? getPendingInvitations(ctx.tenant.id) : Promise.resolve([]),
 
+    db.tenant.findUnique({ where: { id: ctx.tenant.id }, select: { metadata: true } }),
+
   ]);
+
+
+
+  const recallSettings = parseRecallSettings(tenant?.metadata);
 
 
 
@@ -64,6 +71,8 @@ export default async function AdminPage() {
       currentUserId={ctx.user.id}
 
       permissions={getRolePermissions(ctx.user.role)}
+
+      recallSettings={recallSettings}
 
     />
 

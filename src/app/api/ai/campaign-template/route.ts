@@ -18,8 +18,10 @@ export async function POST(req: Request) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { intent } = await req.json();
-    const template = await generateCampaignTemplate(intent);
+    const { intent, campaignType, targetAudience, tone } = await req.json();
+    const template = await generateCampaignTemplate(
+      [intent, campaignType, targetAudience, tone].filter(Boolean).join(" — "),
+    );
     return Response.json(template);
   } catch (err) {
     console.error("[campaign-template]", err);

@@ -145,6 +145,11 @@ export async function getPatientById(tenantId: string, id: string) {
       teeth: { include: { conditions: { orderBy: { recordedAt: "desc" }, take: 3 } } },
       clinicalNotes: { orderBy: { visitDate: "desc" }, take: 10 },
       attachments: { where: { deletedAt: null } },
+      recalls: {
+        where: { status: "PENDING", completedAt: null },
+        orderBy: { dueDate: "asc" },
+        take: 5,
+      },
     },
   });
 }

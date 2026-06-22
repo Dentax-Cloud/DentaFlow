@@ -9,6 +9,7 @@ export type PatientWith360 = Prisma.PatientGetPayload<{
     clinicalNotes: true;
     attachments: true;
     teeth: { include: { conditions: true } };
+    recalls: true;
   };
 }>;
 
@@ -47,6 +48,10 @@ export function mapPatientTo360Profile(p: PatientWith360): PatientDetailProfile 
     noShowRisk: p.noShowRisk ?? undefined,
     churnRisk: p.churnRisk ?? undefined,
     lastVisitAt: p.lastVisitAt?.toISOString(),
+    nextRecallDue: p.recalls
+      .filter((r) => r.status === "PENDING" && !r.completedAt)
+      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0]
+      ?.dueDate.toISOString(),
     teethFindings: findings,
     appointments: p.appointments.map((a) => ({
       id: a.id,

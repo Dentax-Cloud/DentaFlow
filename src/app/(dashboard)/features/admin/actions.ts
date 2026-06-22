@@ -10,6 +10,8 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { clearPendingTeamInvite, sendTeamInvite, storePendingTeamInvite } from "@/lib/tenant/team-invites";
 import { checkStaffLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import type { RecallSettings } from "@/lib/recall/helpers";
+import { DEFAULT_RECALL_SETTINGS } from "@/lib/recall/helpers";
 import {
   inviteTeamMemberSchema,
   removeTeamMemberSchema,
@@ -209,6 +211,14 @@ const procedureSchema = z.object({
   costPrice: z.number().min(0).optional(),
   sellingPrice: z.number().min(0),
   notes: z.string().optional(),
+  inventoryConsumption: z
+    .array(
+      z.object({
+        inventoryItemId: z.string(),
+        quantity: z.number().int().min(1),
+      }),
+    )
+    .optional(),
 });
 
 export const createProcedure = createAction({
@@ -225,6 +235,9 @@ export const createProcedure = createAction({
         costPrice: input.costPrice,
         price: input.sellingPrice,
         description: input.notes,
+        inventoryConsumption: input.inventoryConsumption?.length
+          ? JSON.stringify(input.inventoryConsumption)
+          : null,
       },
     });
     revalidatePath("/admin/procedure-catalog");
@@ -251,6 +264,9 @@ export const updateProcedure = createAction({
         costPrice: input.costPrice,
         price: input.sellingPrice,
         description: input.notes,
+        inventoryConsumption: input.inventoryConsumption?.length
+          ? JSON.stringify(input.inventoryConsumption)
+          : null,
       },
     });
     revalidatePath("/admin/procedure-catalog");
@@ -282,3 +298,33 @@ export async function listProcedures(tenantId: string) {
     orderBy: { name: "asc" },
   });
 }
+
+const recallSettingsSchema = z.object({
+  defaultIntervalMonths: z.number().int().min(1).max(24),
+  autoCreateOnComplete: z.boolean(),
+  reminderLeadDays: z.number().int().min(1).max(90),
+});
+
+export const saveRecallSettings = createAction({
+  schema: recallSettingsSchema,
+  permission: () => requirePermission(PERMISSIONS.admin.write),
+  handler: async (input, ctx) => {
+    const tenant = await db.tenant.findUnique({ where: { id: ctx.tenant.id } });
+    const base =
+      tenant?.metadata && typeof tenant.metadata === "object" && !Array.isArray(tenant.metadata)
+        ? (tenant.metadata as Record<string, unknown>)
+        : {};
+
+    await db.tenant.update({
+      where: { id: ctx.tenant.id },
+      data: {
+        metadata: {
+          ...base,
+          recallSettings: input as RecallSettings,
+        },
+      },
+    });
+    revalidatePath("/admin");
+    return input;
+  },
+});

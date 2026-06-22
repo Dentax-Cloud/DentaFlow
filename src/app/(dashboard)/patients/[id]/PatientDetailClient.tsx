@@ -55,6 +55,7 @@ export interface PatientDetailProfile {
   noShowRisk?: string | null;
   churnRisk?: string | null;
   lastVisitAt?: string | null;
+  nextRecallDue?: string | null;
   teethFindings?: number;
   appointments: {
     id: string;
@@ -159,6 +160,12 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+function riskBadgeVariant(level: string) {
+  if (level === "HIGH") return "destructive" as const;
+  if (level === "MEDIUM") return "warning" as const;
+  return "success" as const;
+}
+
 export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [clerkUserId, setClerkUserId] = useState(patient.portalUserId ?? "");
@@ -244,16 +251,22 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                 {age != null && <span>{age} yrs · </span>}
                 {patient.gender && <span className="capitalize">{patient.gender} · </span>}
                 Patient since {formatDate(patient.createdAt)}
+                {patient.lastVisitAt && (
+                  <span> · Last visit {formatDate(patient.lastVisitAt)}</span>
+                )}
+                {patient.nextRecallDue && (
+                  <span> · Next recall {formatDate(patient.nextRecallDue)}</span>
+                )}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {patient.noShowRisk && (
-                  <Badge variant="warning" className="gap-1">
+                  <Badge variant={riskBadgeVariant(patient.noShowRisk)} className="gap-1">
                     <AlertTriangle className="h-3 w-3" />
                     No-show {patient.noShowRisk.toLowerCase()}
                   </Badge>
                 )}
                 {patient.churnRisk && (
-                  <Badge variant="destructive" className="gap-1">
+                  <Badge variant={riskBadgeVariant(patient.churnRisk)} className="gap-1">
                     Churn {patient.churnRisk.toLowerCase()}
                   </Badge>
                 )}
@@ -534,9 +547,10 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                   <EmptyState message="No treatment plans. Suggest from the clinical chart." />
                 ) : (
                   patient.treatmentPlans.map((tp) => (
-                    <div
+                    <Link
                       key={tp.id}
-                      className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm"
+                      href={`/clinical/treatment-plans/${tp.id}`}
+                      className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors hover:bg-muted/50"
                     >
                       <div>
                         <p className="font-medium">{tp.title}</p>
@@ -550,7 +564,7 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                           {formatCurrency(tp.totalCost)}
                         </p>
                       </div>
-                    </div>
+                    </Link>
                   ))
                 )}
               </CardContent>

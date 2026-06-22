@@ -11,10 +11,12 @@ import {
   TenantStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
-import { sendAppointmentReminder, sendTrialExpiryWarning } from "@/lib/mail";
+import { sendAppointmentReminder, sendTrialExpiryWarning, sendMail } from "@/lib/mail";
+import { parseRecallSettings } from "@/lib/recall/helpers";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const RECALL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 const TRIAL_WARNING_DAYS = [7, 3, 1] as const;
@@ -122,12 +124,13 @@ async function run() {
 
   setInterval(runReminderJob, REMINDER_INTERVAL_MS);
   setInterval(runTrialExpiryJob, TRIAL_CHECK_INTERVAL_MS);
+  setInterval(runRecallReminderJob, RECALL_CHECK_INTERVAL_MS);
 
   console.log("[worker] Jobs scheduled. Running…");
 }
 
 async function runAllJobs() {
-  await Promise.allSettled([runReminderJob(), runTrialExpiryJob()]);
+  await Promise.allSettled([runReminderJob(), runTrialExpiryJob(), runRecallReminderJob()]);
 }
 
 async function sendRemindersForWindow(params: {
@@ -207,6 +210,58 @@ async function runReminderJob() {
     }
   } catch (err) {
     console.error("[worker] reminder job failed:", err);
+  }
+}
+
+async function runRecallReminderJob() {
+  try {
+    const tenants = await db.tenant.findMany({
+      where: { deletedAt: null, status: TenantStatus.ACTIVE },
+      select: { id: true, name: true, metadata: true },
+    });
+
+    let sent = 0;
+
+    for (const tenant of tenants) {
+      const settings = parseRecallSettings(tenant.metadata);
+      const leadMs = settings.reminderLeadDays * 24 * 60 * 60 * 1000;
+      const windowEnd = new Date(Date.now() + leadMs);
+
+      const recalls = await db.recall.findMany({
+        where: {
+          tenantId: tenant.id,
+          status: "PENDING",
+          completedAt: null,
+          dueDate: { lte: windowEnd },
+          reminderSentAt: null,
+        },
+        include: { patient: true },
+      });
+
+      for (const recall of recalls) {
+        if (!recall.patient.email) continue;
+        try {
+          await sendMail({
+            to: recall.patient.email,
+            subject: "Time for your dental checkup",
+            text: `Dear ${recall.patient.firstName}, it's time for your routine dental checkup at ${tenant.name}. Please call us to schedule your appointment.`,
+          });
+          await db.recall.update({
+            where: { id: recall.id },
+            data: { reminderSentAt: new Date() },
+          });
+          sent++;
+        } catch (err) {
+          console.error(`[worker] recall reminder failed for ${recall.id}:`, err);
+        }
+      }
+    }
+
+    if (sent > 0) {
+      console.log(`[worker] Recall reminders sent: ${sent}`);
+    }
+  } catch (err) {
+    console.error("[worker] recall reminder job failed:", err);
   }
 }
 

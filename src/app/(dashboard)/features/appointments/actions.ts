@@ -7,6 +7,10 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { broadcastAppointmentUpdate } from "@/lib/pusher";
 import { predictNoShowRisk } from "@/lib/ai";
+import {
+  maybeCreateRecallAfterAppointment,
+  refreshPatientRiskScores,
+} from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
 import { AuditAction } from "@prisma/client";
 import {
@@ -103,6 +107,28 @@ export const updateAppointmentStatus = createAction({
       data: { status: input.status },
       include: { patient: true, chair: true },
     });
+
+    if (input.status === "COMPLETED") {
+      await db.patient.update({
+        where: { id: appointment.patientId },
+        data: { lastVisitAt: new Date() },
+      });
+      await maybeCreateRecallAfterAppointment({
+        tenantId: ctx.tenant.id,
+        patientId: appointment.patientId,
+      });
+    }
+
+    if (input.status === "NO_SHOW") {
+      await db.patient.update({
+        where: { id: appointment.patientId },
+        data: { noShowCount: { increment: 1 } },
+      });
+    }
+
+    if (input.status === "COMPLETED" || input.status === "NO_SHOW") {
+      await refreshPatientRiskScores(ctx.tenant.id, appointment.patientId);
+    }
 
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
     await createAuditLog({

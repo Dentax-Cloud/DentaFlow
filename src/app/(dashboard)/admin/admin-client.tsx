@@ -26,7 +26,10 @@ import { TeamManagementSection } from "./components/team-management-section";
 
 import { ClinicSettingsForm } from "./components/clinic-settings-form";
 
+import { RecallSettingsSection } from "./components/recall-settings-section";
+
 import type { PendingInvitation } from "@/app/(dashboard)/features/admin/actions";
+import type { RecallSettings } from "@/lib/recall/helpers";
 
 
 
@@ -50,6 +53,8 @@ export function AdminClient({
 
   permissions,
 
+  recallSettings,
+
 }: {
 
   users: User[];
@@ -65,6 +70,8 @@ export function AdminClient({
   currentUserId: string;
 
   permissions: PermissionKey[];
+
+  recallSettings: RecallSettings;
 
 }) {
 
@@ -167,6 +174,10 @@ export function AdminClient({
 
 
       <ClinicSettingsForm settings={settings} canEdit={canEditSettings} />
+
+
+
+      <RecallSettingsSection settings={recallSettings} canEdit={canEditSettings} />
 
 
 

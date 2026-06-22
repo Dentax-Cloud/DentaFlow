@@ -194,6 +194,7 @@ model Patient {
   churnRisk         RiskLevel?
   noShowRisk        RiskLevel?
   lastVisitAt       DateTime?
+  noShowCount       Int                @default(0)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
@@ -413,8 +414,9 @@ model ProcedureCatalog {
   category    String?
   price       Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
-  duration    Int?
-  isActive    Boolean  @default(true)
+  duration             Int?
+  inventoryConsumption String?
+  isActive             Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -547,8 +549,11 @@ model Campaign {
   status      CampaignStatus  @default(DRAFT)
   subject     String?
   body        String
-  scheduledAt DateTime?
-  sentCount   Int             @default(0)
+  scheduledAt     DateTime?
+  sentCount       Int             @default(0)
+  sentAt          DateTime?
+  recipientCount  Int             @default(0)
+  targetAudience  String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -563,9 +568,10 @@ model CommunicationLog {
   channel   CampaignChannel
   direction String          @default("outbound")
   subject   String?
-  body      String
-  status    String          @default("sent")
-  sentAt    DateTime        @default(now())
+  body        String
+  status      String          @default("sent")
+  campaignId  String?
+  sentAt      DateTime        @default(now())
   patient   Patient?        @relation(fields: [patientId], references: [id])
   tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -589,11 +595,13 @@ model Recall {
   id          String     @id @default(cuid())
   tenantId    String
   patientId   String
-  type        String
-  dueDate     DateTime
-  priority    Int        @default(0)
-  churnRisk   RiskLevel?
-  completedAt DateTime?
+  type            String
+  dueDate         DateTime
+  status          String     @default("PENDING")
+  priority        Int        @default(0)
+  churnRisk       RiskLevel?
+  completedAt     DateTime?
+  reminderSentAt  DateTime?
   notes       String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt

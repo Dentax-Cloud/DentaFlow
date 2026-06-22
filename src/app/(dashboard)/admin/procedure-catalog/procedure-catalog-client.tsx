@@ -41,6 +41,7 @@ type FormState = {
   costPrice: string;
   sellingPrice: string;
   notes: string;
+  inventoryLines: { inventoryItemId: string; quantity: string }[];
 };
 
 const emptyForm: FormState = {
@@ -51,12 +52,28 @@ const emptyForm: FormState = {
   costPrice: "",
   sellingPrice: "",
   notes: "",
+  inventoryLines: [],
 };
+
+function parseInventoryConsumption(raw: string | null | undefined) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as { inventoryItemId: string; quantity: number }[];
+    return parsed.map((l) => ({
+      inventoryItemId: l.inventoryItemId,
+      quantity: String(l.quantity),
+    }));
+  } catch {
+    return [];
+  }
+}
 
 export function ProcedureCatalogClient({
   initialProcedures,
+  inventoryItems,
 }: {
   initialProcedures: ProcedureCatalog[];
+  inventoryItems: { id: string; name: string; sku: string; quantity: number }[];
 }) {
   const [procedures, setProcedures] = useState(initialProcedures);
   const [open, setOpen] = useState(false);
@@ -78,6 +95,7 @@ export function ProcedureCatalogClient({
       costPrice: p.costPrice ? String(p.costPrice) : "",
       sellingPrice: String(p.price),
       notes: p.description ?? "",
+      inventoryLines: parseInventoryConsumption(p.inventoryConsumption),
     });
     setOpen(true);
   }
@@ -92,6 +110,12 @@ export function ProcedureCatalogClient({
       costPrice: form.costPrice ? Number(form.costPrice) : undefined,
       sellingPrice: Number(form.sellingPrice) || 0,
       notes: form.notes || undefined,
+      inventoryConsumption: form.inventoryLines
+        .filter((l) => l.inventoryItemId && Number(l.quantity) > 0)
+        .map((l) => ({
+          inventoryItemId: l.inventoryItemId,
+          quantity: Number(l.quantity),
+        })),
     };
 
     const result = form.id
@@ -258,6 +282,69 @@ export function ProcedureCatalogClient({
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
+            </div>
+            <div>
+              <Label>Inventory consumed</Label>
+              <div className="mt-2 space-y-2">
+                {form.inventoryLines.map((line, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <select
+                      className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                      value={line.inventoryItemId}
+                      onChange={(e) => {
+                        const next = [...form.inventoryLines];
+                        next[idx] = { ...next[idx], inventoryItemId: e.target.value };
+                        setForm({ ...form, inventoryLines: next });
+                      }}
+                    >
+                      <option value="">Select item…</option>
+                      {inventoryItems.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name} ({i.sku}, qty {i.quantity})
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      type="number"
+                      className="w-24"
+                      placeholder="Qty"
+                      value={line.quantity}
+                      onChange={(e) => {
+                        const next = [...form.inventoryLines];
+                        next[idx] = { ...next[idx], quantity: e.target.value };
+                        setForm({ ...form, inventoryLines: next });
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          inventoryLines: form.inventoryLines.filter((_, i) => i !== idx),
+                        })
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      inventoryLines: [...form.inventoryLines, { inventoryItemId: "", quantity: "1" }],
+                    })
+                  }
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add inventory line
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>

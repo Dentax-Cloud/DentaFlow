@@ -7,6 +7,9 @@ export default async function InventoryPage() {
   const items = await db.inventoryItem.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },
     orderBy: { name: "asc" },
+    include: {
+      transactions: { orderBy: { createdAt: "desc" }, take: 20 },
+    },
   });
 
   const lowStock = items.filter((i) => i.quantity <= i.reorderLevel);

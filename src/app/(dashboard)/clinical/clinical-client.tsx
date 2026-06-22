@@ -266,8 +266,15 @@ export function ClinicalPageClient({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Clinical</h1>
-        <p className="text-muted-foreground">Interactive odontogram, charting & SOAP notes</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 className="text-3xl font-bold">Clinical</h1>
+            <p className="text-muted-foreground">Interactive odontogram, charting & SOAP notes</p>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/clinical/treatment-plans">Treatment plans</a>
+          </Button>
+        </div>
       </div>
 
       <div className="max-w-xs space-y-2">

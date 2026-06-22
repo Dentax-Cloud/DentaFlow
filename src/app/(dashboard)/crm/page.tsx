@@ -23,5 +23,5 @@ export default async function CrmPage() {
     }),
   ]);
 
-  return <CrmClient leads={leads} campaigns={campaigns} recalls={recalls} />;
+  return <CrmClient leads={leads} campaigns={campaigns} recalls={recalls} tenantId={ctx.tenant.id} />;
 }

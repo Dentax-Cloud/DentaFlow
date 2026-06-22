@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     messages?: { role: "user" | "assistant"; content: string }[];
     role?: "staff" | "patient";
     patientId?: string;
+    chartContext?: string;
   };
 
   if (!body.messages || !Array.isArray(body.messages)) {
@@ -44,6 +45,28 @@ export async function POST(req: Request) {
     });
 
     if (patient) {
+      let chartSummary = body.chartContext;
+      if (!chartSummary) {
+        const teeth = await db.tooth.findMany({
+          where: { tenantId: ctx.tenant.id, patientId: body.patientId },
+          include: { conditions: { orderBy: { recordedAt: "desc" }, take: 3 } },
+        });
+        chartSummary = teeth
+          .filter((t) => t.conditions.length > 0)
+          .map(
+            (t) =>
+              `Tooth ${t.number}: ${t.conditions.map((c) => c.type).join(", ")}`,
+          )
+          .join("; ");
+      }
+
+      const recentNotes = await db.clinicalNote.findMany({
+        where: { tenantId: ctx.tenant.id, patientId: body.patientId },
+        orderBy: { visitDate: "desc" },
+        take: 3,
+        select: { assessment: true, visitDate: true },
+      });
+
       const age = patient.dateOfBirth
         ? Math.floor(
             (Date.now() - patient.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000),
@@ -51,15 +74,23 @@ export async function POST(req: Request) {
         : null;
 
       pageContext = [
-        "Patient context (verify in chart before clinical decisions):",
-        `Name: ${patient.firstName} ${patient.lastName}`,
+        `You are a dental AI assistant. Current patient: ${patient.firstName} ${patient.lastName}.`,
         age !== null ? `Age: ${age}` : null,
+        chartSummary ? `Tooth conditions: ${chartSummary}. Provide clinical guidance only.` : null,
         patient.allergies.length ? `Allergies: ${patient.allergies.join(", ")}` : null,
         patient.medications.length ? `Medications: ${patient.medications.join(", ")}` : null,
+        recentNotes.length
+          ? `Recent notes: ${recentNotes.map((n) => n.assessment?.slice(0, 120)).join(" | ")}`
+          : null,
       ]
         .filter(Boolean)
         .join("\n");
     }
+  }
+
+  if (!pageContext) {
+    pageContext =
+      "You are a dental practice AI assistant. Provide general dental practice guidance.";
   }
 
   const result = chatWithStaffOrPatient(
