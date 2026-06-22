@@ -1,14 +1,21 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/stubs/server";
-import { isSuperAdmin } from "@/lib/tenant/config";
+import { getServerAuthSession } from "@/lib/auth";
 
 /**
  * Server-side guard for super-admin routes.
  * Redirects non-super-admins to the dashboard.
  */
 export async function requireSuperAdminPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
-  if (!isSuperAdmin(userId)) redirect("/dashboard");
-  return userId;
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
+  if (!session.user.isSuperAdmin) redirect("/dashboard");
+  return session.user.id;
+}
+
+export async function requireSuperAdminGuard() {
+  const session = await getServerAuthSession();
+  if (!session?.user?.isSuperAdmin) {
+    throw new Error("FORBIDDEN");
+  }
+  return session.user.id;
 }

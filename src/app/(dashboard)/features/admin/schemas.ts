@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UserRole } from "@prisma/client";
-import { INVITABLE_ROLES } from "@/lib/tenant/clerk-roles";
+import { INVITABLE_ROLES } from "@/lib/tenant/team-roles";
 
 const invitableRoleSchema = z.enum([
   UserRole.ADMIN,

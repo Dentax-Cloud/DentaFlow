@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getRoleLabel } from "@/lib/rbac/permissions";
-import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/clerk-roles";
+import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/team-roles";
 import {
   removeTeamMember,
   updateTeamMemberRole,

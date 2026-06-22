@@ -2,8 +2,8 @@ export const runtime = "nodejs";
 
 import Link from "next/link";
 import { Suspense } from "react";
-import { auth } from "@/lib/auth/stubs/server";
-import { AuthenticateWithRedirectCallback } from "@/lib/auth/stubs/client";
+import { redirect } from "next/navigation";
+import { getServerAuthSession } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import { SignUpShell } from "@/components/auth/sign-up-shell";
 import { ClinicRegistrationWizard } from "@/components/auth/clinic-registration-wizard";
@@ -25,7 +25,9 @@ function WizardFallback() {
 }
 
 export default async function SignUpPage({ params }: Props) {
-  const { userId, orgId } = await auth();
+  const session = await getServerAuthSession();
+  const userId = session?.user?.id ?? null;
+  const orgId = session?.user?.activeTenantId ?? null;
 
   let initialStep = 1;
   let registrationComplete = false;
@@ -45,14 +47,7 @@ export default async function SignUpPage({ params }: Props) {
   const firstSegment = segments[0];
 
   if (firstSegment === "sso-callback") {
-    return (
-      <SignUpShell compact>
-        <AuthenticateWithRedirectCallback
-          signInForceRedirectUrl="/sign-up?oauth=1"
-          signUpForceRedirectUrl="/sign-up?oauth=1"
-        />
-      </SignUpShell>
-    );
+    redirect("/sign-up?oauth=1");
   }
 
   return (

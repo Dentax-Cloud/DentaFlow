@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { SignOutButton } from "@/lib/auth/stubs/client";
+import { SignOutButton } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 
 type Props = {

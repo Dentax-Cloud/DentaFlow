@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getRoleLabel } from "@/lib/rbac/permissions";
-import { INVITABLE_ROLES } from "@/lib/tenant/clerk-roles";
+import { INVITABLE_ROLES } from "@/lib/tenant/team-roles";
 import { inviteTeamMember } from "@/app/(dashboard)/features/admin/actions";
 
 export function InviteUserDialog() {

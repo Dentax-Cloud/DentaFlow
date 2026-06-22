@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/stubs/server";
-import { isSuperAdmin } from "@/lib/tenant/config";
+import { getServerAuthSession } from "@/lib/auth";
 
 type SuperAdminGuardProps = {
   children: React.ReactNode;
@@ -14,8 +13,8 @@ export async function SuperAdminGuard({
   children,
   fallbackUrl = "/dashboard",
 }: SuperAdminGuardProps) {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
-  if (!isSuperAdmin(userId)) redirect(fallbackUrl);
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
+  if (!session.user.isSuperAdmin) redirect(fallbackUrl);
   return <>{children}</>;
 }

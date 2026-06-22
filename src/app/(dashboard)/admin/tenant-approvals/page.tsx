@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/stubs/server";
-import { isSuperAdmin } from "@/lib/tenant/config";
+import { getServerAuthSession } from "@/lib/auth";
 import { listPendingApprovalRequests } from "@/lib/tenant/approval";
 import { TenantApprovalsClient } from "./tenant-approvals-client";
 
 export default async function TenantApprovalsPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
-  if (!isSuperAdmin(userId)) redirect("/dashboard");
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
+  if (!session.user.isSuperAdmin) redirect("/dashboard");
 
   const pending = await listPendingApprovalRequests();
 

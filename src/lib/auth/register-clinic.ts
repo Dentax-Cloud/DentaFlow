@@ -1,4 +1,4 @@
-import { auth, clerkClient } from "@/lib/auth/stubs/server";
+import { getServerAuthSession } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import { UserRole, TenantStatus } from "@prisma/client";
 import { SubscriptionPlan } from "@/lib/subscription/plan-types";
@@ -12,11 +12,7 @@ import {
 import { getCountryByCode } from "@/lib/auth/countries";
 import { sendWelcomeEmail } from "@/lib/mail";
 import { ensureStripeCustomer } from "@/lib/tenant/billing";
-import {
-  provisionTenantFromWebhook,
-  createTenantMembership,
-  provisionTenant,
-} from "@/lib/tenant/service";
+import { provisionTenant } from "@/lib/tenant/service";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
 
 export type RegisterClinicResult =
@@ -25,7 +21,6 @@ export type RegisterClinicResult =
       tenantId: string;
       tenantSlug: string;
       authUserId: string;
-      clerkOrgId?: string;
     }
   | { success: false; error: string; field?: string };
 
@@ -142,7 +137,6 @@ async function finalizeClinicSetup(
   return updatedTenant;
 }
 
-/** NextAuth path: create auth user + provision tenant (H5 / C5 / C6). */
 async function registerClinicNextAuth(
   input: ClinicRegistrationSubmit,
 ): Promise<RegisterClinicResult> {
@@ -198,6 +192,11 @@ async function registerClinicNextAuth(
       input,
     );
 
+    await db.auth_users.update({
+      where: { id: authUser.id },
+      data: { activeTenantId: updatedTenant.id },
+    });
+
     return {
       success: true,
       tenantId: updatedTenant.id,
@@ -210,88 +209,57 @@ async function registerClinicNextAuth(
   }
 }
 
-/** Legacy Clerk-shaped path when stub/session provides a user id. */
-async function registerClinicClerk(
+async function registerClinicForExistingUser(
   input: ClinicRegistrationSubmit,
-  userId: string,
+  authUserId: string,
 ): Promise<RegisterClinicResult> {
-  const client = await clerkClient();
-
-  const existingMemberships = await client.users.getOrganizationMembershipList({ userId });
-  const existingOrg = existingMemberships.data.find(
-    (m) => m.organization.name === input.clinicName,
-  );
-
-  let clerkOrgId: string;
-
-  if (existingOrg) {
-    clerkOrgId = existingOrg.organization.id;
-  } else {
-    const org = await client.organizations.createOrganization({
-      name: input.clinicName,
-      createdBy: userId,
-    });
-    clerkOrgId = org.id;
+  const authUser = await db.auth_users.findUnique({ where: { id: authUserId } });
+  if (!authUser) {
+    return { success: false, error: "Account not found" };
   }
 
-  const tenant = await provisionTenantFromWebhook({
-    clerkOrgId,
-    orgName: input.clinicName,
-    clerkUserId: userId,
-    ownerEmail: input.email,
-    ownerFirstName: input.firstName,
-    ownerLastName: input.lastName,
-  });
+  const ownerName = formatAdminName(input.firstName, input.lastName);
+  const fullAddress = buildFullAddress(input);
 
-  await db.staffMember.upsert({
-    where: {
-      tenantId_clerkUserId: { tenantId: tenant.id, clerkUserId: userId },
-    },
-    create: {
-      tenantId: tenant.id,
-      clerkUserId: userId,
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      role: UserRole.ADMIN,
-      isActive: true,
-    },
-    update: {
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-    },
-  });
-
-  const authUser = await db.auth_users.findUnique({ where: { email: input.email.toLowerCase().trim() } });
-  if (authUser) {
-    await createTenantMembership({
-      tenantId: tenant.id,
-      authUserId: authUser.id,
-      role: "ADMIN",
+  let provisionResult: Awaited<ReturnType<typeof provisionTenant>>;
+  try {
+    provisionResult = await provisionTenant({
+      ownerAuthUserId: authUserId,
+      ownerName,
+      ownerEmail: input.email,
+      clinicName: input.clinicName,
+      clinicEmail: input.email,
+      phone: input.phone,
+      address: fullAddress,
+      timezone: input.timezone,
     });
-    await db.staffMember.updateMany({
-      where: { tenantId: tenant.id, clerkUserId: userId },
-      data: { authUserId: authUser.id },
-    });
+  } catch (err) {
+    console.error("[registerClinic] provisioning failed:", err);
+    return { success: false, error: "Failed to create clinic. Please try again." };
   }
 
-  const staffMember = await db.staffMember.findFirst({
-    where: { tenantId: tenant.id, clerkUserId: userId },
-  });
-  if (!staffMember) {
-    return { success: false, error: "Failed to create staff profile" };
+  try {
+    const updatedTenant = await finalizeClinicSetup(
+      provisionResult.tenant.id,
+      provisionResult.staffMember.id,
+      input,
+    );
+
+    await db.auth_users.update({
+      where: { id: authUserId },
+      data: { activeTenantId: updatedTenant.id },
+    });
+
+    return {
+      success: true,
+      tenantId: updatedTenant.id,
+      tenantSlug: updatedTenant.slug,
+      authUserId,
+    };
+  } catch (err) {
+    console.error("[registerClinic] finalize failed:", err);
+    return { success: false, error: "Failed to complete clinic setup. Please try again." };
   }
-
-  const updatedTenant = await finalizeClinicSetup(tenant.id, staffMember.id, input);
-
-  return {
-    success: true,
-    tenantId: updatedTenant.id,
-    tenantSlug: updatedTenant.slug,
-    authUserId: authUser?.id ?? userId,
-    clerkOrgId,
-  };
 }
 
 export async function registerClinic(data: ClinicRegistrationSubmit): Promise<RegisterClinicResult> {
@@ -307,20 +275,16 @@ export async function registerClinic(data: ClinicRegistrationSubmit): Promise<Re
   }
 
   const input = parsed.data;
-  const { userId } = await auth();
+  const session = await getServerAuthSession();
+  const userId = session?.user?.id ?? null;
 
   if (!userId && input.password) {
     return registerClinicNextAuth(input);
   }
 
-  if (!userId) {
-    return { success: false, error: "You must be signed in to complete registration" };
+  if (userId) {
+    return registerClinicForExistingUser(input, userId);
   }
 
-  try {
-    return await registerClinicClerk(input, userId);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Registration failed";
-    return { success: false, error: message };
-  }
+  return { success: false, error: "Password is required to create an account" };
 }
