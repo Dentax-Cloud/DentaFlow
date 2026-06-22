@@ -46,3 +46,4 @@ prisma/*.db
 
 # clerk configuration (can include secrets)
 /.clerk/
+.env.docker
