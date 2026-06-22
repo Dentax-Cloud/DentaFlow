@@ -13,14 +13,16 @@ export async function POST(req: Request) {
 
   try {
     const ctx = await requireTenantContext();
-    if (!canUseFeature(ctx.tenant.subscriptionPlan, "aiEnabled")) {
+    const plan = ctx.tenant.subscriptionPlan;
+    if (!canUseFeature(plan, "aiEnabled")) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { intent } = await req.json();
     const template = await generateCampaignTemplate(intent);
     return Response.json(template);
-  } catch {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (err) {
+    console.error("[campaign-template]", err);
+    return Response.json({ error: String(err) }, { status: 500 });
   }
 }

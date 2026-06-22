@@ -412,6 +412,7 @@ model ProcedureCatalog {
   description String?
   category    String?
   price       Decimal  @db.Decimal(12, 2)
+  costPrice   Decimal? @db.Decimal(12, 2)
   duration    Int?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -764,6 +765,7 @@ enum AppointmentStatus {
   ARRIVED
   IN_CHAIR
   COMPLETED
+  INVOICED
   CANCELED
   NO_SHOW
 }

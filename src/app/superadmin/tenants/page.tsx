@@ -9,6 +9,7 @@ import {
   updateTenantPlanForm,
   updateTenantStatusForm,
 } from "./actions";
+import { TenantStatusBadge } from "@/components/super-admin/tenant-status-badge";
 
 export const runtime = "nodejs";
 
@@ -58,10 +59,24 @@ export default async function SuperadminTenantsPage() {
                   <div className="text-xs text-zinc-500">/{tenant.slug}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge variant="outline">{tenant.status}</Badge>
+                  <TenantStatusBadge status={tenant.status} />
                 </td>
                 <td className="px-4 py-3">{tenant.subscriptionPlan}</td>
-                <td className="px-4 py-3">{tenant.subscriptionStatus}</td>
+                <td className="px-4 py-3">
+                  <Badge
+                    variant={
+                      tenant.subscriptionStatus === "TRIALING"
+                        ? "default"
+                        : tenant.subscriptionStatus === "ACTIVE"
+                          ? "success"
+                          : tenant.subscriptionStatus === "PAST_DUE"
+                            ? "warning"
+                            : "secondary"
+                    }
+                  >
+                    {tenant.subscriptionStatus}
+                  </Badge>
+                </td>
                 <td className="px-4 py-3 text-xs text-zinc-500">
                   {tenant.stripeSubscriptionId ? "Active" : "—"}
                 </td>

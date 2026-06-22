@@ -30,6 +30,8 @@ type Props = {
   defaultStart?: Date;
   defaultEnd?: Date;
   defaultPatientId?: string;
+  /** Alias for defaultPatientId */
+  prefilledPatientId?: string;
   onCreated?: () => void;
 };
 
@@ -45,15 +47,17 @@ export function BookAppointmentDialog({
   defaultStart,
   defaultEnd,
   defaultPatientId,
+  prefilledPatientId,
   onCreated,
 }: Props) {
+  const resolvedPatientId = prefilledPatientId ?? defaultPatientId;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const startDefault = defaultStart ?? new Date();
   const endDefault = defaultEnd ?? new Date(startDefault.getTime() + 30 * 60 * 1000);
 
-  const [patientId, setPatientId] = useState(defaultPatientId ?? "");
+  const [patientId, setPatientId] = useState(resolvedPatientId ?? "");
   const [doctorId, setDoctorId] = useState("");
   const [chairId, setChairId] = useState("");
   const [title, setTitle] = useState("Consultation");
@@ -63,10 +67,10 @@ export function BookAppointmentDialog({
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    if (defaultPatientId) setPatientId(defaultPatientId);
+    if (resolvedPatientId) setPatientId(resolvedPatientId);
     if (defaultStart) setStartTime(toLocalInputValue(defaultStart));
     if (defaultEnd) setEndTime(toLocalInputValue(defaultEnd));
-  }, [defaultPatientId, defaultStart, defaultEnd, open]);
+  }, [resolvedPatientId, defaultStart, defaultEnd, open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

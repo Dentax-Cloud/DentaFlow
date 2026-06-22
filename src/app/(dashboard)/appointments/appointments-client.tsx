@@ -23,6 +23,7 @@ import {
 } from "@/app/(dashboard)/features/appointments/actions";
 import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pusher-client";
 import { Radio, WifiOff } from "lucide-react";
+import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import type { Appointment, Chair, Patient, Doctor, User } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
@@ -46,7 +47,19 @@ const STATUS_FLOW: AppointmentStatus[] = [
   "ARRIVED",
   "IN_CHAIR",
   "COMPLETED",
+  "INVOICED",
 ];
+
+const statusLabel: Record<string, string> = {
+  SCHEDULED: "Scheduled",
+  CONFIRMED: "Confirmed",
+  ARRIVED: "Checked in",
+  IN_CHAIR: "In chair",
+  COMPLETED: "Completed",
+  INVOICED: "Invoiced",
+  CANCELED: "Canceled",
+  NO_SHOW: "No show",
+};
 
 const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   SCHEDULED: "secondary",
@@ -54,6 +67,7 @@ const statusVariant: Record<string, "default" | "secondary" | "success" | "warni
   ARRIVED: "warning",
   IN_CHAIR: "warning",
   COMPLETED: "success",
+  INVOICED: "success",
   CANCELED: "destructive",
   NO_SHOW: "destructive",
 };
@@ -125,16 +139,57 @@ export function AppointmentsClient({
     };
   }, [tenantId]);
 
-  async function advanceStatus(id: string, current: AppointmentStatus) {
-    const idx = STATUS_FLOW.indexOf(current);
-    if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
-    const next = STATUS_FLOW[idx + 1];
-    const result = await updateAppointmentStatus({ id, status: next });
+  async function setStatus(id: string, status: AppointmentStatus) {
+    const result = await updateAppointmentStatus({ id, status });
     if (result.success) {
-      toast.success(`Status: ${next.replace("_", " ")}`);
+      toast.success(`Status: ${statusLabel[status] ?? status}`);
+      router.refresh();
     } else {
       toast.error(result.error);
     }
+  }
+
+  function renderStatusActions(apt: AppointmentWithRelations) {
+    const actions: { label: string; status: AppointmentStatus }[] = [];
+    if (apt.status === "SCHEDULED" || apt.status === "CONFIRMED") {
+      actions.push({ label: "Check in", status: "ARRIVED" });
+    }
+    if (apt.status === "ARRIVED") {
+      actions.push({ label: "Start", status: "IN_CHAIR" });
+    }
+    if (apt.status === "IN_CHAIR") {
+      actions.push({ label: "Complete", status: "COMPLETED" });
+    }
+    if (apt.status === "COMPLETED") {
+      actions.push({ label: "Create invoice", status: "INVOICED" });
+    }
+
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {actions.map((action) => (
+          <Button
+            key={action.label}
+            size="sm"
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (action.label === "Create invoice") {
+                window.location.href = `/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`;
+                return;
+              }
+              void setStatus(apt.id, action.status);
+            }}
+          >
+            {action.label}
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" asChild>
+          <Link href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
+            Open clinical
+          </Link>
+        </Button>
+      </div>
+    );
   }
 
   async function assignChair(appointmentId: string, chairId: string | null) {
@@ -405,19 +460,12 @@ export function AppointmentsClient({
                         {format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — {apt.title}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end gap-2">
                       <Badge variant={statusVariant[apt.status] ?? "secondary"}>
-                        {apt.status.replace("_", " ")}
+                        {statusLabel[apt.status] ?? apt.status.replace("_", " ")}
                       </Badge>
-                      {apt.status !== "COMPLETED" && apt.status !== "CANCELED" && (
-                        <Button
-                          size="sm"
-                          type="button"
-                          onClick={() => advanceStatus(apt.id, apt.status)}
-                        >
-                          Next status
-                        </Button>
-                      )}
+                      {apt.status !== "CANCELED" && apt.status !== "NO_SHOW" && apt.status !== "INVOICED" &&
+                        renderStatusActions(apt)}
                     </div>
                   </div>
                 </div>
@@ -449,15 +497,12 @@ export function AppointmentsClient({
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                   <Badge variant={statusVariant[apt.status] ?? "secondary"}>
-                    {apt.status.replace("_", " ")}
+                    {statusLabel[apt.status] ?? apt.status.replace("_", " ")}
                   </Badge>
-                  {apt.status !== "COMPLETED" && apt.status !== "CANCELED" && (
-                    <Button size="sm" onClick={() => advanceStatus(apt.id, apt.status)}>
-                      Next status
-                    </Button>
-                  )}
+                  {apt.status !== "CANCELED" && apt.status !== "NO_SHOW" && apt.status !== "INVOICED" &&
+                    renderStatusActions(apt)}
                 </div>
               </CardContent>
             </Card>

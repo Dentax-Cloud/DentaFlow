@@ -1,25 +1,35 @@
-import { requireRouteAccess } from "@/lib/rbac/require-route-access";
-import { getDashboardKPIs } from "@/app/(dashboard)/features/dashboard/queries";
-import { normalizeDashboardRole } from "@/lib/rbac/permissions";
-import { getRoleHomePath } from "@/lib/rbac/routes";
+import { getTenantContext } from "@/lib/tenant/context";
+import { getServerAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import {
+  getDashboardKPIs,
+  getRoleDashboardExtras,
+} from "@/app/(dashboard)/features/dashboard/queries";
 import { DashboardClient } from "./dashboard-client";
 
 export default async function DashboardPage() {
-  const ctx = await requireRouteAccess("reports", "read");
-  const dashboardRole = normalizeDashboardRole(ctx.user.role);
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
 
-  if (dashboardRole !== "ADMIN") {
-    redirect(getRoleHomePath(ctx.user.role));
-  }
+  const ctx = await getTenantContext();
+  if (!ctx) redirect("/select-org");
 
-  const kpis = await getDashboardKPIs(ctx.tenant.id);
+  const userRole = ctx.staffMember?.role ?? "RECEPTIONIST";
+  const staffMemberId = ctx.staffMember?.id ?? null;
+
+  const [kpis, extras] = await Promise.all([
+    getDashboardKPIs(ctx.tenant.id),
+    getRoleDashboardExtras(ctx.tenant.id, userRole, staffMemberId),
+  ]);
 
   return (
     <DashboardClient
       kpis={kpis}
+      extras={extras}
       tenantName={ctx.tenant.name}
       plan={ctx.tenant.subscriptionPlan}
+      userRole={userRole}
+      staffMemberId={staffMemberId}
     />
   );
 }

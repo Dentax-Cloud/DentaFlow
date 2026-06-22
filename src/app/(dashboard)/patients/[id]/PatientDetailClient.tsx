@@ -97,13 +97,14 @@ export interface PatientDetailClientProps {
   uploadsEnabled: boolean;
 }
 
-type TabId = "overview" | "appointments" | "clinical" | "billing" | "documents";
+type TabId = "overview" | "appointments" | "clinical" | "treatment" | "billing" | "documents";
 
 const TABS: { id: TabId; label: string; icon: typeof User }[] = [
   { id: "overview", label: "Overview", icon: User },
   { id: "appointments", label: "Appointments", icon: Calendar },
-  { id: "clinical", label: "Clinical", icon: Stethoscope },
-  { id: "billing", label: "Billing", icon: Receipt },
+  { id: "clinical", label: "Clinical history", icon: Stethoscope },
+  { id: "treatment", label: "Treatment plans", icon: Heart },
+  { id: "billing", label: "Invoice history", icon: Receipt },
   { id: "documents", label: "Documents", icon: FileText },
 ];
 
@@ -288,7 +289,7 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
             <Button variant="secondary" size="sm" asChild>
               <Link href={`/appointments?patientId=${patient.id}`}>
                 <Calendar className="mr-2 h-4 w-4" />
-                Schedule
+                Book appointment
               </Link>
             </Button>
           </div>
@@ -485,13 +486,13 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle className="text-base">Clinical notes</CardTitle>
-                    <CardDescription>{patient.clinicalNotes.length} on file</CardDescription>
+                    <CardTitle className="text-base">Clinical history</CardTitle>
+                    <CardDescription>SOAP notes and odontogram findings</CardDescription>
                   </div>
                   <Button size="sm" asChild>
                     <Link href={`/clinical?patientId=${patient.id}`}>
                       <Sparkles className="mr-2 h-4 w-4" />
-                      Chart & SOAP
+                      Open chart
                     </Link>
                   </Button>
                 </CardHeader>
@@ -519,38 +520,41 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                   )}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Treatment plans</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {patient.treatmentPlans.length === 0 ? (
-                    <EmptyState message="No treatment plans. Suggest from the clinical chart." />
-                  ) : (
-                    patient.treatmentPlans.map((tp) => (
-                      <div
-                        key={tp.id}
-                        className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm"
-                      >
-                        <div>
-                          <p className="font-medium">{tp.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(tp.createdAt)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant="outline">{tp.status}</Badge>
-                          <p className="mt-1 text-xs font-medium tabular-nums">
-                            {formatCurrency(tp.totalCost)}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
             </div>
+          )}
+
+          {activeTab === "treatment" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Treatment plans</CardTitle>
+                <CardDescription>Active and completed treatment plans</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {patient.treatmentPlans.length === 0 ? (
+                  <EmptyState message="No treatment plans. Suggest from the clinical chart." />
+                ) : (
+                  patient.treatmentPlans.map((tp) => (
+                    <div
+                      key={tp.id}
+                      className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium">{tp.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(tp.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline">{tp.status}</Badge>
+                        <p className="mt-1 text-xs font-medium tabular-nums">
+                          {formatCurrency(tp.totalCost)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === "billing" && (

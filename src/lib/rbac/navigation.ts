@@ -106,6 +106,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/admin/procedure-catalog",
+    label: "Procedure catalog",
+    icon: Stethoscope,
+    resource: "admin",
+    action: "read",
+  },
+  {
     href: "/admin",
     label: "Admin",
     icon: Settings,

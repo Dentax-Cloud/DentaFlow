@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
 import { startOfDay, endOfDay } from "date-fns";
+import type { UserRole } from "@prisma/client";
+import { normalizeDashboardRole } from "@/lib/rbac/permissions";
 
 export async function getDashboardKPIs(tenantId: string) {
   const todayStart = startOfDay(new Date());
@@ -57,5 +59,77 @@ export async function getDashboardKPIs(tenantId: string) {
     patientCount,
     inChairNow,
     totalChairs,
+  };
+}
+
+export type TodayAppointmentRow = {
+  id: string;
+  title: string;
+  status: string;
+  startTime: Date;
+  patientName: string;
+  patientId: string;
+};
+
+export async function getRoleDashboardExtras(
+  tenantId: string,
+  role: UserRole,
+  staffMemberId: string | null,
+) {
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+  const dashboardRole = normalizeDashboardRole(role);
+
+  let doctorId: string | null = null;
+  if (staffMemberId && dashboardRole === "DOCTOR") {
+    const doctor = await db.doctor.findFirst({
+      where: { tenantId, userId: staffMemberId },
+      select: { id: true },
+    });
+    doctorId = doctor?.id ?? null;
+  }
+
+  const todayWhere = {
+    tenantId,
+    deletedAt: null,
+    startTime: { gte: todayStart, lte: todayEnd },
+    ...(doctorId ? { doctorId } : {}),
+  };
+
+  const [todayList, waitingCount, pendingPlans] = await Promise.all([
+    db.appointment.findMany({
+      where: todayWhere,
+      include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: { startTime: "asc" },
+      take: 20,
+    }),
+    db.appointment.count({
+      where: {
+        tenantId,
+        deletedAt: null,
+        startTime: { gte: todayStart, lte: todayEnd },
+        status: { in: ["ARRIVED", "CONFIRMED"] },
+      },
+    }),
+    db.treatmentPlan.count({
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: { in: ["PROPOSED", "ACCEPTED", "IN_PROGRESS"] },
+      },
+    }),
+  ]);
+
+  return {
+    todayAppointments: todayList.map((a) => ({
+      id: a.id,
+      title: a.title,
+      status: a.status,
+      startTime: a.startTime,
+      patientId: a.patient.id,
+      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+    })),
+    waitingCount,
+    pendingTreatmentPlans: pendingPlans,
   };
 }

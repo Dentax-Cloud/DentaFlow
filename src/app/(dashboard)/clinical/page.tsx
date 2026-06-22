@@ -5,9 +5,9 @@ import { ClinicalPageClient } from "./clinical-client";
 export default async function ClinicalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ patientId?: string }>;
+  searchParams: Promise<{ patientId?: string; appointmentId?: string }>;
 }) {
-  const { patientId } = await searchParams;
+  const { patientId, appointmentId } = await searchParams;
   const ctx = await requireRouteAccess("clinical", "read");
 
   const patients = await db.patient.findMany({
@@ -43,10 +43,17 @@ export default async function ClinicalPage({
     }
   }
 
+  const procedures = await db.procedureCatalog.findMany({
+    where: { tenantId: ctx.tenant.id, isActive: true },
+    orderBy: { name: "asc" },
+  });
+
   return (
     <ClinicalPageClient
       patients={patients}
       selectedPatientId={patientId}
+      appointmentId={appointmentId}
+      procedures={procedures}
       initialChartData={chartData}
     />
   );

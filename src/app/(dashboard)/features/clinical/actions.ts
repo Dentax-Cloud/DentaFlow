@@ -2,6 +2,7 @@
 
 
 
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 
 import { createAction } from "@/lib/actions/safe-action";
@@ -484,4 +485,81 @@ export async function getPatientChart(tenantId: string, patientId: string) {
   });
 
 }
+
+const generateInvoiceSchema = z.object({
+  patientId: z.string(),
+  appointmentId: z.string(),
+  procedures: z.array(
+    z.object({
+      procedureId: z.string(),
+      quantity: z.number().int().min(1).default(1),
+    }),
+  ).min(1),
+});
+
+export const generateInvoiceFromProcedures = createAction({
+  schema: generateInvoiceSchema,
+  permission: () => requirePermission(PERMISSIONS.billing.write),
+  handler: async (input, ctx) => {
+    await requirePatientInTenant(ctx.tenant.id, input.patientId);
+
+    const catalogItems = await db.procedureCatalog.findMany({
+      where: {
+        id: { in: input.procedures.map((p) => p.procedureId) },
+        tenantId: ctx.tenant.id,
+        isActive: true,
+      },
+    });
+
+    if (catalogItems.length === 0) throw new Error("No valid procedures selected");
+
+    const count = await db.invoice.count({ where: { tenantId: ctx.tenant.id } });
+    const { generateInvoiceNumber } = await import("@/lib/utils");
+
+    const items = catalogItems.map((item) => {
+      const qty = input.procedures.find((p) => p.procedureId === item.id)?.quantity ?? 1;
+      const unitPrice = Number(item.price);
+      return {
+        tenantId: ctx.tenant.id,
+        description: item.name,
+        quantity: qty,
+        unitPrice,
+        total: unitPrice * qty,
+        procedureCode: item.code,
+      };
+    });
+
+    const subtotal = items.reduce((s, i) => s + i.total, 0);
+    const settings = await db.settings.findUnique({ where: { tenantId: ctx.tenant.id } });
+    const taxRate = settings?.taxRate ?? 0;
+    const tax = subtotal * (taxRate / 100);
+    const total = subtotal + tax;
+
+    const invoice = await db.invoice.create({
+      data: {
+        tenantId: ctx.tenant.id,
+        patientId: input.patientId,
+        invoiceNumber: generateInvoiceNumber(count + 1),
+        status: "DRAFT",
+        subtotal,
+        tax,
+        total,
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        notes: `Appointment ${input.appointmentId}`,
+        items: { create: items },
+      },
+      include: { items: true },
+    });
+
+    await db.appointment.updateMany({
+      where: tenantWhere(ctx.tenant.id, { id: input.appointmentId }),
+      data: { status: "INVOICED" },
+    });
+
+    revalidatePath("/billing");
+    revalidatePath("/clinical");
+    revalidatePath("/appointments");
+    return invoice;
+  },
+});
 

@@ -23,6 +23,8 @@ import {
 } from "@/app/(dashboard)/features/clinical/actions";
 import { ToothConditionType } from "@prisma/client";
 import type { TreatmentSuggestion } from "@/lib/ai";
+import { ProcedureVisitPanel } from "@/components/clinical/procedure-visit-panel";
+import type { ProcedureCatalog } from "@prisma/client";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 function updateClinicalUrl(patientId: string) {
@@ -33,10 +35,14 @@ function updateClinicalUrl(patientId: string) {
 export function ClinicalPageClient({
   patients,
   selectedPatientId,
+  appointmentId,
+  procedures,
   initialChartData,
 }: {
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
   selectedPatientId?: string;
+  appointmentId?: string;
+  procedures: ProcedureCatalog[];
   initialChartData: ToothChartData;
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
@@ -347,6 +353,14 @@ export function ClinicalPageClient({
               autoFromChart={autoFromChart}
               onAutoFromChartChange={setAutoFromChart}
             />
+
+            {patientId && (
+              <ProcedureVisitPanel
+                patientId={patientId}
+                appointmentId={appointmentId}
+                procedures={procedures}
+              />
+            )}
           </div>
 
           <div className="space-y-4">
