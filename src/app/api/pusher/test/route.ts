@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth/stubs/server";
+import { getServerAuthSession } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/tenant/config";
 import { getPusherServer } from "@/lib/pusher";
 
@@ -22,7 +22,8 @@ async function triggerTestEvent() {
 }
 
 export async function GET() {
-  const { userId } = await auth();
+  const session = await getServerAuthSession();
+  const userId = session?.user?.id ?? null;
   if (!canRunPusherTest(userId)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }

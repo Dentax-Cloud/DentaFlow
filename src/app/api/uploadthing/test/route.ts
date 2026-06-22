@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth/stubs/server";
+import { getServerAuthSession } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/tenant/config";
 import { getUploadthingToken } from "@/lib/uploadthing-env";
 import { getUTApi } from "@/lib/uploadthing-server";
@@ -9,7 +9,8 @@ function canRunUploadthingTest(userId: string | null): boolean {
 }
 
 export async function GET() {
-  const { userId } = await auth();
+  const session = await getServerAuthSession();
+  const userId = session?.user?.id ?? null;
   if (!canRunUploadthingTest(userId)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }

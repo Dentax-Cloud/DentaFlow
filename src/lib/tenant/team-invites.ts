@@ -84,27 +84,11 @@ export async function listPendingTeamInvitesFromMetadata(
   return Object.entries(pending).map(([email, role]) => ({ email, role }));
 }
 
-export async function readRoleFromClerkInvitation(
-  organizationId: string,
+export async function readRoleFromPendingInvite(
+  tenantId: string,
   email: string,
 ): Promise<UserRole | null> {
-  const { clerkClient } = await import("@/lib/auth/stubs/server");
-  const { readDentaflowRoleFromMetadata } = await import("./clerk-roles");
-  const client = await clerkClient();
-  const normalized = normalizeEmail(email);
-
-  for (const status of ["pending", "accepted"] as const) {
-    const list = await client.organizations.getOrganizationInvitationList({
-      organizationId,
-      status: [status],
-    });
-
-    const match = list.data.find(
-      (inv) => inv.emailAddress.toLowerCase() === normalized,
-    );
-    const role = readDentaflowRoleFromMetadata(match?.publicMetadata);
-    if (role) return role;
-  }
-
-  return null;
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return null;
+  return getPendingTeamInvite(tenant, email);
 }

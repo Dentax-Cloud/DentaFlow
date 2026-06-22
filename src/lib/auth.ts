@@ -27,8 +27,8 @@ async function loadMembershipContext(userId: string, preferredTenantId?: string 
   ]);
 
   const active =
-    memberships.find((m) => m.tenantId === preferredTenantId) ??
     memberships.find((m) => m.tenantId === authUser?.activeTenantId) ??
+    memberships.find((m) => m.tenantId === preferredTenantId) ??
     memberships[0] ??
     null;
 

@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { clerkClient } from "@/lib/auth/stubs/server";
 import { revalidatePath } from "next/cache";
 import { TenantStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -127,24 +126,17 @@ export async function bulkActivateTenantsAction(input: { tenantIds: string[] }) 
 }
 
 /**
- * Adds super admin to target Clerk org (if needed) and returns org id for client-side setActive.
+ * Switches super-admin active tenant and returns tenant id for client redirect.
  */
 export async function impersonateTenantAction(input: { tenantId: string }) {
   return withSuperAdmin(async (userId) => {
     const tenant = await db.tenant.findUnique({ where: { id: input.tenantId } });
     if (!tenant || tenant.deletedAt) throw new Error("Tenant not found");
 
-    const client = await clerkClient();
-    const memberships = await client.users.getOrganizationMembershipList({ userId });
-    const isMember = memberships.data.some((m) => m.organization.id === tenant.clerkOrgId);
-
-    if (!isMember) {
-      await client.organizations.createOrganizationMembership({
-        organizationId: tenant.clerkOrgId,
-        userId,
-        role: "org:admin",
-      });
-    }
+    await db.auth_users.update({
+      where: { id: userId },
+      data: { activeTenantId: tenant.id },
+    });
 
     await logTenantAudit({
       tenantId: tenant.id,
@@ -155,6 +147,6 @@ export async function impersonateTenantAction(input: { tenantId: string }) {
       metadata: { action: "impersonate" },
     });
 
-    return { clerkOrgId: tenant.clerkOrgId, tenantName: tenant.name };
+    return { tenantId: tenant.id, tenantName: tenant.name };
   });
 }

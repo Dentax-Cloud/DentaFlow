@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useAuth, useSignUp, useUser } from "@/lib/auth/stubs/client";
+import { useAuth, useUser } from "@/lib/auth/client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -81,13 +81,10 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const { user, isLoaded: userLoaded } = useUser();
-  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp();
   const { startUpload, isUploading } = useUploadThing("registrationLogo");
 
   const [step, setStep] = useState(initialStep);
   const [submitting, setSubmitting] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState("");
@@ -164,23 +161,16 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
 
     const oauthReturn = searchParams.get("oauth") === "1";
     if (isSignedIn && user) {
-      const firstName = user.firstName ?? "";
-      const lastName = user.lastName ?? "";
-      const email = user.primaryEmailAddress?.emailAddress ?? "";
-      const phone = user.primaryPhoneNumber?.phoneNumber ?? "";
+      const nameParts = (user.name ?? "").trim().split(/\s+/);
+      const firstName = nameParts[0] ?? "";
+      const lastName = nameParts.slice(1).join(" ");
+      const email = user.email ?? "";
       if (firstName) step1Form.setValue("firstName", firstName);
       if (lastName) step1Form.setValue("lastName", lastName);
       if (email) step1Form.setValue("email", email);
-      if (phone) step1Form.setValue("phone", phone);
-
-      const hasGoogleAccount = user.externalAccounts.some(
-        (account) => account.provider === "google",
-      );
-      if (oauthReturn || hasGoogleAccount) {
-        setOauthConnected(true);
-      }
 
       if (oauthReturn) {
+        setOauthConnected(true);
         setStep(2);
       }
     }
@@ -250,14 +240,9 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
   }
 
   async function handleGoogleSignUp() {
-    if (!signUpLoaded || !signUp) return;
     persistWizard(step1Form.getValues());
     try {
-      await signUp.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sign-up/sso-callback",
-        redirectUrlComplete: "/sign-up?oauth=1",
-      });
+      await signIn("google", { callbackUrl: "/sign-up?oauth=1" });
     } catch (err) {
       toast.error(clerkErrorMessage(err));
     }
@@ -283,13 +268,6 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
       step2: { ...wizardData, ...step2Form.getValues() } as RegistrationStep2,
       step3: { ...wizardData, ...step3Form.getValues() } as RegistrationStep3,
     };
-  }
-
-  async function activateOrganization(clerkOrgId: string) {
-    if (!setActive) {
-      throw new Error("Session handler unavailable. Please refresh and try again.");
-    }
-    await setActive({ organization: clerkOrgId });
   }
 
   async function finishRegistration(
@@ -320,13 +298,11 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
       sessionStorage.removeItem(PENDING_REGISTRATION_KEY);
       toast.success(`Welcome to DentaFlow! ${step2.clinicName} is ready.`);
 
-      if (result.clerkOrgId) {
-        await activateOrganization(result.clerkOrgId);
-        window.location.assign("/dashboard");
+      if (isSignedIn) {
+        window.location.assign(`/t/${result.tenantSlug}/dashboard`);
         return;
       }
 
-      // NextAuth registration: sign in then open tenant dashboard
       const signInResult = await signIn("credentials", {
         email: step1.email,
         password: step1.password,
@@ -348,69 +324,18 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
   }
 
   async function createAccountAndRegister() {
-    if (!isSignedIn && (!signUpLoaded || !signUp)) {
-      toast.error("Authentication is still loading. Please wait.");
-      return;
-    }
-
     const { step1, step2, step3 } = collectAllStepData();
 
     setSubmitting(true);
 
     try {
-      if (isSignedIn) {
-        await finishRegistration(step1, step2, step3);
-        return;
-      }
-
-      if (!signUp) {
-        toast.error("Authentication is still loading. Please wait.");
+      if (!isSignedIn && !step1.password) {
+        toast.error("Password is required to create an account.");
         setSubmitting(false);
         return;
       }
 
-      await signUp.create({
-        emailAddress: step1.email,
-        password: step1.password,
-        firstName: step1.firstName,
-        lastName: step1.lastName,
-      });
-
-      if (signUp.status === "complete" && signUp.createdSessionId) {
-        if (setActive) {
-          await setActive({ session: signUp.createdSessionId });
-        }
-        await finishRegistration(step1, step2, step3);
-        return;
-      }
-
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      setVerifying(true);
-      setSubmitting(false);
-      toast.message("Check your email for a verification code");
-    } catch (err) {
-      setSubmitting(false);
-      toast.error(clerkErrorMessage(err));
-    }
-  }
-
-  async function handleVerifyAndRegister() {
-    if (!signUpLoaded || !signUp) return;
-
-    setSubmitting(true);
-    try {
-      const result = await signUp.attemptEmailAddressVerification({ code: verificationCode });
-      if (result.status === "complete" && result.createdSessionId) {
-        if (setActive) {
-          await setActive({ session: result.createdSessionId });
-        }
-        setVerifying(false);
-        const { step1, step2, step3 } = collectAllStepData();
-        await finishRegistration(step1, step2, step3);
-      } else {
-        toast.error("Verification incomplete. Please try again.");
-        setSubmitting(false);
-      }
+      await finishRegistration(step1, step2, step3);
     } catch (err) {
       setSubmitting(false);
       toast.error(clerkErrorMessage(err));
@@ -420,9 +345,9 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
   const progress = (step / STEPS.length) * 100;
   const allData = { ...wizardData, ...step1Form.watch(), ...step2Form.watch(), ...step3Form.watch() };
 
-  const clerkReady = authLoaded && userLoaded && (isSignedIn || signUpLoaded);
+  const authReady = authLoaded && userLoaded;
 
-  if (!clerkReady) {
+  if (!authReady) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
@@ -776,40 +701,20 @@ export function ClinicRegistrationWizard({ uploadsEnabled, initialStep = 1 }: Pr
             </div>
           </div>
 
-          {verifying ? (
-            <div className="space-y-3">
-              <Label htmlFor="code">Email verification code</Label>
-              <Input
-                id="code"
-                className={inputClass}
-                placeholder="Enter 6-digit code"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-              />
-              <Button
-                className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 font-semibold"
-                onClick={handleVerifyAndRegister}
-                disabled={submitting || verificationCode.length < 6}
-              >
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & launch clinic"}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 text-base font-semibold shadow-lg shadow-sky-500/20 hover:from-sky-500 hover:to-cyan-400"
-              onClick={createAccountAndRegister}
-              disabled={submitting || isUploading}
-            >
-              {submitting || isUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating your clinic...
-                </>
-              ) : (
-                "Start Free 14-Day Trial"
-              )}
-            </Button>
-          )}
+          <Button
+            className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 text-base font-semibold shadow-lg shadow-sky-500/20 hover:from-sky-500 hover:to-cyan-400"
+            onClick={createAccountAndRegister}
+            disabled={submitting || isUploading}
+          >
+            {submitting || isUploading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating your clinic...
+              </>
+            ) : (
+              "Start Free 14-Day Trial"
+            )}
+          </Button>
 
           <Button type="button" variant="outline" className="h-11 w-full rounded-xl border-white/15" onClick={() => setStep(3)}>
             <ArrowLeft className="h-4 w-4" /> Back to edit

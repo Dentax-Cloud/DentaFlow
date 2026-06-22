@@ -1,6 +1,6 @@
 "use client";
 
-import { SignOutButton, useUser } from "@/lib/auth/stubs/client";
+import { SignOutButton, useUser } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -16,7 +16,7 @@ export function RegistrationSessionBanner({ registrationComplete }: Props) {
     return null;
   }
 
-  const email = user.primaryEmailAddress?.emailAddress ?? user.fullName ?? "your account";
+  const email = user.email ?? user.name ?? "your account";
 
   return (
     <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">

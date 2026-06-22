@@ -1,10 +1,17 @@
+export const runtime = "nodejs";
+
 import { redirect } from "next/navigation";
+import { getServerAuthSession } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant/context";
 import { OnboardingClient } from "./onboarding-client";
 import { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import { db } from "@/lib/db";
 
 export default async function OnboardingPage() {
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) redirect("/login");
+  if (session.user.activeTenantId) redirect("/dashboard");
+
   const ctx = await getTenantContext();
   if (!ctx) redirect("/select-org");
 
@@ -12,7 +19,7 @@ export default async function OnboardingPage() {
 
   const initial = {
     clinicName: ctx.tenant.name ?? "",
-    email: ctx.tenant.email ?? ctx.user.email ?? "",
+    email: ctx.tenant.email ?? ctx.staffMember?.email ?? "",
     phone: ctx.tenant.phone ?? "",
     address: ctx.tenant.address ?? "",
     city: ctx.tenant.city ?? "",

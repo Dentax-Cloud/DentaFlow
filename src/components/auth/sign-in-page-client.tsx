@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/lib/auth/stubs/client";
+import { useAuth } from "@/lib/auth/client";
 import { Loader2 } from "lucide-react";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { SignedInAuthPrompt } from "@/components/auth/signed-in-auth-prompt";

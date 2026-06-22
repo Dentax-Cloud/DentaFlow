@@ -1,20 +1,10 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
 export default function PortalTreatmentPage() {
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Treatment summary</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Your treatment plans</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Accepted treatment plans and phase progress appear here once linked to your
-            patient record. Contact your clinic for detailed clinical information.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="text-center">
+        <h1 className="mb-2 text-2xl font-bold text-white">Treatment summary</h1>
+        <p className="text-zinc-400">Coming soon. Contact your clinic for access.</p>
+      </div>
     </div>
   );
 }

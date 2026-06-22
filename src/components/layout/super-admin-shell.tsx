@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserButton } from "@/lib/auth/stubs/client";
+import { UserButton } from "@/lib/auth/client";
 import {
   LayoutDashboard,
   Building2,

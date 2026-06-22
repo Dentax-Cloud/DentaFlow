@@ -1,6 +1,5 @@
 import type { Tenant } from "@prisma/client";
-import { getTenantFromClerkOrg } from "@/lib/tenant/isolation";
-import { resolvePostLoginUrl } from "@/lib/auth/post-login-redirect";
+import { db } from "@/lib/db";
 
 export type ClinicRegistrationStatus = {
   isComplete: boolean;
@@ -11,13 +10,13 @@ export type ClinicRegistrationStatus = {
  * Node.js only — uses Prisma. Do not import from middleware.
  */
 export async function getClinicRegistrationStatus(
-  orgId: string | null | undefined,
+  tenantId: string | null | undefined,
 ): Promise<ClinicRegistrationStatus> {
-  if (!orgId) {
+  if (!tenantId) {
     return { isComplete: false, tenant: null };
   }
 
-  const tenant = await getTenantFromClerkOrg(orgId);
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) {
     return { isComplete: false, tenant: null };
   }
@@ -32,12 +31,16 @@ export async function getClinicRegistrationStatus(
  * Post-auth redirect target (NextAuth-first).
  */
 export async function resolvePostAuthDestination(
-  userId: string,
-  _orgId?: string | null | undefined,
+  userId: string | null,
+  orgId: string | null,
 ): Promise<string> {
   if (!userId) return "/login";
-  return resolvePostLoginUrl(userId);
-}
+  if (orgId) return "/dashboard";
 
-/** @deprecated Clerk-era helper — prefer resolvePostLoginUrl */
-export { userHasOrganizationMembership } from "@/lib/auth/registration-clerk";
+  const membership = await db.tenant_memberships.findFirst({
+    where: { userId, isActive: true },
+  });
+  if (membership) return "/dashboard";
+
+  return "/sign-up";
+}
