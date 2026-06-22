@@ -2,39 +2,40 @@ import type { NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
-import { TenantRole } from "@prisma/client";
 import { db } from "@/lib/db";
 
-function parseSuperAdminIds(): string[] {
-  return (process.env.SUPER_ADMIN_AUTH_USER_IDS ?? "")
+export function resolveIsSuperAdmin(userId: string): boolean {
+  const envIds = (process.env.SUPER_ADMIN_AUTH_USER_IDS ?? "")
     .split(",")
-    .map((id) => id.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
-}
-
-export function resolveIsSuperAdmin(
-  userId: string,
-  membershipRole: TenantRole | null,
-): boolean {
-  if (membershipRole === TenantRole.SUPERADMIN) return true;
-  return parseSuperAdminIds().includes(userId);
+  if (envIds.includes(userId)) return true;
+  return false;
 }
 
 async function loadMembershipContext(userId: string, preferredTenantId?: string | null) {
-  const memberships = await db.tenant_memberships.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-  });
+  const [memberships, authUser] = await Promise.all([
+    db.tenant_memberships.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.auth_users.findUnique({
+      where: { id: userId },
+      select: { isSuperAdmin: true, activeTenantId: true },
+    }),
+  ]);
 
   const active =
-    memberships.find((m) => m.tenantId === preferredTenantId) ?? memberships[0] ?? null;
+    memberships.find((m) => m.tenantId === preferredTenantId) ??
+    memberships.find((m) => m.tenantId === authUser?.activeTenantId) ??
+    memberships[0] ??
+    null;
 
   return {
-    activeTenantId: active?.tenantId ?? null,
+    activeTenantId: active?.tenantId ?? authUser?.activeTenantId ?? null,
     role: active?.role ?? null,
-    isSuperAdmin: resolveIsSuperAdmin(userId, active?.role ?? null),
+    isSuperAdmin: resolveIsSuperAdmin(userId) || (authUser?.isSuperAdmin ?? false),
   };
 }
 
@@ -76,7 +77,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db),
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",

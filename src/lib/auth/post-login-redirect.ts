@@ -1,7 +1,7 @@
 /**
  * Post-login routing (H3) — Node.js only, not for middleware.
  */
-import { TenantRole, TenantStatus } from "@prisma/client";
+import { TenantStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { resolveIsSuperAdmin } from "@/lib/auth";
 
@@ -29,10 +29,10 @@ export async function resolvePostLoginDestination(
   authUserId: string,
   options?: ResolveOptions,
 ): Promise<PostLoginDestination> {
-  const memberships = await db.tenantMembership.findMany({
+  const memberships = await db.tenant_memberships.findMany({
     where: { userId: authUserId },
     include: {
-      tenant: {
+      Tenant: {
         select: {
           id: true,
           slug: true,
@@ -44,11 +44,7 @@ export async function resolvePostLoginDestination(
     orderBy: { createdAt: "asc" },
   });
 
-  const membershipRole =
-    memberships.find((m) => m.role === TenantRole.SUPERADMIN)?.role ?? memberships[0]?.role ?? null;
-
-  const isSuperAdmin =
-    options?.isSuperAdmin ?? resolveIsSuperAdmin(authUserId, membershipRole);
+  const isSuperAdmin = options?.isSuperAdmin ?? resolveIsSuperAdmin(authUserId);
 
   if (isSuperAdmin) {
     return { type: "superadmin", url: "/superadmin/tenants" };
@@ -59,11 +55,11 @@ export async function resolvePostLoginDestination(
   }
 
   const activeMemberships = memberships.filter(
-    (m) => m.tenant.status === TenantStatus.ACTIVE,
+    (m) => m.Tenant.status === TenantStatus.ACTIVE,
   );
   const pendingOnly =
     activeMemberships.length === 0 &&
-    memberships.some((m) => m.tenant.status === TenantStatus.PENDING);
+    memberships.some((m) => m.Tenant.status === TenantStatus.PENDING);
 
   if (pendingOnly) {
     return { type: "pending-approval", url: "/pending-approval" };
@@ -76,8 +72,8 @@ export async function resolvePostLoginDestination(
     if (preferred) {
       return {
         type: "tenant",
-        url: `/t/${preferred.tenant.slug}/dashboard`,
-        tenantSlug: preferred.tenant.slug,
+        url: `/t/${preferred.Tenant.slug}/dashboard`,
+        tenantSlug: preferred.Tenant.slug,
       };
     }
   }
@@ -86,8 +82,8 @@ export async function resolvePostLoginDestination(
     const m = usable[0]!;
     return {
       type: "tenant",
-      url: `/t/${m.tenant.slug}/dashboard`,
-      tenantSlug: m.tenant.slug,
+      url: `/t/${m.Tenant.slug}/dashboard`,
+      tenantSlug: m.Tenant.slug,
     };
   }
 

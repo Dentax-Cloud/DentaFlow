@@ -36,5 +36,9 @@ fi
 echo "Installing dependencies..."
 pnpm install
 sh ./scripts/wait-for-db.sh
+echo "Running migrations..."
+pnpm prisma migrate deploy
+echo "Applying auth tables..."
+psql $DATABASE_URL -f /app/prisma/migrations/20260622000000_add_auth_tables/migration.sql 2>/dev/null || true
 pnpm prisma generate
 exec pnpm dev

@@ -1,11 +1,11 @@
 import { clerkClient, currentUser } from "@/lib/auth/stubs/server";
+import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import type { StaffMember, Tenant } from "@prisma/client";
 import {
   UserRole,
   TenantStatus,
   SubscriptionStatus,
-  TenantRole,
 } from "@prisma/client";
 import { slugify } from "@/lib/utils/slugify";
 import { tenantConfig } from "./config";
@@ -29,15 +29,16 @@ export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: bool
 export async function createTenantMembership(input: {
   tenantId: string;
   authUserId: string;
-  role?: TenantRole;
+  role?: string;
 }) {
-  const role = input.role ?? TenantRole.ADMIN;
-  return db.tenantMembership.upsert({
+  const role = input.role ?? "ADMIN";
+  return db.tenant_memberships.upsert({
     where: {
       userId_tenantId: { userId: input.authUserId, tenantId: input.tenantId },
     },
     update: { role },
     create: {
+      id: randomUUID(),
       userId: input.authUserId,
       tenantId: input.tenantId,
       role,
@@ -86,9 +87,9 @@ async function linkAuthUserToTenant(params: {
   tenantId: string;
   email: string;
   staffMemberId: string;
-  membershipRole?: TenantRole;
+  membershipRole?: string;
 }) {
-  const authUser = await db.user.findUnique({
+  const authUser = await db.auth_users.findUnique({
     where: { email: params.email.toLowerCase().trim() },
   });
   if (!authUser) return null;
@@ -96,7 +97,7 @@ async function linkAuthUserToTenant(params: {
   await createTenantMembership({
     tenantId: params.tenantId,
     authUserId: authUser.id,
-    role: params.membershipRole ?? TenantRole.ADMIN,
+    role: params.membershipRole ?? "ADMIN",
   });
 
   await db.staffMember.update({
@@ -151,7 +152,7 @@ export async function provisionTenant(input: {
     createTenantMembership({
       tenantId: tenant.id,
       authUserId: input.ownerAuthUserId,
-      role: TenantRole.ADMIN,
+      role: "ADMIN",
     }),
     db.staffMember.create({
       data: {
@@ -254,7 +255,7 @@ export async function provisionTenantForSession(
       tenantId: tenant.id,
       email,
       staffMemberId: user.id,
-      membershipRole: TenantRole.ADMIN,
+      membershipRole: "ADMIN",
     });
   }
 
@@ -363,14 +364,14 @@ export async function provisionTenantFromWebhook(params: {
       await createTenantMembership({
         tenantId: tenant.id,
         authUserId: params.authUserId,
-        role: TenantRole.ADMIN,
+        role: "ADMIN",
       });
     } else if (params.ownerEmail) {
       await linkAuthUserToTenant({
         tenantId: tenant.id,
         email: params.ownerEmail,
         staffMemberId: staffMember.id,
-        membershipRole: TenantRole.ADMIN,
+        membershipRole: "ADMIN",
       });
     }
 

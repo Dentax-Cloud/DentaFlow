@@ -1,9 +1,8 @@
-import { TenantRole } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getServerAuthSession, resolveIsSuperAdmin } from "@/lib/auth";
 
 export async function getMembershipForTenant(userId: string, tenantId: string) {
-  return db.tenantMembership.findUnique({
+  return db.tenant_memberships.findUnique({
     where: { userId_tenantId: { userId, tenantId } },
   });
 }
@@ -25,8 +24,8 @@ export async function requireTenantMembership(tenantId: string) {
 }
 
 export function hasTenantRole(
-  role: TenantRole | null | undefined,
-  allowed: TenantRole[],
+  role: string | null | undefined,
+  allowed: string[],
 ): boolean {
   if (!role) return false;
   return allowed.includes(role);
@@ -46,10 +45,11 @@ export async function canAccessTenantSlug(slug: string) {
 
 export async function isUserSuperAdmin(userId: string): Promise<boolean> {
   if (parseSuperAdminEnv().includes(userId)) return true;
-  const superMembership = await db.tenantMembership.findFirst({
-    where: { userId, role: TenantRole.SUPERADMIN },
+  const authUser = await db.auth_users.findUnique({
+    where: { id: userId },
+    select: { isSuperAdmin: true },
   });
-  return Boolean(superMembership);
+  return authUser?.isSuperAdmin ?? false;
 }
 
 function parseSuperAdminEnv(): string[] {

@@ -8,7 +8,6 @@ import {
   AppointmentStatus,
   CampaignChannel,
   SubscriptionStatus,
-  TenantRole,
   TenantStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -220,19 +219,30 @@ async function runTrialExpiryJob() {
         subscriptionStatus: SubscriptionStatus.TRIALING,
         trialEndsAt: { not: null, gt: new Date() },
       },
-      include: {
-        memberships: {
-          where: { role: { in: [TenantRole.ADMIN, TenantRole.SUPERADMIN] } },
-          orderBy: { createdAt: "asc" },
-          take: 1,
-          include: { user: { select: { email: true, name: true } } },
-        },
-      },
     });
 
     for (const tenant of tenantsOnTrial) {
-      const owner = tenant.memberships[0]?.user;
-      if (!owner?.email || !tenant.trialEndsAt) continue;
+      if (!tenant.trialEndsAt) continue;
+
+      const memberships = await db.tenant_memberships.findMany({
+        where: {
+          tenantId: tenant.id,
+          isActive: true,
+          role: { in: ["ADMIN", "OWNER"] },
+        },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      });
+
+      const membership = memberships[0];
+      if (!membership) continue;
+
+      const owner = await db.auth_users.findUnique({
+        where: { id: membership.userId },
+        select: { email: true, name: true },
+      });
+
+      if (!owner?.email) continue;
 
       const daysRemaining = Math.ceil(
         (tenant.trialEndsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000),

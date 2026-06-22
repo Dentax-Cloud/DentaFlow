@@ -1,5 +1,6 @@
 import { auth, clerkClient } from "@/lib/auth/stubs/server";
-import { UserRole, TenantRole, TenantStatus } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { UserRole, TenantStatus } from "@prisma/client";
 import { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
@@ -150,7 +151,7 @@ async function registerClinicNextAuth(
   }
 
   const email = input.email.toLowerCase().trim();
-  const existing = await db.user.findUnique({ where: { email } });
+  const existing = await db.auth_users.findUnique({ where: { email } });
   if (existing) {
     return {
       success: false,
@@ -163,8 +164,9 @@ async function registerClinicNextAuth(
   const ownerName = formatAdminName(input.firstName, input.lastName);
   const fullAddress = buildFullAddress(input);
 
-  const authUser = await db.user.create({
+  const authUser = await db.auth_users.create({
     data: {
+      id: `auth_${randomUUID()}`,
       email,
       name: ownerName,
       passwordHash,
@@ -184,7 +186,7 @@ async function registerClinicNextAuth(
       timezone: input.timezone,
     });
   } catch (err) {
-    await db.user.delete({ where: { id: authUser.id } }).catch(() => null);
+    await db.auth_users.delete({ where: { id: authUser.id } }).catch(() => null);
     console.error("[registerClinic] provisioning failed:", err);
     return { success: false, error: "Failed to create clinic. Please try again." };
   }
@@ -261,12 +263,12 @@ async function registerClinicClerk(
     },
   });
 
-  const authUser = await db.user.findUnique({ where: { email: input.email.toLowerCase().trim() } });
+  const authUser = await db.auth_users.findUnique({ where: { email: input.email.toLowerCase().trim() } });
   if (authUser) {
     await createTenantMembership({
       tenantId: tenant.id,
       authUserId: authUser.id,
-      role: TenantRole.ADMIN,
+      role: "ADMIN",
     });
     await db.staffMember.updateMany({
       where: { tenantId: tenant.id, clerkUserId: userId },

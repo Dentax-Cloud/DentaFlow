@@ -129,14 +129,14 @@ export async function getUserTenants() {
   const session = await getServerAuthSession();
   if (!session?.user?.id) return [];
 
-  const memberships = await db.tenantMembership.findMany({
+  const memberships = await db.tenant_memberships.findMany({
     where: { userId: session.user.id },
-    include: { tenant: true },
+    include: { Tenant: true },
     orderBy: { createdAt: "asc" },
   });
 
   return memberships.map((m) => ({
-    ...m.tenant,
+    ...m.Tenant,
     role: m.role,
     membershipId: m.id,
   }));
