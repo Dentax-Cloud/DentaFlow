@@ -33,13 +33,12 @@ export function SignOutButton({
   redirectUrl?: string;
 }) {
   return (
-    <button
-      type="button"
+    <span
       onClick={() => signOut({ callbackUrl: redirectUrl })}
-      style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+      style={{ cursor: "pointer", display: "contents" }}
     >
       {children}
-    </button>
+    </span>
   );
 }
 
