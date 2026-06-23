@@ -48,12 +48,18 @@ export default async function ClinicalPage({
     orderBy: { name: "asc" },
   });
 
+  const serializedProcedures = procedures.map((p) => ({
+    ...p,
+    price: p.price ? Number(p.price) : 0,
+    costPrice: p.costPrice ? Number(p.costPrice) : 0,
+  }));
+
   return (
     <ClinicalPageClient
       patients={patients}
       selectedPatientId={patientId}
       appointmentId={appointmentId}
-      procedures={procedures}
+      procedures={serializedProcedures}
       initialChartData={chartData}
     />
   );
