@@ -6,6 +6,7 @@ import {
   getRevenueByProcedureReport,
 } from "@/app/(dashboard)/features/reports/queries";
 import { getDashboardKPIs } from "@/app/(dashboard)/features/dashboard/queries";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
@@ -21,12 +22,15 @@ export default async function ReportsPage() {
 
   return (
     <ReportsClient
-      kpis={kpis}
+      kpis={serializeDecimal(kpis)}
       tenantId={ctx.tenant.id}
-      doctorProductivity={doctorProductivity}
-      revenueByProcedure={revenueByProcedure}
-      retention={retention}
-      chairUtil={chairUtil}
+      doctorProductivity={doctorProductivity.map(serializeDecimal)}
+      revenueByProcedure={revenueByProcedure.map(serializeDecimal)}
+      retention={serializeDecimal(retention)}
+      chairUtil={{
+        ...chairUtil,
+        byChair: chairUtil.byChair.map(serializeDecimal),
+      }}
     />
   );
 }

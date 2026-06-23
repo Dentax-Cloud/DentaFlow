@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import type { PatientDetailProfile } from "./PatientDetailClient";
 
 export type PatientWith360 = Prisma.PatientGetPayload<{
@@ -60,20 +61,26 @@ export function mapPatientTo360Profile(p: PatientWith360): PatientDetailProfile 
       startTime: a.startTime.toISOString(),
       endTime: a.endTime.toISOString(),
     })),
-    treatmentPlans: p.treatmentPlans.map((tp) => ({
-      id: tp.id,
-      title: tp.title,
-      status: tp.status,
-      totalCost: Number(tp.totalCost),
-      createdAt: tp.createdAt.toISOString(),
-    })),
-    invoices: p.invoices.map((inv) => ({
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      status: inv.status,
-      total: Number(inv.total),
-      createdAt: inv.createdAt.toISOString(),
-    })),
+    treatmentPlans: p.treatmentPlans.map((tp) => {
+      const { totalCost } = serializeDecimal(tp);
+      return {
+        id: tp.id,
+        title: tp.title,
+        status: tp.status,
+        totalCost,
+        createdAt: tp.createdAt.toISOString(),
+      };
+    }),
+    invoices: p.invoices.map((inv) => {
+      const { total } = serializeDecimal(inv);
+      return {
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        status: inv.status,
+        total,
+        createdAt: inv.createdAt.toISOString(),
+      };
+    }),
     clinicalNotes: p.clinicalNotes.map((n) => ({
       id: n.id,
       visitDate: n.visitDate.toISOString(),

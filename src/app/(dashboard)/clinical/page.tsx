@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import { ClinicalPageClient } from "./clinical-client";
 
 export default async function ClinicalPage({
@@ -48,11 +49,7 @@ export default async function ClinicalPage({
     orderBy: { name: "asc" },
   });
 
-  const serializedProcedures = procedures.map((p) => ({
-    ...p,
-    price: p.price ? Number(p.price) : 0,
-    costPrice: p.costPrice ? Number(p.costPrice) : 0,
-  }));
+  const serializedProcedures = procedures.map(serializeDecimal);
 
   return (
     <ClinicalPageClient

@@ -5,6 +5,7 @@ import {
   getDashboardKPIs,
   getRoleDashboardExtras,
 } from "@/app/(dashboard)/features/dashboard/queries";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import { DashboardClient } from "./dashboard-client";
 import {
   getOnboardingChecklist,
@@ -36,7 +37,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       {checklist.showChecklist && <OnboardingChecklist items={checklist.items} compact />}
       <DashboardClient
-        kpis={kpis}
+        kpis={serializeDecimal(kpis)}
         extras={extras}
         tenantName={ctx.tenant.name}
         plan={ctx.tenant.subscriptionPlan}

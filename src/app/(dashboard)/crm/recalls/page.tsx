@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
+import { serializeEntity } from "@/lib/utils/serialize";
 import { RecallsClient } from "./recalls-client";
 
 export default async function RecallsPage() {
@@ -32,5 +33,10 @@ export default async function RecallsPage() {
     }),
   ]);
 
-  return <RecallsClient overdue={overdue} upcoming={upcoming} />;
+  const serializeRecalls = (rows: typeof overdue) =>
+    rows.map((recall) => serializeEntity(recall, { patient: "object" }));
+
+  return (
+    <RecallsClient overdue={serializeRecalls(overdue)} upcoming={serializeRecalls(upcoming)} />
+  );
 }

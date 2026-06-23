@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { serializeDecimal, serializeEntity } from "@/lib/utils/serialize";
 import { TreatmentPlanDetailClient } from "./treatment-plan-detail-client";
 
 export default async function TreatmentPlanDetailPage({
@@ -27,5 +28,10 @@ export default async function TreatmentPlanDetailPage({
     orderBy: { name: "asc" },
   });
 
-  return <TreatmentPlanDetailClient plan={plan} procedures={procedures} />;
+  return (
+    <TreatmentPlanDetailClient
+      plan={serializeEntity(plan, { patient: "object", items: "array" })}
+      procedures={procedures.map(serializeDecimal)}
+    />
+  );
 }

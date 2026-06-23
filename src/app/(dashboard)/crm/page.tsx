@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
+import { serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { CrmClient } from "./crm-client";
 
 export default async function CrmPage() {
@@ -23,5 +24,12 @@ export default async function CrmPage() {
     }),
   ]);
 
-  return <CrmClient leads={leads} campaigns={campaigns} recalls={recalls} tenantId={ctx.tenant.id} />;
+  return (
+    <CrmClient
+      leads={serializeMany(leads)}
+      campaigns={serializeMany(campaigns)}
+      recalls={recalls.map((recall) => serializeEntity(recall, { patient: "object" }))}
+      tenantId={ctx.tenant.id}
+    />
+  );
 }

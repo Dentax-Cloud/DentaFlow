@@ -1,6 +1,7 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getPatients } from "@/app/(dashboard)/features/patients/actions";
 import { getInvoices, getProcedureCatalog } from "@/app/(dashboard)/features/billing/actions";
+import { serializeDecimal, serializeEntity } from "@/lib/utils/serialize";
 import { BillingClient } from "./billing-client";
 
 export default async function BillingPage() {
@@ -11,5 +12,15 @@ export default async function BillingPage() {
     getProcedureCatalog(ctx.tenant.id),
   ]);
 
-  return <BillingClient invoices={invoices} patients={patients} procedures={procedures} />;
+  const serializedInvoices = invoices.map((invoice) =>
+    serializeEntity(invoice, { payments: "array", items: "array", patient: "object" }),
+  );
+
+  return (
+    <BillingClient
+      invoices={serializedInvoices}
+      patients={patients}
+      procedures={procedures.map(serializeDecimal)}
+    />
+  );
 }

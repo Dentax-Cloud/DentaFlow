@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
+import { serializeEntity } from "@/lib/utils/serialize";
 import { TreatmentPlansListClient } from "./treatment-plans-list-client";
 
 export default async function TreatmentPlansPage() {
@@ -23,5 +24,10 @@ export default async function TreatmentPlansPage() {
     }),
   ]);
 
-  return <TreatmentPlansListClient plans={plans} patients={patients} />;
+  return (
+    <TreatmentPlansListClient
+      plans={plans.map((plan) => serializeEntity(plan, { patient: "object" }))}
+      patients={patients}
+    />
+  );
 }

@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
+import { serializeEntity } from "@/lib/utils/serialize";
 import { InventoryClient } from "./inventory-client";
 
 export default async function InventoryPage() {
@@ -13,6 +14,9 @@ export default async function InventoryPage() {
   });
 
   const lowStock = items.filter((i) => i.quantity <= i.reorderLevel);
+  const serializedItems = items.map((item) =>
+    serializeEntity(item, { transactions: "array" }),
+  );
 
-  return <InventoryClient items={items} lowStockCount={lowStock.length} />;
+  return <InventoryClient items={serializedItems} lowStockCount={lowStock.length} />;
 }

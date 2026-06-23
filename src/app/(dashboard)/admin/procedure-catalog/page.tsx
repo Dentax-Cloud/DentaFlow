@@ -1,6 +1,7 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { listProcedures } from "@/app/(dashboard)/features/admin/actions";
 import { db } from "@/lib/db";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import { ProcedureCatalogClient } from "./procedure-catalog-client";
 
 export default async function ProcedureCatalogPage() {
@@ -14,16 +15,11 @@ export default async function ProcedureCatalogPage() {
     }),
   ]);
 
-  const serializedProcedures = procedures.map((p) => ({
-    ...p,
-    price: p.price ? Number(p.price) : 0,
-    costPrice: p.costPrice ? Number(p.costPrice) : 0,
-  }));
-
-  const serializedInventory = inventoryItems.map((i) => ({
-    ...i,
-    costPerUnit: i.cost ? Number(i.cost) : 0,
-  }));
+  const serializedProcedures = procedures.map(serializeDecimal);
+  const serializedInventory = inventoryItems.map((i) => {
+    const { cost, ...rest } = serializeDecimal(i);
+    return { ...rest, costPerUnit: typeof cost === "number" ? cost : 0 };
+  });
 
   return (
     <ProcedureCatalogClient
