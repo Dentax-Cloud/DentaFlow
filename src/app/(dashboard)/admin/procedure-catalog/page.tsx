@@ -10,11 +10,25 @@ export default async function ProcedureCatalogPage() {
     db.inventoryItem.findMany({
       where: { tenantId: ctx.tenant.id, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true, quantity: true },
+      select: { id: true, name: true, sku: true, quantity: true, cost: true },
     }),
   ]);
 
+  const serializedProcedures = procedures.map((p) => ({
+    ...p,
+    price: p.price ? Number(p.price) : 0,
+    costPrice: p.costPrice ? Number(p.costPrice) : 0,
+  }));
+
+  const serializedInventory = inventoryItems.map((i) => ({
+    ...i,
+    costPerUnit: i.cost ? Number(i.cost) : 0,
+  }));
+
   return (
-    <ProcedureCatalogClient initialProcedures={procedures} inventoryItems={inventoryItems} />
+    <ProcedureCatalogClient
+      initialProcedures={serializedProcedures}
+      inventoryItems={serializedInventory}
+    />
   );
 }

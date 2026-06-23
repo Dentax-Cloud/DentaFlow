@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-import { toast } from "sonner";
 import {
   Activity,
   AlertTriangle,
@@ -17,7 +16,6 @@ import {
   Phone,
   Pill,
   Receipt,
-  Shield,
   Sparkles,
   Stethoscope,
   User,
@@ -26,11 +24,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { linkPatientPortalUser } from "@/app/(dashboard)/features/patients/actions";
 import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
 
 /** Core demographics from the server (matches product spec). */
@@ -169,8 +164,6 @@ function riskBadgeVariant(level: string) {
 
 export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [clerkUserId, setClerkUserId] = useState(patient.portalUserId ?? "");
-  const [portalSaving, setPortalSaving] = useState(false);
 
   const fullName = `${patient.firstName} ${patient.lastName}`;
   const age = computeAge(patient.dateOfBirth);
@@ -212,17 +205,6 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
     }
     return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
   }, [patient]);
-
-  async function savePortalLink() {
-    setPortalSaving(true);
-    const result = await linkPatientPortalUser({
-      patientId: patient.id,
-      clerkUserId: clerkUserId.trim(),
-    });
-    setPortalSaving(false);
-    if (result.success) toast.success("Patient portal linked");
-    else toast.error(result.error);
-  }
 
   return (
     <div className="space-y-6 pb-10">
@@ -281,12 +263,6 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                   <Badge variant="destructive">
                     {patient.allergies!.length} allerg
                     {patient.allergies!.length === 1 ? "y" : "ies"}
-                  </Badge>
-                )}
-                {patient.portalUserId && (
-                  <Badge variant="success" className="gap-1">
-                    <Shield className="h-3 w-3" />
-                    Portal active
                   </Badge>
                 )}
               </div>
@@ -651,31 +627,12 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
 
         {/* Sidebar */}
         <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Patient portal</CardTitle>
-              <CardDescription>Link Clerk user for /portal access</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs">Clerk user ID</Label>
-                <Input
-                  className="mt-1 font-mono text-xs"
-                  value={clerkUserId}
-                  onChange={(e) => setClerkUserId(e.target.value)}
-                  placeholder="user_..."
-                />
-              </div>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => void savePortalLink()}
-                disabled={portalSaving || !clerkUserId.trim()}
-              >
-                {portalSaving ? "Saving…" : "Save portal link"}
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-1 text-sm font-medium">Patient Portal</h3>
+            <p className="text-sm text-muted-foreground">
+              Patient portal access coming soon. Patients will receive an invite link via email.
+            </p>
+          </div>
 
           {(patient.emergencyContact || patient.emergencyPhone) && (
             <Card>
