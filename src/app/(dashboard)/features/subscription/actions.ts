@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { SubscriptionPlan, subscriptionPlanSchema } from "@/lib/subscription/plan-types";
+import { SubscriptionStatus } from "@prisma/client";
 import { createAction } from "@/lib/actions/safe-action";
 import { ensureStripeCustomer } from "@/lib/tenant/billing";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/stripe";
 import { getUsageSummary } from "@/lib/features/gate";
 import { getTenantMetrics } from "@/lib/tenant/metrics";
+import { getTenantUsage } from "@/lib/features/usage";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -31,6 +33,12 @@ export const createSubscriptionCheckoutAction = createAction({
     }
 
     const tenant = await ensureStripeCustomer(ctx.tenant);
+
+    const trialEndUnix =
+      tenant.trialEndsAt && tenant.subscriptionStatus === SubscriptionStatus.TRIALING
+        ? Math.floor(tenant.trialEndsAt.getTime() / 1000)
+        : undefined;
+
     const session = await createCheckoutSession({
       customerId: tenant.stripeCustomerId ?? undefined,
       customerEmail: tenant.email ?? ctx.user.email,
@@ -38,6 +46,7 @@ export const createSubscriptionCheckoutAction = createAction({
       tenantId: tenant.id,
       successUrl: `${appUrl}/billing/subscription?success=1`,
       cancelUrl: `${appUrl}/billing/subscription?canceled=1`,
+      trialEndUnix,
     });
 
     if (!session.url) throw new Error("Could not create checkout session");
@@ -94,24 +103,15 @@ export async function getStripeBillingHistory(
 }
 
 export async function getSubscriptionUsage(tenantId: string) {
-  const [summary, metrics] = await Promise.all([
-    getUsageSummary(tenantId),
+  const [usage, metrics] = await Promise.all([
+    getTenantUsage(tenantId),
     getTenantMetrics(tenantId),
   ]);
 
   return {
-    patients: {
-      used: summary.patients.current,
-      limit: summary.patients.unlimited ? -1 : summary.patients.limit,
-    },
-    users: {
-      used: summary.staff.current,
-      limit: summary.staff.unlimited ? -1 : summary.staff.limit,
-    },
-    branches: {
-      used: summary.branches.current,
-      limit: summary.branches.unlimited ? -1 : summary.branches.limit,
-    },
+    patients: usage.patients,
+    users: usage.staff,
+    branches: usage.branches,
     appointments: metrics.appointments,
     invoices: metrics.invoices,
   };

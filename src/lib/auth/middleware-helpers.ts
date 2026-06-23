@@ -5,6 +5,7 @@ const PUBLIC_PREFIXES = [
   "/api/webhooks",
   "/sign-up",
   "/invite/accept",
+  "/verify-email",
 ];
 
 export function isPublicPath(pathname: string): boolean {
@@ -26,6 +27,23 @@ export function isSuperAdminPath(pathname: string): boolean {
 
 export function isTenantPath(pathname: string): boolean {
   return pathname.startsWith("/t/");
+}
+
+/** App routes that require an active subscription/trial. */
+export function isProtectedTenantAppRoute(pathname: string): boolean {
+  const prefixes = [
+    "/dashboard",
+    "/patients",
+    "/appointments",
+    "/clinical",
+    "/billing",
+    "/crm",
+    "/reports",
+    "/inventory",
+    "/admin",
+    "/ai",
+  ];
+  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function extractTenantSlug(pathname: string): string | null {

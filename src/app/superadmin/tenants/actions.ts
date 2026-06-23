@@ -28,19 +28,51 @@ export async function updateStatusAction(tenantId: string, status: SubscriptionS
   return { success: true };
 }
 
-export async function suspendTenantAction(tenantId: string) {
+export async function suspendTenantAction(tenantId: string, reason?: string) {
   await requireSuperAdmin();
 
-  await setTenantActive(tenantId, false);
+  const tenant = await setTenantActive(tenantId, false, reason);
+
+  if (tenant.email) {
+    await sendMail({
+      to: tenant.email,
+      subject: "Your DentaFlow account has been suspended",
+      text: `Your DentaFlow account for ${tenant.name} has been suspended.
+
+${reason ? `Reason: ${reason}` : ""}
+
+Please contact support to resolve this issue.
+Support: support@dentaflow.io`,
+    }).catch((err) => console.error("[suspendTenant] email failed:", err));
+  }
+
   revalidatePath("/superadmin/tenants");
+  revalidatePath(`/superadmin/tenants/${tenantId}`);
   return { success: true };
 }
 
 export async function reinstateTenantAction(tenantId: string) {
   await requireSuperAdmin();
 
-  await setTenantActive(tenantId, true);
+  const tenant = await setTenantActive(tenantId, true);
+
+  if (tenant.email) {
+    const baseUrl =
+      process.env.NEXTAUTH_URL?.trim() ||
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      "http://localhost:3000";
+
+    await sendMail({
+      to: tenant.email,
+      subject: "Your DentaFlow account has been reinstated",
+      text: `Good news! Your DentaFlow account for ${tenant.name} has been reinstated.
+
+You can now log in at: ${baseUrl}/login`,
+    }).catch((err) => console.error("[reinstateTenant] email failed:", err));
+  }
+
   revalidatePath("/superadmin/tenants");
+  revalidatePath(`/superadmin/tenants/${tenantId}`);
   return { success: true };
 }
 

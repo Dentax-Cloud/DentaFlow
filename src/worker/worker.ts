@@ -17,6 +17,7 @@ import { parseRecallSettings } from "@/lib/recall/helpers";
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const RECALL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DAILY_BILLING_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 const TRIAL_WARNING_DAYS = [7, 3, 1] as const;
@@ -125,12 +126,20 @@ async function run() {
   setInterval(runReminderJob, REMINDER_INTERVAL_MS);
   setInterval(runTrialExpiryJob, TRIAL_CHECK_INTERVAL_MS);
   setInterval(runRecallReminderJob, RECALL_CHECK_INTERVAL_MS);
+  setInterval(runExpiredTrialEnforcementJob, DAILY_BILLING_INTERVAL_MS);
+  setInterval(runPastDueDunningJob, DAILY_BILLING_INTERVAL_MS);
 
   console.log("[worker] Jobs scheduled. Running…");
 }
 
 async function runAllJobs() {
-  await Promise.allSettled([runReminderJob(), runTrialExpiryJob(), runRecallReminderJob()]);
+  await Promise.allSettled([
+    runReminderJob(),
+    runTrialExpiryJob(),
+    runRecallReminderJob(),
+    runExpiredTrialEnforcementJob(),
+    runPastDueDunningJob(),
+  ]);
 }
 
 async function sendRemindersForWindow(params: {
@@ -327,6 +336,95 @@ async function runTrialExpiryJob() {
     }
   } catch (err) {
     console.error("[worker] trial expiry job failed:", err);
+  }
+}
+
+async function getTenantOwnerEmail(tenantId: string): Promise<string | null> {
+  const membership = await db.tenant_memberships.findFirst({
+    where: {
+      tenantId,
+      isActive: true,
+      role: { in: ["ADMIN", "OWNER"] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true },
+  });
+  if (!membership) return null;
+
+  const owner = await db.auth_users.findUnique({
+    where: { id: membership.userId },
+    select: { email: true },
+  });
+  return owner?.email ?? null;
+}
+
+async function runExpiredTrialEnforcementJob() {
+  try {
+    const expiredTenants = await db.tenant.findMany({
+      where: {
+        deletedAt: null,
+        status: TenantStatus.ACTIVE,
+        subscriptionStatus: SubscriptionStatus.TRIALING,
+        trialEndsAt: { lt: new Date() },
+        stripeSubscriptionId: null,
+      },
+    });
+
+    for (const tenant of expiredTenants) {
+      await db.tenant.update({
+        where: { id: tenant.id },
+        data: { subscriptionStatus: SubscriptionStatus.EXPIRED },
+      });
+
+      const to = tenant.email ?? (await getTenantOwnerEmail(tenant.id));
+      if (to) {
+        await sendMail({
+          to,
+          subject: `Your DentaFlow trial has ended — ${tenant.name}`,
+          text: `Your trial for ${tenant.name} has ended. Your data is safe but access is paused until you upgrade.
+
+Upgrade here: ${APP_BASE_URL}/billing/subscription`,
+        }).catch((err) => console.error(`[worker] trial expired email failed for ${tenant.id}:`, err));
+      }
+
+      console.log(`[worker] trial expired: ${tenant.name}`);
+    }
+  } catch (err) {
+    console.error("[worker] expired trial enforcement failed:", err);
+  }
+}
+
+async function runPastDueDunningJob() {
+  try {
+    const pastDueTenants = await db.tenant.findMany({
+      where: {
+        deletedAt: null,
+        status: TenantStatus.ACTIVE,
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+      },
+    });
+
+    for (const tenant of pastDueTenants) {
+      const to = tenant.email ?? (await getTenantOwnerEmail(tenant.id));
+      if (!to) continue;
+
+      await sendMail({
+        to,
+        subject: `Action required: Payment failed for ${tenant.name}`,
+        text: `We couldn't process payment for your DentaFlow subscription for ${tenant.name}.
+
+Please update your payment method to avoid service interruption:
+${APP_BASE_URL}/billing/subscription
+
+If payment is not received within 7 days, your account will be suspended.`,
+      }).catch((err) => console.error(`[worker] past due email failed for ${tenant.id}:`, err));
+    }
+
+    if (pastDueTenants.length > 0) {
+      console.log(`[worker] past due dunning sent for ${pastDueTenants.length} tenant(s)`);
+    }
+  } catch (err) {
+    console.error("[worker] past due dunning job failed:", err);
   }
 }
 

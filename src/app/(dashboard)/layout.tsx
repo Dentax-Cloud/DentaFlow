@@ -24,7 +24,7 @@ export default async function DashboardLayout({
   if (!session.user.isSuperAdmin) {
     if (!ctx.tenant.onboardingCompleted) redirect("/sign-up");
     if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
-    if (ctx.tenant.status !== "ACTIVE") redirect("/pending-approval");
+    if (ctx.tenant.status === "CLOSED") redirect("/pending-approval");
   }
 
   const userRole = ctx.staffMember?.role ?? UserRole.ADMIN;
@@ -45,6 +45,11 @@ export default async function DashboardLayout({
       isSuperAdmin={ctx.isSuperAdmin}
       tenantName={ctx.tenant.name}
       tenantLogoUrl={ctx.tenant.logoUrl}
+      trialDaysLeft={
+        ctx.tenant.subscriptionStatus === "TRIALING"
+          ? ctx.trial.trialDaysRemaining
+          : null
+      }
     >
       {children}
     </DashboardShell>

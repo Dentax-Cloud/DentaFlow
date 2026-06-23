@@ -32,10 +32,25 @@ async function loadMembershipContext(userId: string, preferredTenantId?: string 
     memberships[0] ??
     null;
 
+  const activeTenantId = active?.tenantId ?? authUser?.activeTenantId ?? null;
+
+  let subscriptionStatus: string | null = null;
+  let tenantStatus: string | null = null;
+  if (activeTenantId) {
+    const tenant = await db.tenant.findUnique({
+      where: { id: activeTenantId },
+      select: { subscriptionStatus: true, status: true },
+    });
+    subscriptionStatus = tenant?.subscriptionStatus ?? null;
+    tenantStatus = tenant?.status ?? null;
+  }
+
   return {
-    activeTenantId: active?.tenantId ?? authUser?.activeTenantId ?? null,
+    activeTenantId,
     role: active?.role ?? null,
     isSuperAdmin: resolveIsSuperAdmin(userId) || (authUser?.isSuperAdmin ?? false),
+    subscriptionStatus,
+    tenantStatus,
   };
 }
 
@@ -100,6 +115,8 @@ export const authOptions: NextAuthOptions = {
       token.activeTenantId = ctx.activeTenantId;
       token.role = ctx.role;
       token.isSuperAdmin = ctx.isSuperAdmin;
+      token.subscriptionStatus = ctx.subscriptionStatus;
+      token.tenantStatus = ctx.tenantStatus;
 
       return token;
     },
@@ -109,6 +126,8 @@ export const authOptions: NextAuthOptions = {
         session.user.activeTenantId = token.activeTenantId;
         session.user.role = token.role;
         session.user.isSuperAdmin = token.isSuperAdmin;
+        session.user.subscriptionStatus = token.subscriptionStatus;
+        session.user.tenantStatus = token.tenantStatus;
       }
       return session;
     },

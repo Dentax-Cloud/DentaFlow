@@ -1,26 +1,29 @@
+import Link from "next/link";
 import { Users, UserCircle, Building2, Receipt } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+type UsageMetric = { used: number; max: number; pct: number };
+
 type Usage = {
-  patients: { used: number; limit: number };
-  users: { used: number; limit: number };
-  branches: { used: number; limit: number };
+  patients: UsageMetric;
+  users: UsageMetric;
+  branches: UsageMetric;
   appointments: number;
   invoices: number;
 };
 
-function UsageBar({ used, limit, label }: { used: number; limit: number; label: string }) {
-  const unlimited = limit < 0;
-  const pct = unlimited ? 15 : Math.min(100, Math.round((used / limit) * 100));
-  const nearLimit = !unlimited && pct >= 80;
+function UsageBar({ metric, label }: { metric: UsageMetric; label: string }) {
+  const unlimited = metric.max < 0;
+  const pct = unlimited ? 15 : Math.min(100, metric.pct);
+  const nearLimit = !unlimited && metric.pct >= 80;
 
   return (
     <div className="space-y-2">
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-medium tabular-nums">
-          {used.toLocaleString()}
-          {!unlimited && ` / ${limit.toLocaleString()}`}
+          {metric.used.toLocaleString()}
+          {!unlimited && ` / ${metric.max.toLocaleString()}`}
           {unlimited && " · Unlimited"}
         </span>
       </div>
@@ -30,6 +33,14 @@ function UsageBar({ used, limit, label }: { used: number; limit: number; label: 
           style={{ width: `${unlimited ? 15 : pct}%` }}
         />
       </div>
+      {nearLimit && (
+        <p className="text-sm text-amber-600">
+          {metric.pct}% of limit used.{" "}
+          <Link href="/billing/subscription" className="underline">
+            Upgrade for more.
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
@@ -43,7 +54,7 @@ export function UsageMetrics({ usage }: { usage: Usage }) {
           <Users className="h-4 w-4 text-dental" />
         </CardHeader>
         <CardContent>
-          <UsageBar used={usage.patients.used} limit={usage.patients.limit} label="Patient records" />
+          <UsageBar metric={usage.patients} label="Patient records" />
         </CardContent>
       </Card>
       <Card>
@@ -52,7 +63,7 @@ export function UsageMetrics({ usage }: { usage: Usage }) {
           <UserCircle className="h-4 w-4 text-violet-600" />
         </CardHeader>
         <CardContent>
-          <UsageBar used={usage.users.used} limit={usage.users.limit} label="Active users" />
+          <UsageBar metric={usage.users} label="Active users" />
         </CardContent>
       </Card>
       <Card>
@@ -61,7 +72,7 @@ export function UsageMetrics({ usage }: { usage: Usage }) {
           <Building2 className="h-4 w-4 text-emerald-600" />
         </CardHeader>
         <CardContent>
-          <UsageBar used={usage.branches.used} limit={usage.branches.limit} label="Clinic locations" />
+          <UsageBar metric={usage.branches} label="Clinic locations" />
         </CardContent>
       </Card>
       <Card>

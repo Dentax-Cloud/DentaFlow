@@ -16,6 +16,7 @@ export function DashboardShell({
   isSuperAdmin = false,
   tenantName,
   tenantLogoUrl,
+  trialDaysLeft = null,
 }: {
   children: React.ReactNode;
   userRole: UserRole;
@@ -23,6 +24,7 @@ export function DashboardShell({
   isSuperAdmin?: boolean;
   tenantName?: string;
   tenantLogoUrl?: string | null;
+  trialDaysLeft?: number | null;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -76,6 +78,24 @@ export function DashboardShell({
       )}
 
       <main className="flex-1 overflow-y-auto">
+        {trialDaysLeft !== null && trialDaysLeft <= 7 && (
+          <div
+            className={`px-4 py-2 text-center text-sm font-medium ${
+              trialDaysLeft <= 1
+                ? "bg-red-500 text-white"
+                : trialDaysLeft <= 3
+                  ? "bg-orange-500 text-white"
+                  : "bg-yellow-500 text-black"
+            }`}
+          >
+            {trialDaysLeft === 0
+              ? "Your trial expires today! "
+              : `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left in your trial. `}
+            <Link href="/billing/subscription" className="font-bold underline">
+              Upgrade now
+            </Link>
+          </div>
+        )}
         <div className="container mx-auto max-w-7xl p-4 md:p-6">{children}</div>
       </main>
     </div>

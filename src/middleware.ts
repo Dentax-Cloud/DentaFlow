@@ -4,7 +4,10 @@
  */
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
-import { isPublicPath } from "@/lib/auth/middleware-helpers";
+import { isPublicPath, isProtectedTenantAppRoute } from "@/lib/auth/middleware-helpers";
+
+const BLOCKED_SUBSCRIPTION_STATUSES = ["EXPIRED", "CANCELED", "TRIAL_EXPIRED"];
+const BLOCKED_TENANT_STATUSES = ["SUSPENDED", "CLOSED"];
 
 export default withAuth(
   function middleware(req) {
@@ -33,6 +36,32 @@ export default withAuth(
       if (pathname.startsWith("/super-admin")) {
         const newPath = pathname.replace("/super-admin", "/superadmin");
         return NextResponse.redirect(new URL(newPath, req.url));
+      }
+    }
+
+    // Trial / subscription enforcement for tenant app routes
+    if (
+      !token?.isSuperAdmin &&
+      token?.activeTenantId &&
+      isProtectedTenantAppRoute(pathname)
+    ) {
+      const subStatus = token.subscriptionStatus as string | null | undefined;
+      const tenantStatus = token.tenantStatus as string | null | undefined;
+      const subscriptionBlocked =
+        subStatus && BLOCKED_SUBSCRIPTION_STATUSES.includes(subStatus);
+      const tenantBlocked =
+        tenantStatus && BLOCKED_TENANT_STATUSES.includes(tenantStatus);
+
+      if (subscriptionBlocked || tenantBlocked) {
+        const allowed =
+          pathname.startsWith("/billing/subscription") ||
+          pathname.startsWith("/pending-approval");
+        if (!allowed) {
+          const reason = subscriptionBlocked ? "expired" : "suspended";
+          return NextResponse.redirect(
+            new URL(`/billing/subscription?reason=${reason}`, req.url),
+          );
+        }
       }
     }
 

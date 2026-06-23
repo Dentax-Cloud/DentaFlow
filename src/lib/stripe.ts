@@ -25,6 +25,7 @@ export async function createCheckoutSession(params: {
   tenantId: string;
   successUrl: string;
   cancelUrl: string;
+  trialEndUnix?: number;
 }) {
   const priceId = PLAN_PRICE_IDS[params.plan];
   if (!priceId) throw new Error("Price not configured");
@@ -33,12 +34,14 @@ export async function createCheckoutSession(params: {
     mode: "subscription",
     customer: params.customerId,
     customer_email: params.customerId ? undefined : params.customerEmail,
+    payment_method_types: ["card"],
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
-    metadata: { tenantId: params.tenantId, plan: params.plan },
+    metadata: { tenantId: params.tenantId, plan: params.plan, type: "saas_subscription" },
     subscription_data: {
       metadata: { tenantId: params.tenantId, plan: params.plan },
+      ...(params.trialEndUnix ? { trial_end: params.trialEndUnix } : {}),
     },
   });
 }

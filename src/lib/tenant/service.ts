@@ -170,11 +170,12 @@ export async function provisionTenant(input: {
   });
 
   if (tenant.status === TenantStatus.ACTIVE) {
-    await ensureStripeCustomer(tenant);
     await ensureMinioBucket(tenant);
   }
 
-  return { tenant, membership, staffMember, branch };
+  const tenantWithBilling = await ensureStripeCustomer(tenant);
+
+  return { tenant: tenantWithBilling, membership, staffMember, branch };
 }
 
 /** Webhook / legacy provisioning without full auth session */

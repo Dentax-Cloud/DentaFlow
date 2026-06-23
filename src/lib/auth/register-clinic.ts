@@ -10,7 +10,7 @@ import {
   type ClinicRegistrationSubmit,
 } from "@/lib/auth/registration-schema";
 import { getCountryByCode } from "@/lib/auth/countries";
-import { sendWelcomeEmail } from "@/lib/mail";
+import { sendWelcomeEmail, sendMail } from "@/lib/mail";
 import { ensureStripeCustomer } from "@/lib/tenant/billing";
 import { provisionTenant } from "@/lib/tenant/service";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
@@ -34,6 +34,64 @@ function buildFullAddress(input: ClinicRegistrationSubmit) {
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+async function sendEmailVerification(email: string) {
+  const verificationToken = randomUUID();
+  await db.verification_tokens.create({
+    data: {
+      identifier: email,
+      token: verificationToken,
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const baseUrl =
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "http://localhost:3000";
+
+  await sendMail({
+    to: email,
+    subject: "Verify your DentaFlow email address",
+    text: `Please verify your email address by clicking the link below:
+
+${baseUrl}/verify-email?token=${verificationToken}
+
+This link expires in 24 hours.`,
+  }).catch((err) => console.error("[mail:verify]", err));
+}
+
+async function notifySuperAdminsOfRegistration(params: {
+  clinicName: string;
+  ownerName: string;
+  email: string;
+}) {
+  const superAdmins = await db.auth_users.findMany({
+    where: { isSuperAdmin: true },
+    select: { email: true },
+  });
+
+  const baseUrl =
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "http://localhost:3000";
+
+  for (const admin of superAdmins) {
+    if (!admin.email) continue;
+    await sendMail({
+      to: admin.email,
+      subject: `New clinic registered: ${params.clinicName}`,
+      text: `A new clinic has registered on DentaFlow.
+
+Clinic: ${params.clinicName}
+Owner: ${params.ownerName} (${params.email})
+Plan: STARTER (14-day trial)
+Registered: ${new Date().toLocaleString()}
+
+Review at: ${baseUrl}/superadmin/tenants`,
+    }).catch(() => null);
+  }
 }
 
 async function finalizeClinicSetup(
@@ -123,9 +181,7 @@ async function finalizeClinicSetup(
     }
   }
 
-  if (updatedTenant.status === TenantStatus.ACTIVE) {
-    await ensureStripeCustomer(updatedTenant);
-  }
+  await ensureStripeCustomer(updatedTenant);
 
   await sendWelcomeEmail({
     to: input.email,
@@ -167,6 +223,8 @@ async function registerClinicNextAuth(
     },
   });
 
+  await sendEmailVerification(email);
+
   let provisionResult: Awaited<ReturnType<typeof provisionTenant>>;
   try {
     provisionResult = await provisionTenant({
@@ -195,6 +253,12 @@ async function registerClinicNextAuth(
     await db.auth_users.update({
       where: { id: authUser.id },
       data: { activeTenantId: updatedTenant.id },
+    });
+
+    await notifySuperAdminsOfRegistration({
+      clinicName: input.clinicName,
+      ownerName,
+      email,
     });
 
     return {

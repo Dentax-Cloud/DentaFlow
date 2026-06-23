@@ -23,6 +23,8 @@ export default async function SubscriptionManagementPage() {
         subscriptionPlan: ctx.tenant.subscriptionPlan,
         subscriptionStatus: ctx.tenant.subscriptionStatus,
         stripeCustomerId: ctx.tenant.stripeCustomerId,
+        trialEndsAt: ctx.tenant.trialEndsAt,
+        currentPeriodEnd: ctx.tenant.currentPeriodEnd,
       }}
       usage={usage}
       billingHistory={billingHistory}

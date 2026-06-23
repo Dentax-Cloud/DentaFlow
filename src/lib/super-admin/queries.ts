@@ -162,9 +162,23 @@ export async function updateTenantStatus(
   });
 }
 
-export async function setTenantActive(tenantId: string, active: boolean) {
+export async function setTenantActive(
+  tenantId: string,
+  active: boolean,
+  reason?: string,
+) {
   return db.tenant.update({
     where: { id: tenantId },
-    data: { status: active ? TenantStatus.ACTIVE : TenantStatus.SUSPENDED },
+    data: active
+      ? {
+          status: TenantStatus.ACTIVE,
+          suspendedAt: null,
+          suspendedReason: null,
+        }
+      : {
+          status: TenantStatus.SUSPENDED,
+          suspendedAt: new Date(),
+          suspendedReason: reason ?? null,
+        },
   });
 }

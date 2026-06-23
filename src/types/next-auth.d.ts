@@ -11,6 +11,8 @@ declare module "next-auth" {
       activeTenantId: string | null;
       role: string | null;
       isSuperAdmin: boolean;
+      subscriptionStatus: string | null;
+      tenantStatus: string | null;
     };
   }
 }
@@ -21,5 +23,7 @@ declare module "next-auth/jwt" {
     activeTenantId: string | null;
     role: string | null;
     isSuperAdmin: boolean;
+    subscriptionStatus: string | null;
+    tenantStatus: string | null;
   }
 }
