@@ -8,8 +8,6 @@ import { Loader2 } from "lucide-react";
 import { SignUpShell } from "@/components/auth/sign-up-shell";
 import { ClinicRegistrationWizard } from "@/components/auth/clinic-registration-wizard";
 import { RegistrationSessionBanner } from "@/components/auth/registration-session-banner";
-import { getClinicRegistrationStatus } from "@/lib/auth/registration-status";
-import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 
 type Props = {
   params: Promise<{ "sign-up"?: string[] }>;
@@ -30,16 +28,12 @@ export default async function SignUpPage({ params }: Props) {
   const orgId = session?.user?.activeTenantId ?? null;
 
   let initialStep = 1;
-  let registrationComplete = false;
 
   if (userId) {
     if (orgId) {
-      const status = await getClinicRegistrationStatus(orgId);
-      registrationComplete = status.isComplete;
-      initialStep = status.isComplete ? 1 : 2;
-    } else {
-      initialStep = 2;
+      redirect("/dashboard");
     }
+    initialStep = 2;
   }
 
   const resolvedParams = await params;
@@ -52,12 +46,9 @@ export default async function SignUpPage({ params }: Props) {
 
   return (
     <SignUpShell>
-      <RegistrationSessionBanner registrationComplete={registrationComplete} />
+      <RegistrationSessionBanner registrationComplete={false} />
       <Suspense fallback={<WizardFallback />}>
-        <ClinicRegistrationWizard
-          uploadsEnabled={isUploadthingConfigured()}
-          initialStep={initialStep}
-        />
+        <ClinicRegistrationWizard initialStep={initialStep} />
       </Suspense>
       <p className="mt-6 text-center text-sm text-zinc-500">
         Already have an account?{" "}

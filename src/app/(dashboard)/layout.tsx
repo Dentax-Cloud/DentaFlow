@@ -22,9 +22,9 @@ export default async function DashboardLayout({
   if (!ctx) redirect("/select-org");
 
   if (!session.user.isSuperAdmin) {
-    if (!ctx.tenant.onboardingCompleted) redirect("/sign-up");
-    if (ctx.tenant.status === "PENDING") redirect("/pending-approval");
-    if (ctx.tenant.status === "CLOSED") redirect("/pending-approval");
+    if (ctx.tenant.status === "SUSPENDED" || ctx.tenant.status === "CLOSED") {
+      redirect("/pending-approval");
+    }
   }
 
   const userRole = ctx.staffMember?.role ?? UserRole.ADMIN;

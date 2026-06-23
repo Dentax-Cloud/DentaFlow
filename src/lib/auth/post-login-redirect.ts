@@ -1,7 +1,7 @@
 /**
  * Post-login routing (H3) — Node.js only, not for middleware.
  */
-import { TenantStatus } from "@prisma/client";
+import { SubscriptionStatus, TenantStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { resolveIsSuperAdmin } from "@/lib/auth";
 
@@ -29,63 +29,62 @@ export async function resolvePostLoginDestination(
   authUserId: string,
   options?: ResolveOptions,
 ): Promise<PostLoginDestination> {
-  const memberships = await db.tenant_memberships.findMany({
-    where: { userId: authUserId },
-    include: {
-      Tenant: {
-        select: {
-          id: true,
-          slug: true,
-          status: true,
-          onboardingCompleted: true,
-        },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
   const isSuperAdmin = options?.isSuperAdmin ?? resolveIsSuperAdmin(authUserId);
 
   if (isSuperAdmin) {
     return { type: "superadmin", url: "/superadmin/tenants" };
   }
 
-  if (memberships.length === 0) {
-    return { type: "onboarding", url: "/sign-up" };
+  let activeTenantId = options?.activeTenantId ?? null;
+
+  if (!activeTenantId) {
+    const membership = await db.tenant_memberships.findFirst({
+      where: { userId: authUserId, isActive: true },
+      orderBy: { createdAt: "asc" },
+      include: {
+        Tenant: { select: { id: true, slug: true, status: true, subscriptionStatus: true } },
+      },
+    });
+
+    if (!membership) {
+      return { type: "onboarding", url: "/sign-up" };
+    }
+
+    activeTenantId = membership.tenantId;
+    await db.auth_users.update({
+      where: { id: authUserId },
+      data: { activeTenantId: membership.tenantId },
+    });
   }
 
-  const activeMemberships = memberships.filter(
-    (m) => m.Tenant.status === TenantStatus.ACTIVE,
-  );
-  const pendingOnly =
-    activeMemberships.length === 0 &&
-    memberships.some((m) => m.Tenant.status === TenantStatus.PENDING);
+  const tenant = await db.tenant.findUnique({
+    where: { id: activeTenantId },
+    select: { id: true, slug: true, status: true, subscriptionStatus: true },
+  });
 
-  if (pendingOnly) {
+  if (!tenant) {
+    return { type: "select-org", url: "/select-org" };
+  }
+
+  if (tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.CLOSED) {
     return { type: "pending-approval", url: "/pending-approval" };
   }
 
-  const usable = activeMemberships.length > 0 ? activeMemberships : memberships;
-
-  if (options?.activeTenantId) {
-    const preferred = usable.find((m) => m.tenantId === options.activeTenantId);
-    if (preferred) {
-      return {
-        type: "tenant",
-        url: `/t/${preferred.Tenant.slug}/dashboard`,
-        tenantSlug: preferred.Tenant.slug,
-      };
-    }
-  }
-
-  if (usable.length === 1) {
-    const m = usable[0]!;
+  if (tenant.subscriptionStatus === SubscriptionStatus.EXPIRED) {
     return {
       type: "tenant",
-      url: `/t/${m.Tenant.slug}/dashboard`,
-      tenantSlug: m.Tenant.slug,
+      url: "/billing/subscription",
+      tenantSlug: tenant.slug,
     };
   }
 
-  return { type: "select-org", url: "/select-org" };
+  const membershipCount = await db.tenant_memberships.count({
+    where: { userId: authUserId, isActive: true },
+  });
+
+  if (membershipCount > 1 && !options?.activeTenantId) {
+    return { type: "select-org", url: "/select-org" };
+  }
+
+  return { type: "tenant", url: "/dashboard", tenantSlug: tenant.slug };
 }

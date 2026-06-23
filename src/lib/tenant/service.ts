@@ -8,11 +8,8 @@ import {
 } from "@prisma/client";
 import { slugify } from "@/lib/utils/slugify";
 import { tenantConfig } from "./config";
-import { resolveInitialTenantStatus } from "./isolation";
-import { createApprovalRequest } from "./approval";
 import { ensureStripeCustomer } from "./billing";
-import { logTenantAudit } from "./audit";
-import { AuditAction } from "@prisma/client";
+import { seedTenantDefaults } from "./defaults";
 import { getDefaultTrialSubscriptionFields, shouldExpireTrial } from "./trial";
 
 export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: boolean };
@@ -23,7 +20,7 @@ export async function createTenantMembership(input: {
   authUserId: string;
   role?: string;
 }) {
-  const role = input.role ?? "ADMIN";
+  const role = input.role ?? "OWNER";
   return db.tenant_memberships.upsert({
     where: {
       userId_tenantId: { userId: input.authUserId, tenantId: input.tenantId },
@@ -113,7 +110,6 @@ export async function provisionTenant(input: {
   address?: string;
   timezone?: string;
 }) {
-  const initialStatus = resolveInitialTenantStatus();
   const now = new Date();
   const trialDefaults = getDefaultTrialSubscriptionFields(now);
   const nameParts = input.ownerName.trim().split(/\s+/);
@@ -130,7 +126,7 @@ export async function provisionTenant(input: {
         address: input.address ?? null,
         timezone: input.timezone ?? tenantConfig.defaultTimezone,
         locale: tenantConfig.defaultLocale,
-        status: initialStatus,
+        status: TenantStatus.ACTIVE,
         onboardingCompleted: false,
         featureFlags: {},
         metadata: {},
@@ -144,7 +140,7 @@ export async function provisionTenant(input: {
     createTenantMembership({
       tenantId: tenant.id,
       authUserId: input.ownerAuthUserId,
-      role: "ADMIN",
+      role: "OWNER",
     }),
     db.staffMember.create({
       data: {
@@ -153,7 +149,7 @@ export async function provisionTenant(input: {
         email: input.ownerEmail,
         firstName,
         lastName,
-        role: UserRole.ADMIN,
+        role: UserRole.OWNER,
         isActive: true,
       },
     }),
@@ -169,10 +165,8 @@ export async function provisionTenant(input: {
     },
   });
 
-  if (tenant.status === TenantStatus.ACTIVE) {
-    await ensureMinioBucket(tenant);
-  }
-
+  await ensureMinioBucket(tenant);
+  await seedTenantDefaults(tenant);
   const tenantWithBilling = await ensureStripeCustomer(tenant);
 
   return { tenant: tenantWithBilling, membership, staffMember, branch };
@@ -189,8 +183,6 @@ export async function provisionTenantFromWebhook(params: {
   ownerLastName?: string;
 }) {
   const orgName = params.orgName ?? "New Clinic";
-  const initialStatus = resolveInitialTenantStatus();
-
   const now = new Date();
   const trialDefaults = getDefaultTrialSubscriptionFields(now);
 
@@ -201,7 +193,7 @@ export async function provisionTenantFromWebhook(params: {
         clerkOrgId: params.clerkOrgId,
         name: orgName,
         slug: slugify(orgName, params.clerkOrgId),
-        status: initialStatus,
+        status: TenantStatus.ACTIVE,
         locale: tenantConfig.defaultLocale,
         timezone: tenantConfig.defaultTimezone,
         onboardingCompleted: false,
@@ -222,26 +214,22 @@ export async function provisionTenantFromWebhook(params: {
       email: params.ownerEmail ?? "",
       firstName: params.ownerFirstName,
       lastName: params.ownerLastName,
-      role: UserRole.ADMIN,
+      role: UserRole.OWNER,
     });
 
     if (params.authUserId) {
       await createTenantMembership({
         tenantId: tenant.id,
         authUserId: params.authUserId,
-        role: "ADMIN",
+        role: "OWNER",
       });
     } else if (params.ownerEmail) {
       await linkAuthUserToTenant({
         tenantId: tenant.id,
         email: params.ownerEmail,
         staffMemberId: staffMember.id,
-        membershipRole: "ADMIN",
+        membershipRole: "OWNER",
       });
-    }
-
-    if (tenantConfig.approvalRequired && tenant.status === TenantStatus.PENDING) {
-      await createApprovalRequest(tenant.id, params.clerkUserId);
     }
   }
 

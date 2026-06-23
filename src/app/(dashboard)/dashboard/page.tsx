@@ -6,6 +6,11 @@ import {
   getRoleDashboardExtras,
 } from "@/app/(dashboard)/features/dashboard/queries";
 import { DashboardClient } from "./dashboard-client";
+import {
+  getOnboardingChecklist,
+  markOnboardingComplete,
+} from "@/lib/tenant/onboarding";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 
 export default async function DashboardPage() {
   const session = await getServerAuthSession();
@@ -17,19 +22,27 @@ export default async function DashboardPage() {
   const userRole = ctx.staffMember?.role ?? "RECEPTIONIST";
   const staffMemberId = ctx.staffMember?.id ?? null;
 
-  const [kpis, extras] = await Promise.all([
+  const [kpis, extras, checklist] = await Promise.all([
     getDashboardKPIs(ctx.tenant.id),
     getRoleDashboardExtras(ctx.tenant.id, userRole, staffMemberId),
+    getOnboardingChecklist(ctx.tenant),
   ]);
 
+  if (checklist.allComplete && !ctx.tenant.onboardingCompleted) {
+    await markOnboardingComplete(ctx.tenant.id);
+  }
+
   return (
-    <DashboardClient
-      kpis={kpis}
-      extras={extras}
-      tenantName={ctx.tenant.name}
-      plan={ctx.tenant.subscriptionPlan}
-      userRole={userRole}
-      staffMemberId={staffMemberId}
-    />
+    <div className="space-y-6">
+      {checklist.showChecklist && <OnboardingChecklist items={checklist.items} compact />}
+      <DashboardClient
+        kpis={kpis}
+        extras={extras}
+        tenantName={ctx.tenant.name}
+        plan={ctx.tenant.subscriptionPlan}
+        userRole={userRole}
+        staffMemberId={staffMemberId}
+      />
+    </div>
   );
 }

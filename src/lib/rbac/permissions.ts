@@ -220,6 +220,8 @@ function applyLegacyRoleOverrides(
  * Checks whether a role may perform an action on a resource.
  */
 export function can(role: UserRole, action: Action, resource: Resource): boolean {
+  if (role === UserRole.OWNER) return true;
+
   const dashboardRole = normalizeDashboardRole(role);
   const level = PERMISSION_MATRIX[dashboardRole][resource];
   const allowed = accessAllows(level, action);

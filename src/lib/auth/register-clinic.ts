@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import {
   clinicRegistrationServerSchema,
   formatAdminName,
+  doctorCountFromBand,
   type ClinicRegistrationSubmit,
 } from "@/lib/auth/registration-schema";
 import { getCountryByCode } from "@/lib/auth/countries";
@@ -21,6 +22,7 @@ export type RegisterClinicResult =
       tenantId: string;
       tenantSlug: string;
       authUserId: string;
+      redirectUrl: "/dashboard";
     }
   | { success: false; error: string; field?: string };
 
@@ -122,7 +124,7 @@ async function finalizeClinicSetup(
       subscriptionPlan: SubscriptionPlan.STARTER,
       subscriptionStatus: trialFields.subscriptionStatus,
       trialEndsAt: trialFields.trialEndsAt,
-      onboardingCompleted: true,
+      onboardingCompleted: false,
       metadata: {
         ...existingMetadata,
         currency: input.currency,
@@ -182,6 +184,14 @@ async function finalizeClinicSetup(
   }
 
   await ensureStripeCustomer(updatedTenant);
+
+  await db.settings.update({
+    where: { tenantId },
+    data: {
+      currency: input.currency,
+      taxRate: input.currency === "AED" ? 5 : 0,
+    },
+  });
 
   await sendWelcomeEmail({
     to: input.email,
@@ -266,6 +276,7 @@ async function registerClinicNextAuth(
       tenantId: updatedTenant.id,
       tenantSlug: updatedTenant.slug,
       authUserId: authUser.id,
+      redirectUrl: "/dashboard",
     };
   } catch (err) {
     console.error("[registerClinic] finalize failed:", err);
@@ -319,6 +330,7 @@ async function registerClinicForExistingUser(
       tenantId: updatedTenant.id,
       tenantSlug: updatedTenant.slug,
       authUserId,
+      redirectUrl: "/dashboard",
     };
   } catch (err) {
     console.error("[registerClinic] finalize failed:", err);
@@ -327,7 +339,21 @@ async function registerClinicForExistingUser(
 }
 
 export async function registerClinic(data: ClinicRegistrationSubmit): Promise<RegisterClinicResult> {
-  const parsed = clinicRegistrationServerSchema.safeParse(data);
+  const normalized = {
+    ...data,
+    phone: data.phone?.trim() || "Not provided",
+    specialties:
+      data.specialties && data.specialties.length > 0
+        ? data.specialties
+        : data.specialty
+          ? [data.specialty]
+          : undefined,
+    doctorCount: data.doctorCount ?? doctorCountFromBand(data.doctorCountBand),
+    addressLine1: data.addressLine1?.trim() || "Address pending",
+    city: data.city?.trim() || "City pending",
+  };
+
+  const parsed = clinicRegistrationServerSchema.safeParse(normalized);
   if (!parsed.success) {
     const firstIssue = parsed.error.issues[0];
     const field = firstIssue?.path.join(".") || "form";

@@ -5,7 +5,7 @@ export const registrationAccountBaseSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Enter a valid email address"),
-  phone: z.string().min(6, "Phone number is required"),
+  phone: z.string().optional(),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
@@ -20,25 +20,30 @@ export const registrationStep1Schema = registrationAccountBaseSchema.refine(
   { message: "Passwords do not match", path: ["confirmPassword"] },
 );
 
+export const DOCTOR_COUNT_OPTIONS = ["1", "2-5", "6-10", "10+"] as const;
+
 export const registrationStep2Schema = z.object({
   clinicName: z.string().min(2, "Clinic name is required"),
   country: z.string().min(2, "Select a country"),
   timezone: z.string().min(1, "Select a timezone"),
   currency: z.string().min(3, "Currency is required"),
-  chairCount: z.coerce.number().int().min(1).max(50),
-  doctorCount: z.coerce.number().int().min(1).max(100),
-  addressLine1: z.string().min(3, "Street address is required"),
+  phone: z.string().optional(),
+  specialty: z.string().optional(),
+  doctorCountBand: z.enum(DOCTOR_COUNT_OPTIONS).optional(),
+  chairCount: z.coerce.number().int().min(1).max(50).default(1),
+  doctorCount: z.coerce.number().int().min(1).max(100).default(1),
+  addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
-  city: z.string().min(2, "City is required"),
+  city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
 });
 
 export const registrationStep3Schema = z.object({
   taxId: z.string().optional(),
-  specialties: z.array(z.string()).min(1, "Select at least one specialty"),
-  expectedMonthlyPatients: z.string().min(1, "Select an expected patient volume"),
-  referralSource: z.string().min(1, "Let us know how you heard about us"),
+  specialties: z.array(z.string()).optional(),
+  expectedMonthlyPatients: z.string().optional(),
+  referralSource: z.string().optional(),
 });
 
 const registrationAccountFields = registrationAccountBaseSchema.omit({ confirmPassword: true });
@@ -52,9 +57,15 @@ export const clinicRegistrationSchema = registrationAccountFields
 
 /** Server-side — password optional when account already exists (OAuth). */
 export const clinicRegistrationServerSchema = clinicRegistrationSchema
-  .omit({ password: true })
+  .omit({ password: true, specialty: true, doctorCountBand: true })
   .extend({
     password: z.string().optional(),
+    specialties: z.array(z.string()).min(1).default(["General Dentistry"]),
+    expectedMonthlyPatients: z.string().default("1-50"),
+    referralSource: z.string().default("Website"),
+    addressLine1: z.string().default(""),
+    city: z.string().default(""),
+    phone: z.string().min(1).default(""),
   });
 
 export type RegistrationStep1 = z.infer<typeof registrationAccountBaseSchema>;
@@ -63,8 +74,13 @@ export type RegistrationStep3 = z.infer<typeof registrationStep3Schema>;
 export type ClinicRegistrationData = z.infer<typeof clinicRegistrationSchema>;
 
 /** Client → server payload (password optional for OAuth users). */
-export type ClinicRegistrationSubmit = Omit<ClinicRegistrationData, "password"> & {
+export type ClinicRegistrationSubmit = Omit<
+  ClinicRegistrationData,
+  "password" | "specialty" | "doctorCountBand"
+> & {
   password?: string;
+  specialty?: string;
+  doctorCountBand?: (typeof DOCTOR_COUNT_OPTIONS)[number];
 };
 
 export type PendingRegistration = Omit<RegistrationStep1, "password" | "confirmPassword"> &
@@ -82,4 +98,37 @@ export const registrationStep1OAuthSchema = registrationAccountBaseSchema.omit({
 
 export function formatAdminName(firstName: string, lastName: string): string {
   return [firstName, lastName].filter(Boolean).join(" ").trim();
+}
+
+export function doctorCountFromBand(band?: string): number {
+  switch (band) {
+    case "1":
+      return 1;
+    case "2-5":
+      return 3;
+    case "6-10":
+      return 8;
+    case "10+":
+      return 12;
+    default:
+      return 1;
+  }
+}
+
+export function passwordStrengthScore(password: string): {
+  score: number;
+  label: string;
+  color: string;
+} {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 2) return { score, label: "Weak", color: "bg-red-500" };
+  if (score <= 3) return { score, label: "Fair", color: "bg-orange-500" };
+  if (score <= 4) return { score, label: "Good", color: "bg-yellow-500" };
+  return { score, label: "Strong", color: "bg-emerald-500" };
 }

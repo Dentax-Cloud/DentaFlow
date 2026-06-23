@@ -27,9 +27,6 @@ export function validateTenantAccess(tenant: Tenant, clerkUserId: string) {
   if (tenant.deletedAt) throw new Error("TENANT_DELETED");
   if (tenant.status === TenantStatus.CLOSED) throw new Error("TENANT_CLOSED");
   if (tenant.status === TenantStatus.SUSPENDED) throw new Error("TENANT_SUSPENDED");
-  if (tenant.status === TenantStatus.PENDING && !isSuperAdmin(clerkUserId)) {
-    throw new Error("TENANT_PENDING_APPROVAL");
-  }
 }
 
 export function getActiveTenantOrThrow(tenant: Tenant, clerkUserId: string): Tenant {
@@ -45,5 +42,5 @@ export async function requireSuperAdmin() {
 }
 
 export function resolveInitialTenantStatus(): TenantStatus {
-  return tenantConfig.approvalRequired ? TenantStatus.PENDING : TenantStatus.ACTIVE;
+  return TenantStatus.ACTIVE;
 }

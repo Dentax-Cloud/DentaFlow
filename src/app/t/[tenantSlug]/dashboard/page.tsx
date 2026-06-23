@@ -1,38 +1,34 @@
-export const runtime = "nodejs";
+import { redirect } from "next/navigation";
+import { getServerAuthSession } from "@/lib/auth";
+import { db } from "@/lib/db";
 
-import { requireTenantContextBySlug } from "@/lib/tenant/context";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-export default async function TenantDashboardPage({
+export default async function TenantSlugDashboard({
   params,
 }: {
   params: Promise<{ tenantSlug: string }>;
 }) {
   const { tenantSlug } = await params;
-  const ctx = await requireTenantContextBySlug(tenantSlug);
+  const session = await getServerAuthSession();
 
-  return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h2 className="text-2xl font-bold">Dashboard</h2>
-        <p className="text-muted-foreground">Welcome to {ctx.tenant.name}</p>
-      </div>
+  if (!session?.user?.id) redirect("/login");
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Plan</p>
-          <p className="text-xl font-semibold">{ctx.tenant.subscriptionPlan}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Subscription</p>
-          <Badge>{ctx.tenant.subscriptionStatus}</Badge>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Tenant status</p>
-          <Badge variant="outline">{ctx.tenant.status}</Badge>
-        </Card>
-      </div>
-    </div>
-  );
+  const tenant = await db.tenant.findUnique({ where: { slug: tenantSlug } });
+  if (!tenant) redirect("/dashboard");
+
+  if (session.user.activeTenantId === tenant.id) {
+    redirect("/dashboard");
+  }
+
+  const membership = await db.tenant_memberships.findFirst({
+    where: { userId: session.user.id, tenantId: tenant.id, isActive: true },
+  });
+
+  if (membership) {
+    await db.auth_users.update({
+      where: { id: session.user.id },
+      data: { activeTenantId: tenant.id },
+    });
+  }
+
+  redirect("/dashboard");
 }
