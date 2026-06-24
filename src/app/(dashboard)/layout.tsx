@@ -14,6 +14,7 @@ export default async function DashboardLayout({
   const session = await getServerAuthSession();
   if (!session?.user?.id) redirect("/login");
 
+  // Superadmin without active impersonation → go to superadmin panel
   if (session.user.isSuperAdmin && !session.user.activeTenantId) {
     redirect("/superadmin/tenants");
   }
@@ -43,6 +44,7 @@ export default async function DashboardLayout({
           : undefined
       }
       isSuperAdmin={ctx.isSuperAdmin}
+      isImpersonating={session.user.isSuperAdmin && Boolean(session.user.activeTenantId)}
       tenantName={ctx.tenant.name}
       tenantLogoUrl={ctx.tenant.logoUrl}
       trialDaysLeft={

@@ -119,14 +119,14 @@ export function BranchesSection({
             className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
           >
             <div>
-              <p className="font-medium">
+              <div className="font-medium">
                 {b.name}
                 {b.isPrimary && (
                   <Badge className="ml-2" variant="secondary">
                     Primary
                   </Badge>
                 )}
-              </p>
+              </div>
               <p className="text-muted-foreground">
                 {b.address ?? "No address"} · {b._count.chairs} chairs ·{" "}
                 {b._count.appointments} appointments
