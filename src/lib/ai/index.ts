@@ -1,4 +1,5 @@
 export { generateClinicalNotes, type SoapNote } from "./generate-clinical-notes";
+export { enhanceClinicalText } from "./enhance-clinical-text";
 export { suggestTreatmentPlan, type TreatmentSuggestion } from "./suggest-treatment-plan";
 export { predictNoShowRisk, type NoShowPrediction } from "./predict-no-show";
 export { predictChurnRisk, type ChurnPrediction } from "./predict-churn";

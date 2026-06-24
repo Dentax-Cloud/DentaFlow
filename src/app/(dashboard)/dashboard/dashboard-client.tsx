@@ -283,7 +283,7 @@ export function DashboardClient({
                         <Link
                           href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}
                         >
-                          Open clinical
+                          Open chart
                         </Link>
                       </Button>
                     )}
@@ -296,7 +296,7 @@ export function DashboardClient({
                 <Button asChild>
                   <Link href="/clinical">
                     <Stethoscope className="mr-2 h-4 w-4" />
-                    Open clinical
+                    Open chart
                   </Link>
                 </Button>
                 <Button variant="outline" asChild>

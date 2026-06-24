@@ -185,7 +185,7 @@ export function AppointmentsClient({
         ))}
         <Button size="sm" variant="ghost" asChild>
           <Link href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
-            Open clinical
+            Open chart
           </Link>
         </Button>
       </div>

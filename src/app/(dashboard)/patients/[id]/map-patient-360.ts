@@ -84,8 +84,13 @@ export function mapPatientTo360Profile(p: PatientWith360): PatientDetailProfile 
     clinicalNotes: p.clinicalNotes.map((n) => ({
       id: n.id,
       visitDate: n.visitDate.toISOString(),
+      title: n.title,
       assessment: n.assessment,
+      subjective: n.subjective,
       aiGenerated: n.aiGenerated,
+      signedByName: n.signedByName,
+      signedAt: n.signedAt?.toISOString(),
+      toothNumbers: n.toothNumbers ?? [],
     })),
     attachments: p.attachments.map((f) => ({
       id: f.id,

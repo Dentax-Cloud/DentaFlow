@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { Tenant } from "@prisma/client";
+import { PLATFORM_DEFAULT_TEMPLATES } from "@/lib/clinical/default-templates";
 
 /** Seed industry-standard defaults for a newly provisioned clinic. */
 export async function seedTenantDefaults(tenant: Tenant, currency = "AED") {
@@ -7,6 +8,7 @@ export async function seedTenantDefaults(tenant: Tenant, currency = "AED") {
     seedProcedureCatalog(tenant.id),
     seedInventoryItems(tenant.id),
     seedClinicSettings(tenant.id, currency),
+    seedClinicalTemplates(tenant.id),
   ]);
 }
 
@@ -187,5 +189,21 @@ async function seedClinicSettings(tenantId: string, currency: string) {
       currency,
       taxRate: currency === "AED" ? 5 : 0,
     },
+  });
+}
+
+async function seedClinicalTemplates(tenantId: string) {
+  const existing = await db.clinicalTemplate.count({ where: { tenantId } });
+  if (existing > 0) return;
+
+  await db.clinicalTemplate.createMany({
+    data: PLATFORM_DEFAULT_TEMPLATES.map((t) => ({
+      tenantId,
+      name: t.name,
+      type: t.type,
+      content: t.content,
+      isDefault: t.isDefault ?? false,
+      isActive: true,
+    })),
   });
 }
