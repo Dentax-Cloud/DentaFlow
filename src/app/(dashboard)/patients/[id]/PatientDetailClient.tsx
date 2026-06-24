@@ -77,8 +77,13 @@ export interface PatientDetailProfile {
   clinicalNotes: {
     id: string;
     visitDate: string;
+    title: string | null;
     assessment: string | null;
+    subjective: string | null;
     aiGenerated: boolean;
+    signedByName: string | null;
+    signedAt: string | null;
+    toothNumbers: string[];
   }[];
   attachments: {
     id: string;
@@ -92,14 +97,22 @@ export interface PatientDetailProfile {
 export interface PatientDetailClientProps {
   patient: PatientDetailProfile;
   uploadsEnabled: boolean;
+  latestPerio?: {
+    id: string;
+    chartDate: string;
+    perioStage: string | null;
+    perioGrade: string | null;
+    bopPercent: number | null;
+  } | null;
 }
 
-type TabId = "overview" | "appointments" | "clinical" | "treatment" | "billing" | "documents";
+type TabId = "overview" | "appointments" | "clinical" | "perio" | "treatment" | "billing" | "documents";
 
 const TABS: { id: TabId; label: string; icon: typeof User }[] = [
   { id: "overview", label: "Overview", icon: User },
   { id: "appointments", label: "Appointments", icon: Calendar },
   { id: "clinical", label: "Clinical history", icon: Stethoscope },
+  { id: "perio", label: "Perio", icon: Activity },
   { id: "treatment", label: "Treatment plans", icon: Heart },
   { id: "billing", label: "Invoice history", icon: Receipt },
   { id: "documents", label: "Documents", icon: FileText },
@@ -148,11 +161,12 @@ function StatCard({
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, children }: { message: string; children?: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
-      {message}
-    </p>
+    <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+      <p>{message}</p>
+      {children}
+    </div>
   );
 }
 
@@ -162,7 +176,11 @@ function riskBadgeVariant(level: string) {
   return "success" as const;
 }
 
-export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailClientProps) {
+export function PatientDetailClient({
+  patient,
+  uploadsEnabled,
+  latestPerio = null,
+}: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const fullName = `${patient.firstName} ${patient.lastName}`;
@@ -498,25 +516,104 @@ export function PatientDetailClient({ patient, uploadsEnabled }: PatientDetailCl
                   ) : (
                     patient.clinicalNotes.map((note) => (
                       <div key={note.id} className="rounded-lg border px-4 py-3 text-sm">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(note.visitDate)}
-                          </p>
-                          {note.aiGenerated && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              AI-assisted
-                            </Badge>
-                          )}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium">{note.title ?? "Clinical note"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(note.visitDate)}
+                              {note.signedByName ? ` · ${note.signedByName}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            {note.aiGenerated && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                AI-assisted
+                              </Badge>
+                            )}
+                            {note.signedAt && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Signed
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <p className="mt-1 line-clamp-3">
-                          {note.assessment ?? "—"}
+                          {note.assessment ?? note.subjective ?? "—"}
                         </p>
+                        {note.toothNumbers.length > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Teeth: {note.toothNumbers.join(", ")}
+                          </p>
+                        )}
                       </div>
                     ))
                   )}
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {activeTab === "perio" && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base">Periodontal charting</CardTitle>
+                  <CardDescription>
+                    6-point probing, AAP 2017 staging, and chart history
+                  </CardDescription>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/clinical/perio?patientId=${patient.id}`}>
+                      View full chart
+                    </Link>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <Link href={`/clinical/perio?patientId=${patient.id}`}>
+                      New perio chart
+                    </Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {latestPerio ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-lg border bg-green-50 p-3 text-green-800">
+                        <p className="text-xs font-medium opacity-70">Stage</p>
+                        <p className="text-2xl font-bold">{latestPerio.perioStage ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border bg-yellow-50 p-3 text-yellow-800">
+                        <p className="text-xs font-medium opacity-70">Grade</p>
+                        <p className="text-2xl font-bold">{latestPerio.perioGrade ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border bg-blue-50 p-3 text-blue-800">
+                        <p className="text-xs font-medium opacity-70">BOP</p>
+                        <p className="text-2xl font-bold">
+                          {latestPerio.bopPercent != null ? `${latestPerio.bopPercent}%` : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border bg-muted/50 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Last charted</p>
+                        <p className="text-lg font-semibold">{formatDate(latestPerio.chartDate)}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Open the full periodontal chart to enter measurements, compare visits, or
+                      review history.
+                    </p>
+                  </div>
+                ) : (
+                  <EmptyState message="No periodontal charts recorded yet.">
+                    <Button className="mt-3" asChild>
+                      <Link href={`/clinical/perio?patientId=${patient.id}`}>
+                        Record first perio chart
+                      </Link>
+                    </Button>
+                  </EmptyState>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === "treatment" && (

@@ -43,6 +43,7 @@ model Tenant {
   chairs               Chair[]
   claims               Claim[]
   clinicalNotes        ClinicalNote[]
+  clinicalTemplates    ClinicalTemplate[]
   communicationLogs    CommunicationLog[]
   doctors              Doctor[]
   feedbacks            Feedback[]
@@ -62,6 +63,8 @@ model Tenant {
   teeth                Tooth[]
   toothConditions      ToothCondition[]
   treatmentPlans       TreatmentPlan[]
+  clinicalNoteVersions ClinicalNoteVersion[]
+  perioCharts          PerioChart[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
 }
@@ -212,6 +215,7 @@ model Patient {
   teeth             Tooth[]
   toothConditions   ToothCondition[]
   treatmentPlans    TreatmentPlan[]
+  perioCharts       PerioChart[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -299,6 +303,7 @@ model Appointment {
   patient      Patient           @relation(fields: [patientId], references: [id])
   provider     StaffMember?      @relation("AssignedProvider", fields: [providerId], references: [id])
   tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clinicalNotes ClinicalNote[]
 
   @@index([tenantId])
   @@index([tenantId, startTime])
@@ -324,46 +329,119 @@ model Tooth {
 }
 
 model ToothCondition {
-  id          String             @id @default(cuid())
-  tenantId    String
-  patientId   String
-  toothId     String
-  type        ToothConditionType
-  surfaces    String[]
-  severity    Int?
-  mobility    Int?
-  pocketDepth Float?
-  notes       String?
-  recordedAt  DateTime           @default(now())
-  recordedBy  String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  patient     Patient            @relation(fields: [patientId], references: [id])
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tooth       Tooth              @relation(fields: [toothId], references: [id])
+  id            String             @id @default(cuid())
+  tenantId      String
+  patientId     String
+  toothId       String
+  type          ToothConditionType
+  surfaces      String[]
+  severity      Int?
+  mobility      Int?
+  pocketDepth   Float?
+  notes         String?
+  appointmentId String?
+  recordedAt    DateTime           @default(now())
+  recordedBy    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  patient       Patient            @relation(fields: [patientId], references: [id])
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tooth         Tooth              @relation(fields: [toothId], references: [id])
 
   @@index([tenantId, patientId])
   @@index([tenantId, toothId])
+  @@index([tenantId, appointmentId])
 }
 
 model ClinicalNote {
-  id          String      @id @default(cuid())
-  tenantId    String
-  patientId   String
-  providerId  String
-  subjective  String?
-  objective   String?
-  assessment  String?
-  plan        String?
-  rawNotes    String?
-  aiGenerated Boolean     @default(false)
-  visitDate   DateTime    @default(now())
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  patient     Patient     @relation(fields: [patientId], references: [id])
-  provider    StaffMember @relation(fields: [providerId], references: [id])
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id             String                @id @default(cuid())
+  tenantId       String
+  patientId      String
+  providerId     String
+  appointmentId  String?
+  templateId     String?
+  noteType       String                @default("SOAP")
+  title          String?
+  subjective     String?
+  objective      String?
+  assessment     String?
+  plan           String?
+  bodyHtml       String?
+  rawNotes       String?
+  toothNumbers   String[]
+  aiGenerated    Boolean               @default(false)
+  aiEnhanced     Boolean               @default(false)
+  currentVersion Int                   @default(1)
+  signedAt       DateTime?
+  signedByName   String?
+  visitDate      DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  patient        Patient               @relation(fields: [patientId], references: [id])
+  provider       StaffMember           @relation(fields: [providerId], references: [id])
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment    Appointment?          @relation(fields: [appointmentId], references: [id])
+  template       ClinicalTemplate?     @relation(fields: [templateId], references: [id])
+  versions       ClinicalNoteVersion[]
 
+  @@index([tenantId, patientId])
+  @@index([tenantId, appointmentId])
+}
+
+model ClinicalNoteVersion {
+  id           String       @id @default(cuid())
+  tenantId     String
+  noteId       String
+  version      Int
+  subjective   String?
+  objective    String?
+  assessment   String?
+  plan         String?
+  bodyHtml     String?
+  rawNotes     String?
+  editedById   String?
+  editedByName String?
+  createdAt    DateTime     @default(now())
+  note         ClinicalNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, version])
+  @@index([tenantId, noteId])
+}
+
+model ClinicalTemplate {
+  id        String         @id @default(cuid())
+  tenantId  String?
+  name      String
+  type      String
+  content   String
+  isDefault Boolean        @default(false)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notes     ClinicalNote[]
+
+  @@index([tenantId, type])
+}
+
+model PerioChart {
+  id           String   @id @default(cuid())
+  tenantId     String
+  patientId    String
+  examinerId   String?
+  chartDate    DateTime @default(now())
+  perioStage   String?
+  perioGrade   String?
+  bopPercent   Float?
+  notes        String?
+  measurements Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
   @@index([tenantId, patientId])
 }
 
@@ -812,6 +890,8 @@ enum ToothConditionType {
   MOBILITY
   FRACTURE
   ROOT_CANAL
+  WATCH
+  BRIDGE
 }
 
 enum TreatmentPlanStatus {

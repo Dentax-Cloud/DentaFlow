@@ -3,23 +3,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Odontogram } from "@/components/clinical/dental-chart";
-import { ToothDetailPanel } from "@/components/clinical/tooth-detail-panel";
-import { ClinicalNotesSection } from "@/components/clinical/clinical-notes-section";
+import { ToothDetailPanel, type AddConditionInput } from "@/components/clinical/tooth-detail-panel";
+import { ClinicalNoteEditor, type ClinicalTemplateOption } from "@/components/clinical/clinical-note-editor";
 import { TreatmentSuggestionsPanel } from "@/components/clinical/treatment-suggestions-panel";
+import { ChartHistoryTimeline } from "@/components/clinical/chart-history-timeline";
+import { ChartExportButton } from "@/components/clinical/chart-export";
 import type { ToothChartData } from "@/lib/clinical/chart-types";
 import { chartToSummary } from "@/lib/clinical/chart-types";
 import type { ChartNotation } from "@/lib/clinical/odontogram-notation";
+import type { ToothSurface } from "@/lib/clinical/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
-  saveToothCondition,
-  removeToothCondition,
+  createToothCondition,
+  deleteToothCondition,
   generateSoapNote,
-  saveClinicalNote,
   loadPatientChart,
   aiSuggestTreatment,
   saveSuggestedTreatmentPlan,
+  markToothMissing,
+  restoreToothStatus,
 } from "@/app/(dashboard)/features/clinical/actions";
 import { ToothConditionType } from "@prisma/client";
 import type { TreatmentSuggestion } from "@/lib/ai";
@@ -27,9 +32,12 @@ import { ProcedureVisitPanel } from "@/components/clinical/procedure-visit-panel
 import type { ProcedureCatalog } from "@prisma/client";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
-function updateClinicalUrl(patientId: string) {
-  const url = patientId ? `/clinical?patientId=${patientId}` : "/clinical";
-  window.history.replaceState(null, "", url);
+function updateClinicalUrl(patientId: string, appointmentId?: string) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patientId", patientId);
+  if (appointmentId) params.set("appointmentId", appointmentId);
+  const qs = params.toString();
+  window.history.replaceState(null, "", qs ? `/clinical?${qs}` : "/clinical");
 }
 
 export function ClinicalPageClient({
@@ -38,17 +46,24 @@ export function ClinicalPageClient({
   appointmentId,
   procedures,
   initialChartData,
+  providerName,
+  clinicName,
+  templates,
 }: {
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
   selectedPatientId?: string;
   appointmentId?: string;
   procedures: ProcedureCatalog[];
   initialChartData: ToothChartData;
+  providerName?: string;
+  clinicName?: string;
+  templates: ClinicalTemplateOption[];
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
   const [chartData, setChartData] = useState<ToothChartData>(initialChartData);
   const [notation, setNotation] = useState<ChartNotation>("FDI");
   const [selectedTooth, setSelectedTooth] = useState<string>();
+  const [highlightSurfaces, setHighlightSurfaces] = useState<ToothSurface[]>([]);
   const [rawNotes, setRawNotes] = useState("");
   const [soap, setSoap] = useState<{
     subjective: string;
@@ -68,55 +83,69 @@ export function ClinicalPageClient({
   const [savingTier, setSavingTier] = useState<"basic" | "premium" | null>(null);
   const loadRequestRef = useRef(0);
 
+  const selectedPatient = patients.find((p) => p.id === patientId);
+  const patientDisplayName = selectedPatient
+    ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+    : "";
+
   const chartSummary = useMemo(() => chartToSummary(chartData), [chartData]);
+
+  const chartToothNumbers = useMemo(
+    () => Object.keys(chartData).filter((t) => (chartData[t]?.conditions.length ?? 0) > 0),
+    [chartData],
+  );
 
   const selectedConditions = selectedTooth
     ? (chartData[selectedTooth]?.conditions ?? [])
     : [];
 
-  const fetchChart = useCallback(async (id: string) => {
-    const requestId = ++loadRequestRef.current;
+  const fetchChart = useCallback(
+    async (id: string) => {
+      const requestId = ++loadRequestRef.current;
 
-    if (!id) {
-      setPatientId("");
-      setChartData({});
-      setSelectedTooth(undefined);
-      setSoap(null);
-      setTreatmentSuggestion(null);
-      setLoadError(null);
-      setChartLoading(false);
-      updateClinicalUrl("");
-      return;
-    }
-
-    setChartLoading(true);
-    setLoadError(null);
-    setPatientId(id);
-    setSelectedTooth(undefined);
-    setTreatmentSuggestion(null);
-
-    try {
-      const result = await loadPatientChart({ patientId: id });
-      if (requestId !== loadRequestRef.current) return;
-
-      if (result.success) {
-        setChartData(result.data);
-        setLoadError(null);
-        updateClinicalUrl(id);
-      } else {
+      if (!id) {
+        setPatientId("");
         setChartData({});
-        setLoadError(result.error);
+        setSelectedTooth(undefined);
+        setSoap(null);
+        setTreatmentSuggestion(null);
+        setLoadError(null);
+        setChartLoading(false);
+        updateClinicalUrl("");
+        return;
       }
-    } catch {
-      if (requestId !== loadRequestRef.current) return;
-      setChartData({});
-      setLoadError(
-        "Could not load the dental chart. Check your connection and try again.",
-      );
-    } finally {
-      if (requestId === loadRequestRef.current) setChartLoading(false);
-    }
-  }, []);
+
+      setChartLoading(true);
+      setLoadError(null);
+      setPatientId(id);
+      setSelectedTooth(undefined);
+      setHighlightSurfaces([]);
+      setTreatmentSuggestion(null);
+
+      try {
+        const result = await loadPatientChart({ patientId: id });
+        if (requestId !== loadRequestRef.current) return;
+
+        if (result.success) {
+          setChartData(result.data);
+          setLoadError(null);
+          updateClinicalUrl(id, appointmentId);
+        } else {
+          setChartData({});
+          setLoadError(result.error);
+        }
+      } catch {
+        if (requestId !== loadRequestRef.current) return;
+        setChartData({});
+        setLoadError(
+          "Could not load the dental chart. Check your connection and try again.",
+        );
+      } finally {
+        if (requestId === loadRequestRef.current) setChartLoading(false);
+      }
+    },
+    [appointmentId],
+  );
 
   useEffect(() => {
     if (!selectedPatientId) return;
@@ -125,43 +154,48 @@ export function ClinicalPageClient({
     setLoadError(null);
   }, [selectedPatientId, initialChartData]);
 
-  async function handleAddCondition(
+  function mergeConditionIntoChart(
     toothNumber: string,
-    type: ToothConditionType,
-    notes?: string,
+    entry: {
+      id: string;
+      type: ToothConditionType;
+      surfaces: string[];
+      severity?: number | null;
+      notes?: string | null;
+      recordedAt: string;
+      recordedBy?: string | null;
+      recordedByName?: string | null;
+    },
   ) {
+    setChartData((prev) => {
+      const existing = prev[toothNumber]?.conditions ?? [];
+      return {
+        ...prev,
+        [toothNumber]: {
+          conditions: [entry, ...existing.filter((c) => c.id !== entry.id)],
+        },
+      };
+    });
+  }
+
+  async function handleAddCondition(toothNumber: string, input: AddConditionInput) {
     if (!patientId) return;
     setConditionSaving(true);
-    const result = await saveToothCondition({
+    const result = await createToothCondition({
       patientId,
       toothNumber,
-      type,
-      notes,
+      type: input.type,
+      surfaces: input.surfaces,
+      notes: input.notes,
+      recordedAt: input.recordedAt,
+      appointmentId,
     });
     setConditionSaving(false);
 
     if (result.success) {
-      const entry = result.data;
-      setChartData((prev) => {
-        const existing = prev[toothNumber]?.conditions ?? [];
-        return {
-          ...prev,
-          [toothNumber]: {
-            conditions: [
-              {
-                id: entry.id,
-                type: entry.type,
-                surfaces: entry.surfaces,
-                severity: entry.severity,
-                notes: entry.notes,
-                recordedAt: entry.recordedAt,
-              },
-              ...existing,
-            ],
-          },
-        };
-      });
-      toast.success(`${type.replace(/_/g, " ").toLowerCase()} added`);
+      mergeConditionIntoChart(toothNumber, result.data);
+      setHighlightSurfaces([]);
+      toast.success(`${input.type.replace(/_/g, " ").toLowerCase()} added`);
     } else {
       toast.error(result.error);
     }
@@ -170,7 +204,7 @@ export function ClinicalPageClient({
   async function handleRemoveCondition(conditionId: string) {
     if (!patientId || !selectedTooth) return;
     setConditionSaving(true);
-    const result = await removeToothCondition({ patientId, conditionId });
+    const result = await deleteToothCondition({ patientId, conditionId });
     setConditionSaving(false);
 
     if (result.success) {
@@ -187,6 +221,43 @@ export function ClinicalPageClient({
         return next;
       });
       toast.success("Finding removed");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleMarkMissing() {
+    if (!patientId || !selectedTooth) return;
+    setConditionSaving(true);
+    const result = await markToothMissing({ patientId, toothNumber: selectedTooth });
+    setConditionSaving(false);
+    if (result.success) {
+      mergeConditionIntoChart(selectedTooth, result.data);
+      toast.success("Tooth marked missing");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleRestoreTooth() {
+    if (!patientId || !selectedTooth) return;
+    setConditionSaving(true);
+    const result = await restoreToothStatus({ patientId, toothNumber: selectedTooth });
+    setConditionSaving(false);
+    if (result.success) {
+      setChartData((prev) => {
+        const tooth = prev[selectedTooth];
+        if (!tooth) return prev;
+        const conditions = tooth.conditions.filter((c) => c.type !== "MISSING");
+        const next = { ...prev };
+        if (conditions.length === 0) {
+          delete next[selectedTooth];
+        } else {
+          next[selectedTooth] = { conditions };
+        }
+        return next;
+      });
+      toast.success("Tooth restored");
     } else {
       toast.error(result.error);
     }
@@ -244,23 +315,6 @@ export function ClinicalPageClient({
     [chartSummary],
   );
 
-  async function handleSaveNote() {
-    if (!patientId || !soap) return;
-    const result = await saveClinicalNote({
-      patientId,
-      rawNotes,
-      ...soap,
-      aiGenerated: true,
-    });
-    if (result.success) {
-      toast.success("Clinical note saved");
-      setRawNotes("");
-      setSoap(null);
-    } else {
-      toast.error(result.error);
-    }
-  }
-
   const showChart = patientId && !loadError;
 
   return (
@@ -269,12 +323,34 @@ export function ClinicalPageClient({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-3xl font-bold">Clinical</h1>
-            <p className="text-muted-foreground">Interactive odontogram, charting & SOAP notes</p>
+            <p className="text-muted-foreground">
+              Digital odontogram, charting & SOAP notes
+            </p>
           </div>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/clinical/treatment-plans">Treatment plans</a>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {showChart && (
+              <ChartExportButton
+                chartData={chartData}
+                notation={notation}
+                patientName={patientDisplayName}
+                clinicName={clinicName}
+              />
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <a href="/clinical/treatment-plans">Treatment plans</a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href={patientId ? `/clinical/perio?patientId=${patientId}` : "/clinical/perio"}>
+                Perio chart
+              </a>
+            </Button>
+          </div>
         </div>
+        {appointmentId && showChart && (
+          <Badge variant="secondary" className="mt-2">
+            Linked to appointment
+          </Badge>
+        )}
       </div>
 
       <div className="max-w-xs space-y-2">
@@ -326,18 +402,29 @@ export function ClinicalPageClient({
       )}
 
       {showChart && (
-        <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <div className="space-y-6">
             <div className={chartLoading ? "pointer-events-none opacity-50" : undefined}>
               <Odontogram
                 data={chartData}
                 notation={notation}
                 selectedTooth={selectedTooth}
-                onToothClick={setSelectedTooth}
+                highlightSurfaces={highlightSurfaces}
+                onToothClick={(tooth) => {
+                  setSelectedTooth(tooth);
+                  setHighlightSurfaces([]);
+                }}
                 onNotationChange={setNotation}
                 disabled={chartLoading || conditionSaving}
               />
             </div>
+
+            <ChartHistoryTimeline
+              chartData={chartData}
+              notation={notation}
+              patientName={patientDisplayName}
+              filterTooth={selectedTooth}
+            />
 
             <TreatmentSuggestionsPanel
               suggestion={treatmentSuggestion}
@@ -347,14 +434,18 @@ export function ClinicalPageClient({
               onDismiss={() => setTreatmentSuggestion(null)}
             />
 
-            <ClinicalNotesSection
+            <ClinicalNoteEditor
+              patientId={patientId}
+              appointmentId={appointmentId}
+              providerName={providerName}
+              templates={templates}
+              chartSummary={chartSummary}
+              toothNumbers={chartToothNumbers}
               rawNotes={rawNotes}
               onRawNotesChange={setRawNotes}
               soap={soap}
               onSoapChange={setSoap}
-              chartSummary={chartSummary}
               onGenerate={handleGenerateSoap}
-              onSave={handleSaveNote}
               generating={soapLoading}
               disabled={chartLoading}
               autoFromChart={autoFromChart}
@@ -376,12 +467,17 @@ export function ClinicalPageClient({
                 fdiNumber={selectedTooth}
                 notation={notation}
                 conditions={selectedConditions}
-                onClose={() => setSelectedTooth(undefined)}
-                onAddCondition={(type, notes) =>
-                  handleAddCondition(selectedTooth, type, notes)
-                }
+                providerName={providerName}
+                onClose={() => {
+                  setSelectedTooth(undefined);
+                  setHighlightSurfaces([]);
+                }}
+                onAddCondition={(input) => handleAddCondition(selectedTooth, input)}
                 onRemoveCondition={handleRemoveCondition}
+                onMarkMissing={handleMarkMissing}
+                onRestoreTooth={handleRestoreTooth}
                 onSuggestTreatment={() => void handleSuggestTreatment()}
+                onSurfacesChange={setHighlightSurfaces}
                 treatmentLoading={treatmentLoading}
                 saving={conditionSaving}
               />
@@ -393,8 +489,8 @@ export function ClinicalPageClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  Click any tooth on the odontogram to add findings, quick-add common
-                  conditions, and link to AI treatment suggestions.
+                  Click any tooth on the odontogram to record findings by surface,
+                  add quick conditions, and link to AI treatment suggestions.
                 </CardContent>
               </Card>
             )}
