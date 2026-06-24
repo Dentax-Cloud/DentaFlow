@@ -7,6 +7,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: [
+    "http://145.223.90.247:3100",
+    "https://145.223.90.247:3100",
+  ],
   images: {
     remotePatterns: [{ protocol: "https", hostname: "utfs.io" }],
   },
