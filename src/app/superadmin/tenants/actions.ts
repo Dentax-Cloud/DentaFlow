@@ -1,31 +1,101 @@
 "use server";
 
 import { requireSuperAdmin } from "@/lib/auth";
+import { setTenantActive } from "@/lib/super-admin/queries";
 import {
-  updateTenantPlan,
-  updateTenantStatus,
-  setTenantActive,
-} from "@/lib/super-admin/queries";
-import { SubscriptionPlan, SubscriptionStatus, TenantStatus } from "@prisma/client";
+  SubscriptionPlan,
+  SubscriptionStatus,
+  TenantStatus,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { isSubscriptionPlan } from "@/lib/subscription/plan-types";
 import { db } from "@/lib/db";
 import { sendMail, sendWelcomeEmail } from "@/lib/mail";
 
-export async function updatePlanAction(tenantId: string, plan: SubscriptionPlan) {
+export async function updateTenantPlan(
+  tenantId: string,
+  plan: SubscriptionPlan,
+  status: SubscriptionStatus,
+  options?: {
+    extendTrialDays?: number;
+    reason?: string;
+  },
+) {
   await requireSuperAdmin();
 
-  await updateTenantPlan(tenantId, plan);
+  const trialEndsAt = options?.extendTrialDays
+    ? new Date(Date.now() + options.extendTrialDays * 24 * 60 * 60 * 1000)
+    : undefined;
+
+  const tenant = await db.tenant.update({
+    where: { id: tenantId },
+    data: {
+      subscriptionPlan: plan,
+      subscriptionStatus: status,
+      ...(trialEndsAt ? { trialEndsAt } : {}),
+      ...(status === SubscriptionStatus.CANCELED
+        ? { status: TenantStatus.CLOSED }
+        : status === SubscriptionStatus.ACTIVE ||
+            status === SubscriptionStatus.TRIALING
+          ? { status: TenantStatus.ACTIVE }
+          : {}),
+    },
+  });
+
+  await db.auditLog
+    .create({
+      data: {
+        tenantId,
+        action: "UPDATE",
+        entity: "Tenant",
+        entityId: tenantId,
+        metadata: {
+          type: "PLAN_UPDATED",
+          plan,
+          status,
+          reason: options?.reason ?? "Manual update by superadmin",
+          extendTrialDays: options?.extendTrialDays,
+        },
+      },
+    })
+    .catch(() => null);
+
+  if (tenant.email) {
+    const baseUrl =
+      process.env.NEXTAUTH_URL?.trim() ||
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      "http://localhost:3000";
+
+    await sendMail({
+      to: tenant.email,
+      subject: `Your DentaFlow plan has been updated — ${tenant.name}`,
+      text: `Your DentaFlow subscription for ${tenant.name} has been updated.
+
+Plan: ${plan}
+Status: ${status}
+${trialEndsAt ? `Trial extended until: ${trialEndsAt.toLocaleDateString()}` : ""}
+${options?.reason ? `Note: ${options.reason}` : ""}
+
+Log in to your dashboard: ${baseUrl}/login`,
+    }).catch(() => null);
+  }
+
   revalidatePath("/superadmin/tenants");
-  return { success: true };
+  revalidatePath(`/superadmin/tenants/${tenantId}`);
+  return tenant;
+}
+
+export async function updatePlanAction(tenantId: string, plan: SubscriptionPlan) {
+  return updateTenantPlan(tenantId, plan, SubscriptionStatus.ACTIVE);
 }
 
 export async function updateStatusAction(tenantId: string, status: SubscriptionStatus) {
-  await requireSuperAdmin();
-
-  await updateTenantStatus(tenantId, status);
-  revalidatePath("/superadmin/tenants");
-  return { success: true };
+  const existing = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { subscriptionPlan: true },
+  });
+  if (!existing) throw new Error("Tenant not found");
+  return updateTenantPlan(tenantId, existing.subscriptionPlan, status);
 }
 
 export async function suspendTenantAction(tenantId: string, reason?: string) {

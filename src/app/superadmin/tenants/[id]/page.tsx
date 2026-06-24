@@ -3,14 +3,18 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TenantStatusBadge } from "@/components/super-admin/tenant-status-badge";
-import { ImpersonateButton } from "@/components/super-admin/impersonate-button";
+import { SubscriptionStatusBadge } from "@/components/super-admin/subscription-status-badge";
+import { PlanUpgradeForm } from "@/components/super-admin/plan-upgrade-form";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getPlanFeatures } from "@/lib/features/plans";
 import {
   reinstateTenantAction,
   suspendTenantAction,
 } from "../actions";
+
+export const runtime = "nodejs";
 
 export default async function TenantDetailPage({
   params,
@@ -70,8 +74,49 @@ export default async function TenantDetailPage({
             </Badge>
           </div>
         </div>
-        <ImpersonateButton tenantId={tenant.id} tenantName={tenant.name} />
       </div>
+
+      <Card className="border-white/10 bg-zinc-900/50">
+        <CardHeader>
+          <CardTitle>Subscription management</CardTitle>
+          <CardDescription className="text-zinc-400">
+            Change plan, status, and trial period for this clinic
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 rounded-lg bg-white/5 p-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-zinc-500">Current plan</p>
+              <p className="font-semibold">{tenant.subscriptionPlan}</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {(() => {
+                  const f = getPlanFeatures(tenant.subscriptionPlan);
+                  return f.maxPatients === -1
+                    ? "Unlimited patients"
+                    : `${f.maxPatients} patients · ${f.maxUsers} staff`;
+                })()}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Status</p>
+              <div className="mt-1">
+                <SubscriptionStatusBadge status={tenant.subscriptionStatus} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Trial ends</p>
+              <p className="text-sm font-medium">
+                {tenant.trialEndsAt ? formatDate(tenant.trialEndsAt) : "—"}
+              </p>
+            </div>
+          </div>
+          <PlanUpgradeForm
+            tenantId={tenant.id}
+            currentPlan={tenant.subscriptionPlan}
+            currentStatus={tenant.subscriptionStatus}
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
