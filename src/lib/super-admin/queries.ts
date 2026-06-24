@@ -145,23 +145,6 @@ export async function getTenantDetail(tenantId: string) {
   };
 }
 
-export async function updateTenantPlan(tenantId: string, plan: SubscriptionPlan) {
-  return db.tenant.update({
-    where: { id: tenantId },
-    data: { subscriptionPlan: plan },
-  });
-}
-
-export async function updateTenantStatus(
-  tenantId: string,
-  status: SubscriptionStatus,
-) {
-  return db.tenant.update({
-    where: { id: tenantId },
-    data: { subscriptionStatus: status },
-  });
-}
-
 export async function setTenantActive(
   tenantId: string,
   active: boolean,

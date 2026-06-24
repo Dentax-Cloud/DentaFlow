@@ -1,20 +1,16 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { SubscriptionStatus, TenantStatus } from "@prisma/client";
-import { Badge } from "@/components/ui/badge";
+import { TenantStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SUBSCRIPTION_PLAN_VALUES } from "@/lib/subscription/plan-types";
 import {
   approveTenantAction,
   rejectTenantAction,
   reinstateTenantAction,
   suspendTenantAction,
-  updateTenantPlanForm,
-  updateTenantStatusForm,
 } from "./actions";
 import { TenantStatusBadge } from "@/components/super-admin/tenant-status-badge";
-import { ImpersonateButton } from "@/components/super-admin/impersonate-button";
+import { TenantPlanQuickSelect } from "@/components/super-admin/tenant-plan-quick-select";
 
 export const runtime = "nodejs";
 
@@ -102,8 +98,7 @@ export default async function SuperadminTenantsPage() {
             <tr>
               <th className="px-4 py-3">Clinic</th>
               <th className="px-4 py-3">Clinic status</th>
-              <th className="px-4 py-3">Plan</th>
-              <th className="px-4 py-3">Subscription</th>
+              <th className="px-4 py-3">Plan & subscription</th>
               <th className="px-4 py-3">Stripe</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -119,70 +114,22 @@ export default async function SuperadminTenantsPage() {
                     {tenant.name}
                   </Link>
                   <div className="text-xs text-zinc-500">/{tenant.slug}</div>
-                  <ImpersonateButton tenantId={tenant.id} tenantName={tenant.name} />
                 </td>
                 <td className="px-4 py-3">
                   <TenantStatusBadge status={tenant.status} />
                 </td>
-                <td className="px-4 py-3">{tenant.subscriptionPlan}</td>
                 <td className="px-4 py-3">
-                  <Badge
-                    variant={
-                      tenant.subscriptionStatus === "TRIALING"
-                        ? "default"
-                        : tenant.subscriptionStatus === "ACTIVE"
-                          ? "success"
-                          : tenant.subscriptionStatus === "PAST_DUE"
-                            ? "warning"
-                            : "secondary"
-                    }
-                  >
-                    {tenant.subscriptionStatus}
-                  </Badge>
+                  <TenantPlanQuickSelect
+                    tenantId={tenant.id}
+                    currentPlan={tenant.subscriptionPlan}
+                    currentStatus={tenant.subscriptionStatus}
+                  />
                 </td>
                 <td className="px-4 py-3 text-xs text-zinc-500">
                   {tenant.stripeSubscriptionId ? "Active" : "—"}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-2">
-                    <form
-                      action={updateTenantPlanForm.bind(null, tenant.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <select
-                        name="plan"
-                        defaultValue={tenant.subscriptionPlan}
-                        className="h-9 rounded-md border border-white/10 bg-zinc-900 px-2 text-sm"
-                      >
-                        {SUBSCRIPTION_PLAN_VALUES.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                      <Button type="submit" size="sm" variant="secondary">
-                        Plan
-                      </Button>
-                    </form>
-                    <form
-                      action={updateTenantStatusForm.bind(null, tenant.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <select
-                        name="status"
-                        defaultValue={tenant.subscriptionStatus}
-                        className="h-9 rounded-md border border-white/10 bg-zinc-900 px-2 text-sm"
-                      >
-                        {Object.values(SubscriptionStatus).map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <Button type="submit" size="sm" variant="secondary">
-                        Sub
-                      </Button>
-                    </form>
                     {tenant.status === "SUSPENDED" ? (
                       <form action={reinstateTenantAction.bind(null, tenant.id)}>
                         <Button type="submit" size="sm" variant="outline">
