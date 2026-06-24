@@ -205,6 +205,11 @@ export function AppointmentsClient({
             Radiographs
           </Link>
         </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/clinical/photos?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
+            Photos
+          </Link>
+        </Button>
       </div>
     );
   }

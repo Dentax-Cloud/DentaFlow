@@ -358,6 +358,13 @@ export function ClinicalPageClient({
                 </a>
               </Button>
             )}
+            {patientId && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/clinical/photos?patientId=${patientId}`}>
+                  Clinical Photos
+                </a>
+              </Button>
+            )}
           </div>
         </div>
         {appointmentId && showChart && (

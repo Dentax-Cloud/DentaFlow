@@ -10,12 +10,19 @@ import { toast } from "sonner";
 type Props = {
   patientId: string;
   appointmentId?: string;
+  defaultType?: ImageType;
   onUploaded: () => void;
   onCancel: () => void;
 };
 
-export function ImageUploadForm({ patientId, appointmentId, onUploaded, onCancel }: Props) {
-  const [type, setType] = useState<ImageType>("OPG");
+export function ImageUploadForm({
+  patientId,
+  appointmentId,
+  defaultType = "OPG",
+  onUploaded,
+  onCancel,
+}: Props) {
+  const [type, setType] = useState<ImageType>(defaultType);
   const [toothNumbers, setToothNumbers] = useState("");
   const [quadrant, setQuadrant] = useState("");
   const [notes, setNotes] = useState("");

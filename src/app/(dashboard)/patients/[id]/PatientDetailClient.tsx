@@ -18,6 +18,7 @@ import {
   Pill,
   Receipt,
   ScanLine,
+  Camera,
   Sparkles,
   Stethoscope,
   User,
@@ -28,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { IMAGE_TYPE_CONFIG, type ImageType } from "@/lib/clinical/image-types";
+import { IMAGE_TYPE_CONFIG, PHOTO_CATEGORY_CONFIG, type ImageType, type PhotoCategory } from "@/lib/clinical/image-types";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
@@ -119,6 +120,17 @@ export interface PatientDetailClientProps {
       takenAt: string | null;
     }[];
   };
+  patientPhotos?: {
+    total: number;
+    byCategory: Record<string, number>;
+    beforeAfterCount: number;
+    recent: {
+      id: string;
+      url: string;
+      photoCategory: string | null;
+      takenAt: string | null;
+    }[];
+  };
 }
 
 type TabId =
@@ -127,6 +139,7 @@ type TabId =
   | "clinical"
   | "perio"
   | "radiographs"
+  | "photos"
   | "treatment"
   | "billing"
   | "documents";
@@ -137,6 +150,7 @@ const TABS: { id: TabId; label: string; icon: typeof User }[] = [
   { id: "clinical", label: "Clinical history", icon: Stethoscope },
   { id: "perio", label: "Perio", icon: Activity },
   { id: "radiographs", label: "Radiographs", icon: ScanLine },
+  { id: "photos", label: "Photos", icon: Camera },
   { id: "treatment", label: "Treatment plans", icon: Heart },
   { id: "billing", label: "Invoice history", icon: Receipt },
   { id: "documents", label: "Documents", icon: FileText },
@@ -205,6 +219,7 @@ export function PatientDetailClient({
   uploadsEnabled,
   latestPerio = null,
   clinicalImages,
+  patientPhotos,
 }: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
@@ -651,9 +666,9 @@ export function PatientDetailClient({
             <Card>
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
-                  <CardTitle className="text-base">Radiographs & clinical images</CardTitle>
+                  <CardTitle className="text-base">Radiographs</CardTitle>
                   <CardDescription>
-                    X-rays, photos, and annotated radiographs
+                    X-rays, OPG, CBCT and annotated radiographs
                   </CardDescription>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -719,6 +734,94 @@ export function PatientDetailClient({
                     <Button className="mt-3" asChild>
                       <Link href={`/clinical/radiographs?patientId=${patient.id}&upload=true`}>
                         Upload first image
+                      </Link>
+                    </Button>
+                  </EmptyState>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "photos" && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base">Clinical photography</CardTitle>
+                  <CardDescription>
+                    Intraoral and extraoral photos, before/after comparisons
+                  </CardDescription>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/clinical/photos?patientId=${patient.id}`}>
+                      View all
+                    </Link>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <Link href={`/clinical/photos?patientId=${patient.id}`}>
+                      Take photo
+                    </Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {patientPhotos && patientPhotos.total > 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(patientPhotos.byCategory).map(([cat, count]) => {
+                        const cfg = PHOTO_CATEGORY_CONFIG[cat as PhotoCategory];
+                        return (
+                          <Badge key={cat} variant="secondary" className="text-xs">
+                            {cfg?.icon ?? "📷"} {cfg?.label ?? cat}: {count}
+                          </Badge>
+                        );
+                      })}
+                      <Badge variant="outline" className="text-xs">
+                        {patientPhotos.total} total
+                      </Badge>
+                      {patientPhotos.beforeAfterCount > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {patientPhotos.beforeAfterCount} before/after pair
+                          {patientPhotos.beforeAfterCount !== 1 ? "s" : ""}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {patientPhotos.recent.map((img) => {
+                        const cfg = img.photoCategory
+                          ? PHOTO_CATEGORY_CONFIG[img.photoCategory as PhotoCategory]
+                          : null;
+                        return (
+                          <Link
+                            key={img.id}
+                            href={`/clinical/photos?patientId=${patient.id}`}
+                            className="relative aspect-square overflow-hidden rounded-lg border bg-black"
+                          >
+                            <img
+                              src={img.url}
+                              alt="Clinical photo"
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                              <p className="text-xs font-medium text-white">
+                                {cfg?.label ?? "Photo"}
+                              </p>
+                              {img.takenAt && (
+                                <p className="text-xs text-zinc-400">
+                                  {formatDate(img.takenAt)}
+                                </p>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState message="No clinical photos yet.">
+                    <Button className="mt-3" asChild>
+                      <Link href={`/clinical/photos?patientId=${patient.id}`}>
+                        Capture first photo
                       </Link>
                     </Button>
                   </EmptyState>

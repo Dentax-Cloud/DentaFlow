@@ -101,3 +101,134 @@ export function parseAnnotations(value: unknown): Annotation[] {
       typeof (item as Annotation).type === "string",
   );
 }
+
+export type PhotoCategory =
+  | "FRONTAL_SMILE"
+  | "FRONTAL_REST"
+  | "RIGHT_LATERAL"
+  | "LEFT_LATERAL"
+  | "UPPER_OCCLUSAL"
+  | "LOWER_OCCLUSAL"
+  | "RIGHT_BUCCAL"
+  | "LEFT_BUCCAL"
+  | "ANTERIOR_RETRACTED"
+  | "CLOSEUP"
+  | "BEFORE"
+  | "AFTER"
+  | "CUSTOM";
+
+export const PHOTO_CATEGORY_CONFIG: Record<
+  PhotoCategory,
+  {
+    label: string;
+    icon: string;
+    description: string;
+    isExtraoral: boolean;
+  }
+> = {
+  FRONTAL_SMILE: {
+    label: "Frontal (smile)",
+    icon: "😊",
+    description: "Full face smiling",
+    isExtraoral: true,
+  },
+  FRONTAL_REST: {
+    label: "Frontal (rest)",
+    icon: "😐",
+    description: "Full face at rest",
+    isExtraoral: true,
+  },
+  RIGHT_LATERAL: {
+    label: "Right lateral",
+    icon: "👤",
+    description: "Right profile",
+    isExtraoral: true,
+  },
+  LEFT_LATERAL: {
+    label: "Left lateral",
+    icon: "👤",
+    description: "Left profile",
+    isExtraoral: true,
+  },
+  UPPER_OCCLUSAL: {
+    label: "Upper occlusal",
+    icon: "⬆️",
+    description: "Upper arch from above",
+    isExtraoral: false,
+  },
+  LOWER_OCCLUSAL: {
+    label: "Lower occlusal",
+    icon: "⬇️",
+    description: "Lower arch from below",
+    isExtraoral: false,
+  },
+  RIGHT_BUCCAL: {
+    label: "Right buccal",
+    icon: "→",
+    description: "Right side teeth",
+    isExtraoral: false,
+  },
+  LEFT_BUCCAL: {
+    label: "Left buccal",
+    icon: "←",
+    description: "Left side teeth",
+    isExtraoral: false,
+  },
+  ANTERIOR_RETRACTED: {
+    label: "Anterior retracted",
+    icon: "🦷",
+    description: "Front teeth retracted",
+    isExtraoral: false,
+  },
+  CLOSEUP: {
+    label: "Close-up",
+    icon: "🔍",
+    description: "Specific tooth or area",
+    isExtraoral: false,
+  },
+  BEFORE: {
+    label: "Before",
+    icon: "1️⃣",
+    description: "Before treatment",
+    isExtraoral: false,
+  },
+  AFTER: {
+    label: "After",
+    icon: "2️⃣",
+    description: "After treatment",
+    isExtraoral: false,
+  },
+  CUSTOM: {
+    label: "Custom",
+    icon: "📷",
+    description: "Other clinical photo",
+    isExtraoral: false,
+  },
+};
+
+export const STANDARD_PHOTO_SERIES: PhotoCategory[] = [
+  "FRONTAL_SMILE",
+  "FRONTAL_REST",
+  "RIGHT_LATERAL",
+  "LEFT_LATERAL",
+  "UPPER_OCCLUSAL",
+  "LOWER_OCCLUSAL",
+  "RIGHT_BUCCAL",
+  "LEFT_BUCCAL",
+  "ANTERIOR_RETRACTED",
+];
+
+export function parseImageIds(value: string | unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((id): id is string => typeof id === "string");
+  }
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}

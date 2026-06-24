@@ -17,20 +17,32 @@ export default async function PatientDetailPage({
   const { id } = await params;
   const ctx = await requireRouteAccess("patients", "read");
 
-  const [patient, latestPerio, clinicalImageRows] = await Promise.all([
+  const [patient, latestPerio, clinicalImageRows, photoRows] = await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
       where: { tenantId: ctx.tenant.id, patientId: id },
       orderBy: { chartDate: "desc" },
     }),
     db.clinicalImage.findMany({
-      where: { tenantId: ctx.tenant.id, patientId: id },
+      where: { tenantId: ctx.tenant.id, patientId: id, type: { not: "PHOTO" } },
       orderBy: { takenAt: "desc" },
       select: {
         id: true,
         url: true,
         type: true,
         fileName: true,
+        takenAt: true,
+      },
+    }),
+    db.clinicalImage.findMany({
+      where: { tenantId: ctx.tenant.id, patientId: id, type: "PHOTO" },
+      orderBy: { takenAt: "desc" },
+      select: {
+        id: true,
+        url: true,
+        photoCategory: true,
+        isBeforePhoto: true,
+        afterImageId: true,
         takenAt: true,
       },
     }),
@@ -42,6 +54,16 @@ export default async function PatientDetailPage({
   for (const img of clinicalImageRows) {
     byType[img.type] = (byType[img.type] ?? 0) + 1;
   }
+
+  const byCategory: Record<string, number> = {};
+  for (const img of photoRows) {
+    const cat = img.photoCategory ?? "CUSTOM";
+    byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+  }
+
+  const beforeAfterCount = photoRows.filter(
+    (img) => img.isBeforePhoto && img.afterImageId,
+  ).length;
 
   return (
     <PatientDetailClient
@@ -66,6 +88,17 @@ export default async function PatientDetailPage({
           url: img.url,
           type: img.type,
           fileName: img.fileName,
+          takenAt: img.takenAt?.toISOString() ?? null,
+        })),
+      }}
+      patientPhotos={{
+        total: photoRows.length,
+        byCategory,
+        beforeAfterCount,
+        recent: photoRows.slice(0, 4).map((img) => ({
+          id: img.id,
+          url: img.url,
+          photoCategory: img.photoCategory,
           takenAt: img.takenAt?.toISOString() ?? null,
         })),
       }}
