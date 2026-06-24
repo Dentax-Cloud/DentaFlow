@@ -17,6 +17,7 @@ import {
   Sparkles,
   Stethoscope,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import type { UserRole } from "@prisma/client";
@@ -33,6 +34,8 @@ type KPIs = {
   patientCount: number;
   inChairNow: number;
   totalChairs: number;
+  emergencyWaiting: number;
+  emergencyImmediate: number;
 };
 
 type Extras = {
@@ -139,6 +142,41 @@ export function DashboardClient({
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">{tenantName}</p>
       </div>
+
+      {(isClinicalView || isFrontDeskView || isAdminView) &&
+        (kpis.emergencyWaiting > 0 || kpis.emergencyImmediate > 0) && (
+          <Card
+            className={
+              kpis.emergencyImmediate > 0
+                ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+                : "border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/30"
+            }
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle
+                  className={`h-5 w-5 ${kpis.emergencyImmediate > 0 ? "text-red-600" : "text-yellow-600"}`}
+                />
+                <CardTitle className="text-base">Emergency queue</CardTitle>
+              </div>
+              <Button size="sm" asChild>
+                <Link href="/clinical/emergency">View queue</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-4 text-sm">
+              <div>
+                <span className="text-2xl font-bold">{kpis.emergencyWaiting}</span>
+                <span className="ml-1 text-muted-foreground">waiting</span>
+              </div>
+              {kpis.emergencyImmediate > 0 && (
+                <div className="text-red-700">
+                  <span className="text-2xl font-bold">{kpis.emergencyImmediate}</span>
+                  <span className="ml-1">immediate</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {isFinanceView && (
         <div className="grid gap-4 md:grid-cols-3">

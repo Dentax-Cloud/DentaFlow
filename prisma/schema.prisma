@@ -71,6 +71,7 @@ model Tenant {
   clinicalImages       ClinicalImage[]
   photoSeries          PhotoSeries[]
   casePresentations    CasePresentation[]
+  emergencyIntakes     EmergencyIntake[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
 }
@@ -226,6 +227,7 @@ model Patient {
   clinicalImages    ClinicalImage[]
   photoSeries       PhotoSeries[]
   casePresentations CasePresentation[]
+  emergencyIntakes  EmergencyIntake[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -644,6 +646,36 @@ model CasePresentation {
   @@index([tenantId])
   @@index([patientId])
   @@index([shareToken])
+}
+
+model EmergencyIntake {
+  id             String   @id @default(cuid())
+  tenantId       String
+  patientId      String
+  appointmentId  String?
+  chiefComplaint String
+  painScore      Int      @default(0)
+  painLocation   String?
+  onset          String?
+  aggravating    String?
+  relieving      String?
+  vitals         Json?
+  allergies      String?
+  medications    String?
+  clinicalNote   String?
+  suggestedCodes Json?
+  triageLevel    String   @default("ROUTINE")
+  attendedById   String?
+  status         String   @default("WAITING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model ProcedureCatalog {

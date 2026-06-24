@@ -50,6 +50,15 @@ export async function getDashboardKPIs(tenantId: string) {
   const chairUtilization =
     totalChairs > 0 ? Math.round((inChairNow / totalChairs) * 100) : 0;
 
+  const emergencyIntakes = await db.emergencyIntake.findMany({
+    where: {
+      tenantId,
+      createdAt: { gte: todayStart, lte: todayEnd },
+      status: { notIn: ["COMPLETED", "REFERRED"] },
+    },
+    select: { status: true, triageLevel: true },
+  });
+
   return {
     todayAppointments,
     completedToday,
@@ -59,6 +68,8 @@ export async function getDashboardKPIs(tenantId: string) {
     patientCount,
     inChairNow,
     totalChairs,
+    emergencyWaiting: emergencyIntakes.filter((i) => i.status === "WAITING").length,
+    emergencyImmediate: emergencyIntakes.filter((i) => i.triageLevel === "IMMEDIATE").length,
   };
 }
 

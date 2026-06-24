@@ -1,7 +1,8 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getPatients } from "@/app/(dashboard)/features/patients/actions";
 import { getAppointments, getChairs, getDoctors } from "@/app/(dashboard)/features/appointments/actions";
-import { startOfWeek, endOfWeek } from "date-fns";
+import { db } from "@/lib/db";
+import { startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { AppointmentsClient } from "./appointments-client";
 
@@ -14,7 +15,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
   const { patientId } = await searchParams;
   const now = new Date();
 
-  const [appointments, chairs, patients, doctors] = await Promise.all([
+  const [appointments, chairs, patients, doctors, emergencyStats] = await Promise.all([
     getAppointments(ctx.tenant.id, {
       start: startOfWeek(now),
       end: endOfWeek(now),
@@ -22,6 +23,14 @@ export default async function AppointmentsPage({ searchParams }: Props) {
     getChairs(ctx.tenant.id),
     getPatients(ctx.tenant.id),
     getDoctors(ctx.tenant.id),
+    db.emergencyIntake.findMany({
+      where: {
+        tenantId: ctx.tenant.id,
+        createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
+        status: { notIn: ["COMPLETED", "REFERRED"] },
+      },
+      select: { status: true, triageLevel: true },
+    }),
   ]);
 
   const serializedAppointments = appointments.map((appointment) => {
@@ -45,6 +54,8 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       doctors={doctors.map((doctor) => serializeEntity(doctor, { user: "object" }))}
       tenantId={ctx.tenant.id}
       defaultPatientId={patientId}
+      emergencyWaiting={emergencyStats.filter((e) => e.status === "WAITING").length}
+      emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}
     />
   );
 }

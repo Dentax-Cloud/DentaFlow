@@ -17,7 +17,7 @@ export default async function PatientDetailPage({
   const { id } = await params;
   const ctx = await requireRouteAccess("patients", "read");
 
-  const [patient, latestPerio, clinicalImageRows, photoRows] = await Promise.all([
+  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows] = await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
       where: { tenantId: ctx.tenant.id, patientId: id },
@@ -44,6 +44,19 @@ export default async function PatientDetailPage({
         isBeforePhoto: true,
         afterImageId: true,
         takenAt: true,
+      },
+    }),
+    db.emergencyIntake.findMany({
+      where: { tenantId: ctx.tenant.id, patientId: id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        chiefComplaint: true,
+        painScore: true,
+        triageLevel: true,
+        status: true,
+        createdAt: true,
       },
     }),
   ]);
@@ -102,6 +115,14 @@ export default async function PatientDetailPage({
           takenAt: img.takenAt?.toISOString() ?? null,
         })),
       }}
+      emergencyHistory={emergencyRows.map((e) => ({
+        id: e.id,
+        chiefComplaint: e.chiefComplaint,
+        painScore: e.painScore,
+        triageLevel: e.triageLevel,
+        status: e.status,
+        createdAt: e.createdAt.toISOString(),
+      }))}
     />
   );
 }

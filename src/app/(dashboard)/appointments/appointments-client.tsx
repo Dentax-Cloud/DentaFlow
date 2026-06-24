@@ -22,7 +22,7 @@ import {
   updateAppointmentTime,
 } from "@/app/(dashboard)/features/appointments/actions";
 import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pusher-client";
-import { Radio, WifiOff } from "lucide-react";
+import { Radio, WifiOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import type { Appointment, Chair, Patient, Doctor, User } from "@prisma/client";
@@ -79,6 +79,8 @@ export function AppointmentsClient({
   doctors,
   tenantId,
   defaultPatientId,
+  emergencyWaiting = 0,
+  emergencyImmediate = 0,
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
@@ -86,6 +88,8 @@ export function AppointmentsClient({
   doctors: DoctorWithRelations[];
   tenantId: string;
   defaultPatientId?: string;
+  emergencyWaiting?: number;
+  emergencyImmediate?: number;
 }) {
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -298,6 +302,20 @@ export function AppointmentsClient({
           <p className="text-muted-foreground">Calendar & chair board</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/clinical/emergency">
+              <AlertCircle className="mr-2 h-4 w-4" />
+              Emergency
+              {emergencyWaiting > 0 && (
+                <Badge className="ml-2 bg-yellow-500 text-white">{emergencyWaiting}</Badge>
+              )}
+              {emergencyImmediate > 0 && (
+                <Badge className="ml-1 animate-pulse bg-red-600 text-white">
+                  {emergencyImmediate} urgent
+                </Badge>
+              )}
+            </Link>
+          </Button>
           <BookAppointmentDialog
             patients={patients}
             doctors={doctors}

@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { IMAGE_TYPE_CONFIG, PHOTO_CATEGORY_CONFIG, type ImageType, type PhotoCategory } from "@/lib/clinical/image-types";
+import { TRIAGE_CONFIG, getComplaintLabel, type TriageLevel } from "@/lib/clinical/emergency-types";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
@@ -131,6 +132,14 @@ export interface PatientDetailClientProps {
       takenAt: string | null;
     }[];
   };
+  emergencyHistory?: {
+    id: string;
+    chiefComplaint: string;
+    painScore: number;
+    triageLevel: string;
+    status: string;
+    createdAt: string;
+  }[];
 }
 
 type TabId =
@@ -220,6 +229,7 @@ export function PatientDetailClient({
   latestPerio = null,
   clinicalImages,
   patientPhotos,
+  emergencyHistory = [],
 }: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
@@ -261,8 +271,17 @@ export function PatientDetailClient({
         meta: inv.status,
       });
     }
+    for (const e of emergencyHistory) {
+      events.push({
+        id: `emergency-${e.id}`,
+        date: e.createdAt,
+        title: `Emergency: ${getComplaintLabel(e.chiefComplaint)}`,
+        kind: "emergency",
+        meta: `${TRIAGE_CONFIG[e.triageLevel as TriageLevel]?.label ?? e.triageLevel} · Pain ${e.painScore}/10`,
+      });
+    }
     return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
-  }, [patient]);
+  }, [patient, emergencyHistory]);
 
   return (
     <div className="space-y-6 pb-10">
@@ -492,10 +511,20 @@ export function PatientDetailClient({
                               ev.kind === "appointment" && "bg-blue-500",
                               ev.kind === "clinical" && "bg-emerald-500",
                               ev.kind === "billing" && "bg-amber-500",
+                              ev.kind === "emergency" && "bg-red-500",
                             )}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm leading-tight">{ev.title}</p>
+                            {ev.kind === "emergency" ? (
+                              <Link
+                                href={`/clinical/emergency?intakeId=${ev.id.replace("emergency-", "")}`}
+                                className="text-sm font-medium leading-tight hover:underline"
+                              >
+                                {ev.title}
+                              </Link>
+                            ) : (
+                              <p className="text-sm font-medium leading-tight">{ev.title}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {formatDate(ev.date, { dateStyle: "medium", timeStyle: "short" })}
                               {ev.meta && ` · ${ev.meta}`}
