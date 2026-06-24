@@ -23,7 +23,7 @@ import {
   saveClinicalNote,
   enhanceNoteText,
   getNoteAutoFillContext,
-} from "@/app/(dashboard)/features/clinical/actions";
+} from "@/app/(dashboard)/features/clinical/note-actions";
 import { plainTextToHtml } from "@/lib/clinical/render-template";
 
 export type ClinicalTemplateOption = {

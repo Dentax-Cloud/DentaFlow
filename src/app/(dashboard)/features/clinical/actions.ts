@@ -822,11 +822,3 @@ export const scheduleAppointmentFromPlan = createAction({
     return appointment;
   },
 });
-
-export {
-  saveClinicalNote,
-  updateClinicalNote,
-  getNoteVersions,
-  getNoteAutoFillContext,
-  enhanceNoteText,
-} from "./note-actions";
