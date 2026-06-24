@@ -67,6 +67,7 @@ model Tenant {
   perioCharts          PerioChart[]
   chairsideSessions    ChairsideSession[]
   chairsideEntries     ChairsideEntry[]
+  treatmentPlanShares  TreatmentPlanShare[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
 }
@@ -492,43 +493,80 @@ model ChairsideEntry {
 }
 
 model TreatmentPlan {
-  id          String              @id @default(cuid())
-  tenantId    String
-  patientId   String
-  title       String
-  description String?
-  status      TreatmentPlanStatus @default(DRAFT)
-  phase       Int                 @default(1)
-  totalCost   Decimal             @default(0) @db.Decimal(12, 2)
-  acceptedAt  DateTime?
-  aiSuggested Boolean             @default(false)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  deletedAt   DateTime?
-  items       TreatmentItem[]
-  patient     Patient             @relation(fields: [patientId], references: [id])
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                String              @id @default(cuid())
+  tenantId          String
+  patientId         String
+  title             String
+  description       String?
+  status            TreatmentPlanStatus @default(DRAFT)
+  phase             Int                 @default(1)
+  totalCost         Decimal             @default(0) @db.Decimal(12, 2)
+  version           Int                 @default(1)
+  parentPlanId      String?
+  acceptedAt        DateTime?
+  acceptedBy        String?
+  rejectedAt        DateTime?
+  rejectedReason    String?
+  presentedAt       DateTime?
+  totalEstimate     Decimal?            @db.Decimal(10, 2)
+  insuranceEstimate Decimal?            @db.Decimal(10, 2)
+  patientEstimate   Decimal?            @db.Decimal(10, 2)
+  aiSuggested       Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  deletedAt         DateTime?
+  items             TreatmentItem[]
+  shares            TreatmentPlanShare[]
+  patient           Patient             @relation(fields: [patientId], references: [id])
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentPlan        TreatmentPlan?      @relation("PlanRevisions", fields: [parentPlanId], references: [id])
+  revisions         TreatmentPlan[]     @relation("PlanRevisions")
 
   @@index([tenantId, patientId])
+  @@index([tenantId, parentPlanId])
 }
 
 model TreatmentItem {
-  id              String        @id @default(cuid())
-  tenantId        String
-  treatmentPlanId String
-  procedureCode   String?
-  description     String
-  toothNumbers    String[]
-  quantity        Int           @default(1)
-  unitCost        Decimal       @db.Decimal(12, 2)
-  totalCost       Decimal       @db.Decimal(12, 2)
-  phase           Int           @default(1)
-  status          String        @default("pending")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(cuid())
+  tenantId            String
+  treatmentPlanId     String
+  procedureCode       String?
+  procedureCatalogId  String?
+  description         String
+  toothNumbers        String[]
+  surfaces            String?
+  quantity            Int           @default(1)
+  unitCost            Decimal       @db.Decimal(12, 2)
+  totalCost           Decimal       @db.Decimal(12, 2)
+  phase               Int           @default(1)
+  visitNumber         Int           @default(1)
+  priority            String        @default("ELECTIVE")
+  estimatedDuration   Int?
+  status              String        @default("pending")
+  completedAt         DateTime?
+  completedByStaffId  String?
+  linkedAppointmentId String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  treatmentPlan       TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, treatmentPlanId])
+  @@index([tenantId, visitNumber])
+}
+
+model TreatmentPlanShare {
+  id         String        @id @default(cuid())
+  planId     String
+  tenantId   String
+  token      String        @unique
+  expiresAt  DateTime
+  viewedAt   DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime      @default(now())
+  plan       TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
 }
 
 model ProcedureCatalog {

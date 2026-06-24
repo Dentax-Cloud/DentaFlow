@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { notFound } from "next/navigation";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { tenantWhere } from "@/lib/tenant/scoped";
-import { serializeDecimal, serializeEntity } from "@/lib/utils/serialize";
-import { TreatmentPlanDetailClient } from "./treatment-plan-detail-client";
+import { serializeDecimal } from "@/lib/utils/serialize";
+import { mapPlanItemForClient } from "@/lib/clinical/treatment-plan-types";
+import { TreatmentPlanClient } from "./treatment-plan-client";
 
 export default async function TreatmentPlanDetailPage({
   params,
@@ -16,22 +19,63 @@ export default async function TreatmentPlanDetailPage({
   const plan = await db.treatmentPlan.findFirst({
     where: tenantWhere(ctx.tenant.id, { id, deletedAt: null }),
     include: {
-      patient: true,
-      items: { orderBy: { createdAt: "asc" } },
+      patient: { select: { id: true, firstName: true, lastName: true } },
+      items: { orderBy: [{ visitNumber: "asc" }, { priority: "asc" }] },
     },
   });
 
   if (!plan) notFound();
 
-  const procedures = await db.procedureCatalog.findMany({
-    where: { tenantId: ctx.tenant.id, isActive: true },
-    orderBy: { name: "asc" },
-  });
+  const rootId = plan.parentPlanId ?? plan.id;
+  const [procedures, versionsRaw] = await Promise.all([
+    db.procedureCatalog.findMany({
+      where: { tenantId: ctx.tenant.id, isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    db.treatmentPlan.findMany({
+      where: {
+        tenantId: ctx.tenant.id,
+        deletedAt: null,
+        OR: [{ id: rootId }, { parentPlanId: rootId }],
+      },
+      select: { id: true, version: true, status: true, createdAt: true, title: true },
+      orderBy: { version: "asc" },
+    }),
+  ]);
+
+  const versions = versionsRaw.filter(
+    (v, i, arr) => arr.findIndex((x) => x.id === v.id) === i,
+  );
 
   return (
-    <TreatmentPlanDetailClient
-      plan={serializeEntity(plan, { patient: "object", items: "array" })}
-      procedures={procedures.map(serializeDecimal)}
+    <TreatmentPlanClient
+      plan={{
+        id: plan.id,
+        title: plan.title,
+        status: plan.status,
+        version: plan.version,
+        description: plan.description,
+        createdAt: plan.createdAt.toISOString(),
+        patient: plan.patient,
+        items: plan.items.map((item) => mapPlanItemForClient(item)),
+      }}
+      procedures={procedures.map((p) => {
+        const s = serializeDecimal(p);
+        return {
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          price: Number(s.price ?? 0),
+          duration: p.duration,
+        };
+      })}
+      versions={versions.map((v) => ({
+        id: v.id,
+        version: v.version,
+        status: v.status,
+        createdAt: v.createdAt.toISOString(),
+        title: v.title,
+      }))}
     />
   );
 }

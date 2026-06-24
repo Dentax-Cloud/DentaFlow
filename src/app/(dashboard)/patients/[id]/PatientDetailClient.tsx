@@ -25,7 +25,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
 
@@ -67,6 +67,8 @@ export interface PatientDetailProfile {
     status: string;
     totalCost: number;
     createdAt: string;
+    itemCount: number;
+    completedCount: number;
   }[];
   invoices: {
     id: string;
@@ -625,34 +627,67 @@ export function PatientDetailClient({
 
           {activeTab === "treatment" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Treatment plans</CardTitle>
-                <CardDescription>Active and completed treatment plans</CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base">Treatment plans</CardTitle>
+                  <CardDescription>Active and completed treatment plans</CardDescription>
+                </div>
+                <Button size="sm" asChild>
+                  <Link href={`/clinical/treatment-plans/new?patientId=${patient.id}`}>
+                    New plan
+                  </Link>
+                </Button>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 {patient.treatmentPlans.length === 0 ? (
-                  <EmptyState message="No treatment plans. Suggest from the clinical chart." />
+                  <EmptyState message="No treatment plans yet.">
+                    <Button className="mt-3" size="sm" asChild>
+                      <Link href={`/clinical/treatment-plans/new?patientId=${patient.id}`}>
+                        Create first treatment plan
+                      </Link>
+                    </Button>
+                  </EmptyState>
                 ) : (
-                  patient.treatmentPlans.map((tp) => (
-                    <Link
-                      key={tp.id}
-                      href={`/clinical/treatment-plans/${tp.id}`}
-                      className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors hover:bg-muted/50"
-                    >
-                      <div>
-                        <p className="font-medium">{tp.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(tp.createdAt)}
-                        </p>
+                  patient.treatmentPlans.map((tp) => {
+                    const progress =
+                      tp.itemCount > 0
+                        ? Math.round((tp.completedCount / tp.itemCount) * 100)
+                        : 0;
+                    return (
+                      <div
+                        key={tp.id}
+                        className="rounded-lg border px-4 py-3 text-sm"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{tp.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(tp.createdAt)} · {tp.itemCount} items
+                            </p>
+                            {tp.itemCount > 0 && (
+                              <div className="mt-2 space-y-1">
+                                <Progress value={progress} className="h-1.5" />
+                                <p className="text-xs text-muted-foreground">
+                                  {tp.completedCount} of {tp.itemCount} completed ({progress}%)
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="outline">{tp.status}</Badge>
+                            <p className="mt-1 text-xs font-medium tabular-nums">
+                              {formatCurrency(tp.totalCost)}
+                            </p>
+                            <Button size="sm" variant="link" className="h-auto p-0 mt-1" asChild>
+                              <Link href={`/clinical/treatment-plans/${tp.id}`}>
+                                View plan
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <Badge variant="outline">{tp.status}</Badge>
-                        <p className="mt-1 text-xs font-medium tabular-nums">
-                          {formatCurrency(tp.totalCost)}
-                        </p>
-                      </div>
-                    </Link>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>

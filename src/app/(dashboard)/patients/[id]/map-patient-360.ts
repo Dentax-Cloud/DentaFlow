@@ -5,7 +5,9 @@ import type { PatientDetailProfile } from "./PatientDetailClient";
 export type PatientWith360 = Prisma.PatientGetPayload<{
   include: {
     appointments: true;
-    treatmentPlans: true;
+    treatmentPlans: {
+      include: { items: { select: { id: true, status: true, totalCost: true } } };
+    };
     invoices: true;
     clinicalNotes: true;
     attachments: true;
@@ -63,12 +65,18 @@ export function mapPatientTo360Profile(p: PatientWith360): PatientDetailProfile 
     })),
     treatmentPlans: p.treatmentPlans.map((tp) => {
       const { totalCost } = serializeDecimal(tp);
+      const items = "items" in tp && Array.isArray(tp.items) ? tp.items : [];
+      const completed = items.filter(
+        (i: { status: string }) => i.status.toLowerCase() === "completed",
+      ).length;
       return {
         id: tp.id,
         title: tp.title,
         status: tp.status,
         totalCost,
         createdAt: tp.createdAt.toISOString(),
+        itemCount: items.length,
+        completedCount: completed,
       };
     }),
     invoices: p.invoices.map((inv) => {

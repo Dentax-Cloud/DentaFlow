@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   "/sign-up",
   "/invite/accept",
   "/verify-email",
+  "/plan",
 ];
 
 export function isPublicPath(pathname: string): boolean {

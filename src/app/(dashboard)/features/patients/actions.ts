@@ -147,7 +147,15 @@ export async function getPatientById(tenantId: string, id: string) {
     where: tenantWhere(tenantId, { id, deletedAt: null }),
     include: {
       appointments: { orderBy: { startTime: "desc" }, take: 10 },
-      treatmentPlans: { orderBy: { createdAt: "desc" }, take: 5 },
+      treatmentPlans: {
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: {
+          items: {
+            select: { id: true, status: true, totalCost: true },
+          },
+        },
+      },
       invoices: { orderBy: { createdAt: "desc" }, take: 10 },
       teeth: { include: { conditions: { orderBy: { recordedAt: "desc" }, take: 3 } } },
       clinicalNotes: { orderBy: { visitDate: "desc" }, take: 10 },
