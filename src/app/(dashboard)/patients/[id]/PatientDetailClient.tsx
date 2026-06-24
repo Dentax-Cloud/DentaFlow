@@ -17,6 +17,7 @@ import {
   Phone,
   Pill,
   Receipt,
+  ScanLine,
   Sparkles,
   Stethoscope,
   User,
@@ -27,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
+import { IMAGE_TYPE_CONFIG, type ImageType } from "@/lib/clinical/image-types";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
@@ -107,15 +108,35 @@ export interface PatientDetailClientProps {
     perioGrade: string | null;
     bopPercent: number | null;
   } | null;
+  clinicalImages?: {
+    total: number;
+    byType: Record<string, number>;
+    recent: {
+      id: string;
+      url: string;
+      type: string;
+      fileName: string | null;
+      takenAt: string | null;
+    }[];
+  };
 }
 
-type TabId = "overview" | "appointments" | "clinical" | "perio" | "treatment" | "billing" | "documents";
+type TabId =
+  | "overview"
+  | "appointments"
+  | "clinical"
+  | "perio"
+  | "radiographs"
+  | "treatment"
+  | "billing"
+  | "documents";
 
 const TABS: { id: TabId; label: string; icon: typeof User }[] = [
   { id: "overview", label: "Overview", icon: User },
   { id: "appointments", label: "Appointments", icon: Calendar },
   { id: "clinical", label: "Clinical history", icon: Stethoscope },
   { id: "perio", label: "Perio", icon: Activity },
+  { id: "radiographs", label: "Radiographs", icon: ScanLine },
   { id: "treatment", label: "Treatment plans", icon: Heart },
   { id: "billing", label: "Invoice history", icon: Receipt },
   { id: "documents", label: "Documents", icon: FileText },
@@ -183,6 +204,7 @@ export function PatientDetailClient({
   patient,
   uploadsEnabled,
   latestPerio = null,
+  clinicalImages,
 }: PatientDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
@@ -617,6 +639,86 @@ export function PatientDetailClient({
                     <Button className="mt-3" asChild>
                       <Link href={`/clinical/perio?patientId=${patient.id}`}>
                         Record first perio chart
+                      </Link>
+                    </Button>
+                  </EmptyState>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "radiographs" && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base">Radiographs & clinical images</CardTitle>
+                  <CardDescription>
+                    X-rays, photos, and annotated radiographs
+                  </CardDescription>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/clinical/radiographs?patientId=${patient.id}`}>
+                      View all
+                    </Link>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <Link href={`/clinical/radiographs?patientId=${patient.id}&upload=true`}>
+                      Upload
+                    </Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {clinicalImages && clinicalImages.total > 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(clinicalImages.byType).map(([type, count]) => {
+                        const cfg = IMAGE_TYPE_CONFIG[type as ImageType];
+                        return (
+                          <Badge key={type} variant="secondary" className="text-xs">
+                            {cfg?.icon ?? "📷"} {cfg?.label ?? type}: {count}
+                          </Badge>
+                        );
+                      })}
+                      <Badge variant="outline" className="text-xs">
+                        {clinicalImages.total} total
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {clinicalImages.recent.map((img) => {
+                        const cfg = IMAGE_TYPE_CONFIG[img.type as ImageType];
+                        return (
+                          <Link
+                            key={img.id}
+                            href={`/clinical/radiographs?patientId=${patient.id}`}
+                            className="group relative overflow-hidden rounded-lg border bg-black aspect-square"
+                          >
+                            <img
+                              src={img.url}
+                              alt={img.fileName ?? "Clinical image"}
+                              className="h-full w-full object-contain"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                              <p className="text-xs font-medium text-white">
+                                {cfg?.label ?? img.type}
+                              </p>
+                              {img.takenAt && (
+                                <p className="text-xs text-zinc-400">
+                                  {formatDate(img.takenAt)}
+                                </p>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState message="No radiographs or clinical images yet.">
+                    <Button className="mt-3" asChild>
+                      <Link href={`/clinical/radiographs?patientId=${patient.id}&upload=true`}>
+                        Upload first image
                       </Link>
                     </Button>
                   </EmptyState>

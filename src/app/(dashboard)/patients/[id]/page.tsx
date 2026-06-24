@@ -17,15 +17,31 @@ export default async function PatientDetailPage({
   const { id } = await params;
   const ctx = await requireRouteAccess("patients", "read");
 
-  const [patient, latestPerio] = await Promise.all([
+  const [patient, latestPerio, clinicalImageRows] = await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
       where: { tenantId: ctx.tenant.id, patientId: id },
       orderBy: { chartDate: "desc" },
     }),
+    db.clinicalImage.findMany({
+      where: { tenantId: ctx.tenant.id, patientId: id },
+      orderBy: { takenAt: "desc" },
+      select: {
+        id: true,
+        url: true,
+        type: true,
+        fileName: true,
+        takenAt: true,
+      },
+    }),
   ]);
 
   if (!patient) notFound();
+
+  const byType: Record<string, number> = {};
+  for (const img of clinicalImageRows) {
+    byType[img.type] = (byType[img.type] ?? 0) + 1;
+  }
 
   return (
     <PatientDetailClient
@@ -42,6 +58,17 @@ export default async function PatientDetailPage({
             }
           : null
       }
+      clinicalImages={{
+        total: clinicalImageRows.length,
+        byType,
+        recent: clinicalImageRows.slice(0, 4).map((img) => ({
+          id: img.id,
+          url: img.url,
+          type: img.type,
+          fileName: img.fileName,
+          takenAt: img.takenAt?.toISOString() ?? null,
+        })),
+      }}
     />
   );
 }

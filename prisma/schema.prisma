@@ -68,6 +68,7 @@ model Tenant {
   chairsideSessions    ChairsideSession[]
   chairsideEntries     ChairsideEntry[]
   treatmentPlanShares  TreatmentPlanShare[]
+  clinicalImages       ClinicalImage[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
 }
@@ -220,6 +221,7 @@ model Patient {
   treatmentPlans    TreatmentPlan[]
   perioCharts       PerioChart[]
   chairsideSessions ChairsideSession[]
+  clinicalImages    ClinicalImage[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -567,6 +569,37 @@ model TreatmentPlanShare {
   tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([token])
+}
+
+model ClinicalImage {
+  id              String    @id @default(cuid())
+  tenantId        String
+  patientId       String
+  uploadedById    String?
+  type            String    @default("XRAY")
+  subtype         String?
+  url             String
+  thumbnailUrl    String?
+  fileName        String?
+  fileSize        Int?
+  mimeType        String?
+  width           Int?
+  height          Int?
+  toothNumbers    String?
+  quadrant        String?
+  notes           String?
+  annotations     Json?
+  takenAt         DateTime?
+  appointmentId   String?
+  treatmentPlanId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, patientId])
+  @@index([tenantId, type])
 }
 
 model ProcedureCatalog {

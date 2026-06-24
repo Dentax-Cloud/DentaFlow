@@ -200,6 +200,11 @@ export function AppointmentsClient({
         >
           Chairside
         </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/clinical/radiographs?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
+            Radiographs
+          </Link>
+        </Button>
       </div>
     );
   }

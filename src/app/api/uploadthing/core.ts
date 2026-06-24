@@ -101,6 +101,31 @@ export const ourFileRouter = {
         patientId: metadata.patientId,
       };
     }),
+
+  clinicalImageUploader: f({
+    image: { maxFileSize: "16MB", maxFileCount: 10 },
+    pdf: { maxFileSize: "16MB", maxFileCount: 5 },
+  })
+    .input(z.object({ patientId: z.string().min(1) }))
+    .middleware(async ({ input }) => {
+      const metadata = await requireTenantUpload();
+
+      const patient = await db.patient.findFirst({
+        where: tenantWhere(metadata.tenantId, { id: input.patientId, deletedAt: null }),
+      });
+      if (!patient) throw new Error("Patient not found");
+
+      return {
+        ...metadata,
+        patientId: patient.id,
+      };
+    })
+    .onUploadComplete(async ({ file }) => ({
+      url: file.ufsUrl ?? file.url,
+      name: file.name,
+      size: file.size,
+      type: file.type ?? null,
+    })),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
