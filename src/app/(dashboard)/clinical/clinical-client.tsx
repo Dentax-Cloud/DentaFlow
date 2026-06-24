@@ -344,6 +344,13 @@ export function ClinicalPageClient({
                 Perio chart
               </a>
             </Button>
+            {patientId && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/clinical/chairside?patientId=${patientId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}`}>
+                  Start chairside session
+                </a>
+              </Button>
+            )}
           </div>
         </div>
         {appointmentId && showChart && (

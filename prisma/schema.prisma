@@ -65,6 +65,8 @@ model Tenant {
   treatmentPlans       TreatmentPlan[]
   clinicalNoteVersions ClinicalNoteVersion[]
   perioCharts          PerioChart[]
+  chairsideSessions    ChairsideSession[]
+  chairsideEntries     ChairsideEntry[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
 }
@@ -216,6 +218,7 @@ model Patient {
   toothConditions   ToothCondition[]
   treatmentPlans    TreatmentPlan[]
   perioCharts       PerioChart[]
+  chairsideSessions ChairsideSession[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -443,6 +446,49 @@ model PerioChart {
 
   @@index([tenantId])
   @@index([tenantId, patientId])
+}
+
+model ChairsideSession {
+  id            String           @id @default(cuid())
+  tenantId      String
+  patientId     String
+  appointmentId String?
+  staffId       String?
+  startedAt     DateTime         @default(now())
+  finalizedAt   DateTime?
+  status        String           @default("ACTIVE")
+  notes         String?
+  invoiceId     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  entries       ChairsideEntry[]
+
+  @@index([tenantId])
+  @@index([tenantId, patientId])
+  @@index([tenantId, appointmentId])
+}
+
+model ChairsideEntry {
+  id               String           @id @default(cuid())
+  sessionId        String
+  tenantId         String
+  toothNumber      Int?
+  surface          String?
+  procedureCode    String?
+  procedureName    String?
+  conditionType    String?
+  notes            String?
+  unitPrice        Decimal?         @db.Decimal(10, 2)
+  quantity         Int              @default(1)
+  includeInInvoice Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  session          ChairsideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([tenantId])
 }
 
 model TreatmentPlan {

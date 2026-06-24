@@ -188,6 +188,18 @@ export function AppointmentsClient({
             Open chart
           </Link>
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          onClick={() =>
+            router.push(
+              `/clinical/chairside?patientId=${apt.patientId}&appointmentId=${apt.id}`,
+            )
+          }
+        >
+          Chairside
+        </Button>
       </div>
     );
   }
