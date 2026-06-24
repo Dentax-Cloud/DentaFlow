@@ -11,6 +11,8 @@ export const CONDITION_COLORS: Record<ToothConditionType, string> = {
   MOBILITY: "fill-pink-200 stroke-pink-600",
   FRACTURE: "fill-rose-300 stroke-rose-700",
   ROOT_CANAL: "fill-cyan-200 stroke-cyan-600",
+  WATCH: "fill-yellow-200 stroke-yellow-600",
+  BRIDGE: "fill-indigo-200 stroke-indigo-600",
 };
 
 export const CONDITION_DOT_COLORS: Record<ToothConditionType, string> = {
@@ -24,17 +26,21 @@ export const CONDITION_DOT_COLORS: Record<ToothConditionType, string> = {
   MOBILITY: "bg-pink-500",
   FRACTURE: "bg-rose-600",
   ROOT_CANAL: "bg-cyan-500",
+  WATCH: "bg-yellow-500",
+  BRIDGE: "bg-indigo-500",
 };
 
 /** Highest priority wins for tooth fill color when multiple conditions exist. */
 export const CONDITION_PRIORITY: ToothConditionType[] = [
   ToothConditionType.MISSING,
   ToothConditionType.IMPLANT,
+  ToothConditionType.BRIDGE,
   ToothConditionType.CROWN,
   ToothConditionType.ROOT_CANAL,
   ToothConditionType.CARIES,
   ToothConditionType.FRACTURE,
   ToothConditionType.RESTORATION,
+  ToothConditionType.WATCH,
   ToothConditionType.PERIO_POCKET,
   ToothConditionType.MOBILITY,
   ToothConditionType.HEALTHY,
@@ -43,12 +49,10 @@ export const CONDITION_PRIORITY: ToothConditionType[] = [
 export const QUICK_FINDINGS: { type: ToothConditionType; label: string }[] = [
   { type: ToothConditionType.CARIES, label: "Caries" },
   { type: ToothConditionType.RESTORATION, label: "Restoration" },
-  { type: ToothConditionType.CROWN, label: "Crown" },
-  { type: ToothConditionType.IMPLANT, label: "Implant" },
   { type: ToothConditionType.MISSING, label: "Missing" },
+  { type: ToothConditionType.CROWN, label: "Crown" },
   { type: ToothConditionType.ROOT_CANAL, label: "Root canal" },
-  { type: ToothConditionType.PERIO_POCKET, label: "Perio pocket" },
-  { type: ToothConditionType.FRACTURE, label: "Fracture" },
+  { type: ToothConditionType.WATCH, label: "Watch" },
 ];
 
 export function formatConditionType(type: ToothConditionType): string {

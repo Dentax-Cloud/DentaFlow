@@ -21,289 +21,289 @@ import type { ToothChartData } from "@/lib/clinical/chart-types";
 
 
 import {
-
-  saveToothConditionSchema,
-
-  removeToothConditionSchema,
-
-  saveClinicalNoteSchema,
-
+  createToothConditionSchema,
+  updateToothConditionSchema,
+  deleteToothConditionSchema,
+  toothPatientSchema,
   generateSoapSchema,
-
   loadPatientChartSchema,
-
   saveTreatmentPlanSchema,
-
 } from "./schemas";
-
 import { z } from "zod";
-
-
+import { ToothConditionType } from "@prisma/client";
 
 async function requirePatientInTenant(tenantId: string, patientId: string) {
-
   const patient = await db.patient.findFirst({
-
     where: tenantWhere(tenantId, { id: patientId, deletedAt: null }),
-
   });
-
   if (!patient) throw new Error("Patient not found");
-
   return patient;
-
 }
 
+async function resolveProviderName(
+  tenantId: string,
+  recordedBy: string | null | undefined,
+): Promise<string | null> {
+  if (!recordedBy) return null;
+  const staff = await db.staffMember.findFirst({
+    where: { tenantId, authUserId: recordedBy },
+    select: { firstName: true, lastName: true },
+  });
+  if (!staff) return null;
+  return `${staff.firstName} ${staff.lastName}`.trim();
+}
 
+function mapCondition(
+  c: {
+    id: string;
+    type: ToothConditionType;
+    surfaces: string[];
+    severity: number | null;
+    notes: string | null;
+    recordedAt: Date;
+    recordedBy: string | null;
+  },
+  recordedByName?: string | null,
+) {
+  return {
+    id: c.id,
+    type: c.type,
+    surfaces: c.surfaces,
+    severity: c.severity,
+    notes: c.notes,
+    recordedAt: c.recordedAt.toISOString(),
+    recordedBy: c.recordedBy,
+    recordedByName: recordedByName ?? null,
+  };
+}
 
-function buildChartData(
-
-  teeth: Awaited<ReturnType<typeof getPatientChart>>,
-
-): ToothChartData {
-
-  const data: ToothChartData = {};
-
+async function buildChartData(
+  teeth: Awaited<ReturnType<typeof getPatientChartRecords>>,
+): Promise<ToothChartData> {
+  const providerIds = new Set<string>();
   for (const tooth of teeth) {
-
-    if (tooth.conditions.length === 0) continue;
-
-    data[tooth.number] = {
-
-      conditions: tooth.conditions.map((c) => ({
-
-        id: c.id,
-
-        type: c.type,
-
-        surfaces: c.surfaces,
-
-        severity: c.severity,
-
-        notes: c.notes,
-
-        recordedAt: c.recordedAt.toISOString(),
-
-      })),
-
-    };
-
+    for (const c of tooth.conditions) {
+      if (c.recordedBy) providerIds.add(c.recordedBy);
+    }
   }
 
-  return data;
+  const nameByUserId = new Map<string, string>();
+  if (providerIds.size > 0) {
+    const staff = await db.staffMember.findMany({
+      where: { authUserId: { in: [...providerIds] } },
+      select: { authUserId: true, firstName: true, lastName: true },
+    });
+    for (const s of staff) {
+      if (s.authUserId) {
+        nameByUserId.set(s.authUserId, `${s.firstName} ${s.lastName}`.trim());
+      }
+    }
+  }
 
+  const data: ToothChartData = {};
+  for (const tooth of teeth) {
+    if (tooth.conditions.length === 0) continue;
+    data[tooth.number] = {
+      conditions: tooth.conditions.map((c) =>
+        mapCondition(c, c.recordedBy ? nameByUserId.get(c.recordedBy) : null),
+      ),
+    };
+  }
+  return data;
 }
 
-
+async function upsertTooth(
+  tenantId: string,
+  patientId: string,
+  toothNumber: string,
+) {
+  let tooth = await db.tooth.findUnique({
+    where: {
+      tenantId_patientId_number: { tenantId, patientId, number: toothNumber },
+    },
+  });
+  if (!tooth) {
+    tooth = await db.tooth.create({
+      data: { tenantId, patientId, number: toothNumber },
+    });
+  }
+  return tooth;
+}
 
 export const loadPatientChart = createAction({
-
   schema: loadPatientChartSchema,
-
   permission: () => requirePermission(PERMISSIONS.clinical.read),
-
   handler: async (input, ctx) => {
-
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
-
-    const teeth = await getPatientChart(ctx.tenant.id, input.patientId);
-
+    const teeth = await getPatientChartRecords(ctx.tenant.id, input.patientId);
     return buildChartData(teeth);
-
   },
-
 });
 
-
-
-export const saveToothCondition = createAction({
-
-  schema: saveToothConditionSchema,
-
+export const createToothCondition = createAction({
+  schema: createToothConditionSchema,
   permission: () => requirePermission(PERMISSIONS.clinical.write),
-
   handler: async (input, ctx) => {
-
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
+    const tooth = await upsertTooth(ctx.tenant.id, input.patientId, input.toothNumber);
 
-
-
-    let tooth = await db.tooth.findUnique({
-
-      where: {
-
-        tenantId_patientId_number: {
-
-          tenantId: ctx.tenant.id,
-
-          patientId: input.patientId,
-
-          number: input.toothNumber,
-
-        },
-
-      },
-
-    });
-
-
-
-    if (!tooth) {
-
-      tooth = await db.tooth.create({
-
-        data: {
-
-          tenantId: ctx.tenant.id,
-
-          patientId: input.patientId,
-
-          number: input.toothNumber,
-
-        },
-
-      });
-
-    }
-
-
+    const surfaces = input.surfaces ?? (input.surface ? [input.surface] : []);
 
     const condition = await db.toothCondition.create({
-
       data: {
-
         tenantId: ctx.tenant.id,
-
         patientId: input.patientId,
-
         toothId: tooth.id,
-
         type: input.type,
-
-        surfaces: input.surfaces ?? [],
-
+        surfaces,
         severity: input.severity,
-
         mobility: input.mobility,
-
         pocketDepth: input.pocketDepth,
-
         notes: input.notes,
-
+        appointmentId: input.appointmentId,
         recordedBy: ctx.user.id,
-
+        ...(input.recordedAt
+          ? { recordedAt: new Date(input.recordedAt) }
+          : {}),
       },
-
     });
 
-
+    const providerName = await resolveProviderName(ctx.tenant.id, ctx.user.id);
+    revalidatePath("/clinical");
 
     return {
-
-      id: condition.id,
-
-      type: condition.type,
-
-      surfaces: condition.surfaces,
-
-      severity: condition.severity,
-
-      notes: condition.notes,
-
-      recordedAt: condition.recordedAt.toISOString(),
-
+      ...mapCondition(condition, providerName),
       toothNumber: input.toothNumber,
-
     };
-
   },
-
 });
 
+/** @deprecated use createToothCondition */
+export const saveToothCondition = createToothCondition;
 
-
-export const removeToothCondition = createAction({
-
-  schema: removeToothConditionSchema,
-
+export const updateToothCondition = createAction({
+  schema: updateToothConditionSchema,
   permission: () => requirePermission(PERMISSIONS.clinical.write),
-
   handler: async (input, ctx) => {
-
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
 
+    const existing = await db.toothCondition.findFirst({
+      where: {
+        id: input.conditionId,
+        tenantId: ctx.tenant.id,
+        patientId: input.patientId,
+      },
+    });
+    if (!existing) throw new Error("Condition not found");
 
+    const condition = await db.toothCondition.update({
+      where: { id: existing.id },
+      data: {
+        ...(input.type !== undefined ? { type: input.type } : {}),
+        ...(input.surfaces !== undefined ? { surfaces: input.surfaces } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.recordedAt ? { recordedAt: new Date(input.recordedAt) } : {}),
+      },
+    });
+
+    const providerName = await resolveProviderName(ctx.tenant.id, condition.recordedBy);
+    revalidatePath("/clinical");
+    return mapCondition(condition, providerName);
+  },
+});
+
+export const deleteToothCondition = createAction({
+  schema: deleteToothConditionSchema,
+  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  handler: async (input, ctx) => {
+    await requirePatientInTenant(ctx.tenant.id, input.patientId);
 
     const condition = await db.toothCondition.findFirst({
-
       where: {
-
         id: input.conditionId,
-
         tenantId: ctx.tenant.id,
-
         patientId: input.patientId,
-
       },
-
       include: { tooth: true },
-
     });
-
     if (!condition) throw new Error("Condition not found");
 
-
-
     await db.toothCondition.delete({ where: { id: condition.id } });
-
+    revalidatePath("/clinical");
     return { toothNumber: condition.tooth.number };
-
   },
-
 });
 
+/** @deprecated use deleteToothCondition */
+export const removeToothCondition = deleteToothCondition;
 
-
-export const saveClinicalNote = createAction({
-
-  schema: saveClinicalNoteSchema,
-
+export const markToothMissing = createAction({
+  schema: toothPatientSchema,
   permission: () => requirePermission(PERMISSIONS.clinical.write),
-
   handler: async (input, ctx) => {
-
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
+    const tooth = await upsertTooth(ctx.tenant.id, input.patientId, input.toothNumber);
 
-
-
-    return db.clinicalNote.create({
-
-      data: {
-
+    const existing = await db.toothCondition.findFirst({
+      where: {
         tenantId: ctx.tenant.id,
-
         patientId: input.patientId,
-
-        providerId: ctx.user.id,
-
-        rawNotes: input.rawNotes,
-
-        subjective: input.subjective,
-
-        objective: input.objective,
-
-        assessment: input.assessment,
-
-        plan: input.plan,
-
-        aiGenerated: input.aiGenerated ?? false,
-
+        toothId: tooth.id,
+        type: ToothConditionType.MISSING,
       },
+    });
+    if (existing) {
+      return mapCondition(
+        existing,
+        await resolveProviderName(ctx.tenant.id, existing.recordedBy),
+      );
+    }
 
+    const condition = await db.toothCondition.create({
+      data: {
+        tenantId: ctx.tenant.id,
+        patientId: input.patientId,
+        toothId: tooth.id,
+        type: ToothConditionType.MISSING,
+        surfaces: [],
+        recordedBy: ctx.user.id,
+      },
     });
 
+    const providerName = await resolveProviderName(ctx.tenant.id, ctx.user.id);
+    revalidatePath("/clinical");
+    return mapCondition(condition, providerName);
   },
+});
 
+export const restoreToothStatus = createAction({
+  schema: toothPatientSchema,
+  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  handler: async (input, ctx) => {
+    await requirePatientInTenant(ctx.tenant.id, input.patientId);
+    const tooth = await db.tooth.findUnique({
+      where: {
+        tenantId_patientId_number: {
+          tenantId: ctx.tenant.id,
+          patientId: input.patientId,
+          number: input.toothNumber,
+        },
+      },
+    });
+    if (!tooth) return { removed: 0 };
+
+    const result = await db.toothCondition.deleteMany({
+      where: {
+        tenantId: ctx.tenant.id,
+        patientId: input.patientId,
+        toothId: tooth.id,
+        type: ToothConditionType.MISSING,
+      },
+    });
+
+    revalidatePath("/clinical");
+    return { removed: result.count };
+  },
 });
 
 
@@ -475,15 +475,15 @@ export const saveSuggestedTreatmentPlan = createAction({
 
 
 export async function getPatientChart(tenantId: string, patientId: string) {
+  const teeth = await getPatientChartRecords(tenantId, patientId);
+  return buildChartData(teeth);
+}
 
+export async function getPatientChartRecords(tenantId: string, patientId: string) {
   return db.tooth.findMany({
-
     where: { tenantId, patientId },
-
     include: { conditions: { orderBy: { recordedAt: "desc" } } },
-
   });
-
 }
 
 const generateInvoiceSchema = z.object({
@@ -823,3 +823,10 @@ export const scheduleAppointmentFromPlan = createAction({
   },
 });
 
+export {
+  saveClinicalNote,
+  updateClinicalNote,
+  getNoteVersions,
+  getNoteAutoFillContext,
+  enhanceNoteText,
+} from "./note-actions";

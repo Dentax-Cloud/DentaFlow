@@ -1,6 +1,10 @@
+export const runtime = "nodejs";
+
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
+import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
+import { listTemplates } from "@/app/(dashboard)/features/clinical/template-actions";
 import { ClinicalPageClient } from "./clinical-client";
 
 export default async function ClinicalPage({
@@ -24,23 +28,7 @@ export default async function ClinicalPage({
       where: { tenantId: ctx.tenant.id, id: patientId, deletedAt: null },
     });
     if (patient) {
-      const teeth = await db.tooth.findMany({
-        where: { tenantId: ctx.tenant.id, patientId: patient.id },
-        include: { conditions: { orderBy: { recordedAt: "desc" } } },
-      });
-      for (const tooth of teeth) {
-        if (tooth.conditions.length === 0) continue;
-        chartData[tooth.number] = {
-          conditions: tooth.conditions.map((c) => ({
-            id: c.id,
-            type: c.type,
-            surfaces: c.surfaces,
-            severity: c.severity,
-            notes: c.notes,
-            recordedAt: c.recordedAt.toISOString(),
-          })),
-        };
-      }
+      chartData = await getPatientChart(ctx.tenant.id, patient.id);
     }
   }
 
@@ -49,7 +37,21 @@ export default async function ClinicalPage({
     orderBy: { name: "asc" },
   });
 
+  const providerName = ctx.staffMember
+    ? `${ctx.staffMember.firstName} ${ctx.staffMember.lastName}`.trim()
+    : undefined;
+
   const serializedProcedures = procedures.map(serializeDecimal);
+
+  const templatesResult = await listTemplates({});
+  const templates = templatesResult.success
+    ? templatesResult.data.map((t) => ({
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        isDefault: t.isDefault,
+      }))
+    : [];
 
   return (
     <ClinicalPageClient
@@ -58,6 +60,9 @@ export default async function ClinicalPage({
       appointmentId={appointmentId}
       procedures={serializedProcedures}
       initialChartData={chartData}
+      providerName={providerName}
+      clinicName={ctx.tenant.name}
+      templates={templates}
     />
   );
 }
