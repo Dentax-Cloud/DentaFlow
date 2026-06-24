@@ -13,7 +13,6 @@ export function DashboardShell({
   children,
   userRole,
   user,
-  isSuperAdmin = false,
   tenantName,
   tenantLogoUrl,
   trialDaysLeft = null,
@@ -21,7 +20,6 @@ export function DashboardShell({
   children: React.ReactNode;
   userRole: UserRole;
   user?: SidebarUser;
-  isSuperAdmin?: boolean;
   tenantName?: string;
   tenantLogoUrl?: string | null;
   trialDaysLeft?: number | null;
@@ -35,7 +33,7 @@ export function DashboardShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background md:flex-row">
-      <RoleRouteGuard role={userRole} isSuperAdmin={isSuperAdmin} />
+      <RoleRouteGuard role={userRole} />
       <div className="flex items-center border-b px-4 py-3 md:hidden">
         <button
           type="button"
@@ -46,11 +44,6 @@ export function DashboardShell({
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <span className="ml-3 font-semibold">{tenantName ?? "DentaFlow"}</span>
-        {isSuperAdmin && (
-          <Link href="/superadmin/tenants" className="ml-auto text-xs text-violet-600">
-            Platform admin
-          </Link>
-        )}
       </div>
 
       <div
@@ -62,7 +55,6 @@ export function DashboardShell({
         <Sidebar
           userRole={userRole}
           user={user}
-          isSuperAdmin={isSuperAdmin}
           tenantName={tenantName}
           tenantLogoUrl={tenantLogoUrl}
         />

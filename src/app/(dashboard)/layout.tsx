@@ -14,21 +14,19 @@ export default async function DashboardLayout({
   const session = await getServerAuthSession();
   if (!session?.user?.id) redirect("/login");
 
-  // Superadmin without active impersonation → go to superadmin panel
-  if (session.user.isSuperAdmin && !session.user.activeTenantId) {
+  // Superadmin ALWAYS goes to superadmin panel — no clinic dashboard
+  if (session.user.isSuperAdmin) {
     redirect("/superadmin/tenants");
   }
 
   const ctx = await getTenantContext();
   if (!ctx) redirect("/select-org");
 
-  if (!session.user.isSuperAdmin) {
-    if (ctx.tenant.status === "SUSPENDED" || ctx.tenant.status === "CLOSED") {
-      redirect("/pending-approval");
-    }
+  if (ctx.tenant.status === "SUSPENDED" || ctx.tenant.status === "CLOSED") {
+    redirect("/pending-approval");
   }
 
-  const userRole = ctx.staffMember?.role ?? UserRole.ADMIN;
+  const userRole = ctx.staffMember?.role ?? UserRole.OWNER;
 
   return (
     <DashboardShell
@@ -43,8 +41,6 @@ export default async function DashboardLayout({
             }
           : undefined
       }
-      isSuperAdmin={ctx.isSuperAdmin}
-      isImpersonating={session.user.isSuperAdmin && Boolean(session.user.activeTenantId)}
       tenantName={ctx.tenant.name}
       tenantLogoUrl={ctx.tenant.logoUrl}
       trialDaysLeft={

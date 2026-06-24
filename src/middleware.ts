@@ -39,6 +39,14 @@ export default withAuth(
       }
     }
 
+    if (!isSuperAdminRoute && token?.isSuperAdmin) {
+      const allowedPaths = ["/api/", "/login", "/superadmin", "/verify-email"];
+      const isAllowed = allowedPaths.some((p) => pathname.startsWith(p));
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL("/superadmin/tenants", req.url));
+      }
+    }
+
     // Trial / subscription enforcement for tenant app routes
     if (
       !token?.isSuperAdmin &&

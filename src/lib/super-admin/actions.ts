@@ -124,29 +124,3 @@ export async function bulkActivateTenantsAction(input: { tenantIds: string[] }) 
     return { count: result.count };
   });
 }
-
-/**
- * Switches super-admin active tenant and returns tenant id for client redirect.
- */
-export async function impersonateTenantAction(input: { tenantId: string }) {
-  return withSuperAdmin(async (userId) => {
-    const tenant = await db.tenant.findUnique({ where: { id: input.tenantId } });
-    if (!tenant || tenant.deletedAt) throw new Error("Tenant not found");
-
-    await db.auth_users.update({
-      where: { id: userId },
-      data: { activeTenantId: tenant.id },
-    });
-
-    await logTenantAudit({
-      tenantId: tenant.id,
-      userId,
-      action: "LOGIN",
-      entity: "Tenant",
-      entityId: tenant.id,
-      metadata: { action: "impersonate" },
-    });
-
-    return { tenantId: tenant.id, tenantName: tenant.name };
-  });
-}
