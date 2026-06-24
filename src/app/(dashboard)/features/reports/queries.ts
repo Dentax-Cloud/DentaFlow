@@ -195,7 +195,7 @@ export async function getChairUtilizationReport(tenantId: string, range: ReportD
   const { start, end } = rangeBounds(range);
 
   const [chairs, appointments, settings] = await Promise.all([
-    db.chair.findMany({ where: { tenantId, deletedAt: null } }),
+    db.chair.findMany({ where: { tenantId, isActive: true } }),
     db.appointment.findMany({
       where: {
         tenantId,
