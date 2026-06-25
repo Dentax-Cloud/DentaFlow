@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { generatePatientNumber } from "@/lib/utils";
+import { generatePatientId } from "@/lib/ids/generate-ids";
 import { AuditAction } from "@prisma/client";
 import { createPatientSchema, updatePatientSchema } from "./schemas";
 
@@ -21,11 +22,23 @@ export const createPatient = createAction({
     }
 
     const count = await db.patient.count({ where: { tenantId: ctx.tenant.id } });
+
+    const branch = await db.branch.findFirst({
+      where: { tenantId: ctx.tenant.id, deletedAt: null },
+      orderBy: { isPrimary: "desc" },
+    });
+    if (!branch) throw new Error("No active branch found");
+
+    const { patientId, patientSeq, branchCode } = await generatePatientId(branch.id);
+
     try {
       const patient = await db.patient.create({
         data: {
           tenantId: ctx.tenant.id,
           patientNumber: generatePatientNumber(count + 1),
+          patientId,
+          branchSeq: patientSeq,
+          branchCode,
           firstName: input.firstName.trim(),
           lastName: input.lastName.trim(),
           email: input.email?.trim() || null,

@@ -35,6 +35,10 @@ model Tenant {
   currentPeriodEnd     DateTime?
   suspendedAt          DateTime?
   suspendedReason      String?
+  tenantCode           String?
+  countryCode          String                  @default("AE")
+  globalTenantId       String?
+  patientIdDisplayMode String                  @default("FULL")
   appointments         Appointment[]
   attachments          Attachment[]
   auditLogs            AuditLog[]
@@ -74,6 +78,14 @@ model Tenant {
   emergencyIntakes     EmergencyIntake[]
   staffMembers         StaffMember[]
   tenant_memberships   tenant_memberships[]
+  dailyCounters        DailyCounter[]
+  barcodeScans         BarcodeScan[]
+  supplierBarcodes     SupplierBarcode[]
+  inventoryBatches     InventoryBatch[]
+  purchaseOrders       PurchaseOrder[]
+  posSessions          PosSession[]
+  chairSetups          ChairSetup[]
+  paymentPlans         PaymentPlan[]
 }
 
 model TenantApprovalRequest {
@@ -91,18 +103,23 @@ model TenantApprovalRequest {
 }
 
 model Branch {
-  id           String        @id @default(cuid())
-  tenantId     String
-  name         String
-  address      String?
-  phone        String?
-  isPrimary    Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
-  appointments Appointment[]
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  chairs       Chair[]
+  id                String        @id @default(cuid())
+  tenantId          String
+  name              String
+  address           String?
+  phone             String?
+  isPrimary         Boolean       @default(false)
+  branchCode        String?
+  cityCode          String        @default("OTH")
+  branchSeq         Int           @default(1)
+  countryCode       String        @default("AE")
+  patientSeqCounter Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+  appointments      Appointment[]
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chairs            Chair[]
 
   @@index([tenantId])
 }
@@ -116,6 +133,8 @@ model StaffMember {
   lastName        String?
   avatarUrl       String?
   role            UserRole         @default(RECEPTIONIST)
+  staffRef        String?
+  roleCode        String?
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -184,9 +203,18 @@ model UserPermission {
 }
 
 model Patient {
-  id                String             @id @default(cuid())
-  tenantId          String
-  patientNumber     String
+  id                    String             @id @default(cuid())
+  tenantId              String
+  patientNumber         String
+  patientId             String?
+  branchCode            String?
+  branchSeq             Int?
+  photoUrl              String?
+  bloodGroup            String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  referredBy            String?
+  referralSource        String?
   firstName         String
   lastName          String
   email             String?
@@ -228,10 +256,13 @@ model Patient {
   photoSeries       PhotoSeries[]
   casePresentations CasePresentation[]
   emergencyIntakes  EmergencyIntake[]
+  paymentPlans      PaymentPlan[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
   @@index([tenantId, lastName, firstName])
+  @@index([patientId])
+  @@index([branchCode])
 }
 
 model Attachment {
@@ -305,11 +336,12 @@ model Appointment {
   type         String?
   notes        String?
   reminderSent Boolean           @default(false)
-  noShowRisk   RiskLevel?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  deletedAt    DateTime?
-  branch       Branch?           @relation(fields: [branchId], references: [id])
+  noShowRisk     RiskLevel?
+  appointmentRef String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+  branch         Branch?           @relation(fields: [branchId], references: [id])
   chair        Chair?            @relation(fields: [chairId], references: [id])
   doctor       Doctor?           @relation(fields: [doctorId], references: [id])
   patient      Patient           @relation(fields: [patientId], references: [id])
@@ -703,6 +735,7 @@ model Invoice {
   tenantId              String
   patientId             String
   invoiceNumber         String
+  invoiceRef            String?
   status                InvoiceStatus @default(DRAFT)
   subtotal              Decimal       @default(0) @db.Decimal(12, 2)
   tax                   Decimal       @default(0) @db.Decimal(12, 2)
@@ -711,6 +744,14 @@ model Invoice {
   dueDate               DateTime?
   notes                 String?
   stripePaymentIntentId String?
+  paymentPlanId         String?
+  insuranceId           String?
+  patientPortion        Decimal?      @db.Decimal(10, 2)
+  insurancePortion      Decimal?      @db.Decimal(10, 2)
+  discountAmount        Decimal?      @default(0) @db.Decimal(10, 2)
+  discountReason        String?
+  printedAt             DateTime?
+  emailedAt             DateTime?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   deletedAt             DateTime?
@@ -746,6 +787,13 @@ model Payment {
   method          PaymentMethod
   reference       String?
   stripePaymentId String?
+  paymentRef      String?
+  receiptRef      String?
+  cardLast4       String?
+  cardBrand       String?
+  cashReceived    Decimal?      @db.Decimal(10, 2)
+  changeGiven     Decimal?      @db.Decimal(10, 2)
+  installmentId   String?
   paidAt          DateTime      @default(now())
   notes           String?
   createdAt       DateTime      @default(now())
@@ -901,41 +949,261 @@ model Supplier {
 }
 
 model InventoryItem {
-  id           String             @id @default(cuid())
-  tenantId     String
-  supplierId   String?
-  sku          String
-  name         String
-  category     String?
-  unit         String             @default("unit")
-  quantity     Int                @default(0)
-  reorderLevel Int                @default(10)
-  cost         Decimal?           @db.Decimal(12, 2)
-  batchNumber  String?
-  expiryDate   DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  deletedAt    DateTime?
-  supplier     Supplier?          @relation(fields: [supplierId], references: [id])
-  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactions StockTransaction[]
+  id                 String              @id @default(cuid())
+  tenantId           String
+  supplierId         String?
+  sku                String
+  name               String
+  category           String?
+  unit               String              @default("unit")
+  quantity           Int                 @default(0)
+  reorderLevel       Int                 @default(10)
+  cost               Decimal?            @db.Decimal(12, 2)
+  batchNumber        String?
+  expiryDate         DateTime?
+  itemRef            String?
+  gtin               String?
+  retailPrice        Decimal?            @db.Decimal(10, 2)
+  taxRate            Decimal?            @default(5) @db.Decimal(5, 2)
+  isSellable         Boolean             @default(false)
+  trackByBatch       Boolean             @default(false)
+  trackByExpiry      Boolean             @default(true)
+  storageLocation    String?
+  storageConditions  String?
+  minStockAlert      Int?
+  maxStock           Int?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions       StockTransaction[]
+  batches            InventoryBatch[]
+  supplierBarcodes   SupplierBarcode[]
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
+  @@index([gtin])
 }
 
 model StockTransaction {
-  id        String               @id @default(cuid())
-  tenantId  String
-  itemId    String
-  type      StockTransactionType
-  quantity  Int
-  notes     String?
-  createdAt DateTime             @default(now())
-  item      InventoryItem        @relation(fields: [itemId], references: [id])
-  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String               @id @default(cuid())
+  tenantId        String
+  itemId          String
+  type            StockTransactionType
+  quantity        Int
+  notes           String?
+  transactionRef  String?
+  batchId         String?
+  appointmentId   String?
+  chairId         String?
+  patientId       String?
+  invoiceId       String?
+  purchaseOrderId String?
+  scannedBarcode  String?
+  scanMethod      String?
+  createdAt       DateTime             @default(now())
+  item            InventoryItem        @relation(fields: [itemId], references: [id])
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batch           InventoryBatch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, itemId])
+}
+
+model DailyCounter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  date      String
+  entity    String
+  counter   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date, entity])
+  @@index([tenantId])
+}
+
+model BarcodeScan {
+  id          String   @id @default(cuid())
+  tenantId    String
+  scannedCode String
+  barcodeType String   @default("UNKNOWN")
+  scannedById String?
+  action      String   @default("LOOKUP")
+  entityType  String?
+  entityId    String?
+  result      String   @default("NOT_FOUND")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([scannedCode])
+  @@index([createdAt])
+}
+
+model SupplierBarcode {
+  id              String        @id @default(cuid())
+  tenantId        String
+  inventoryItemId String
+  barcode         String
+  barcodeType     String        @default("EAN13")
+  packSize        Int           @default(1)
+  packUnit        String        @default("PCS")
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item            InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, barcode])
+  @@index([barcode])
+  @@index([inventoryItemId])
+}
+
+model InventoryBatch {
+  id               String             @id @default(cuid())
+  batchRef         String
+  tenantId         String
+  inventoryItemId  String
+  supplierId       String?
+  purchaseOrderId  String?
+  lotNumber        String?
+  expiryDate       DateTime?
+  manufacturerDate DateTime?
+  gtin             String?
+  receivedQty      Int                @default(0)
+  currentQty       Int                @default(0)
+  reservedQty      Int                @default(0)
+  unitCost         Decimal?           @db.Decimal(10, 2)
+  status           String             @default("ACTIVE")
+  recalledAt       DateTime?
+  recallReason     String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item             InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  purchaseOrder    PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  transactions     StockTransaction[]
+
+  @@index([tenantId])
+  @@index([inventoryItemId])
+  @@index([expiryDate])
+  @@index([lotNumber])
+}
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  poRef        String?
+  tenantId     String
+  supplierId   String?
+  status       String              @default("DRAFT")
+  orderDate    DateTime            @default(now())
+  expectedDate DateTime?
+  receivedDate DateTime?
+  subtotal     Decimal             @default(0) @db.Decimal(10, 2)
+  tax          Decimal             @default(0) @db.Decimal(10, 2)
+  total        Decimal             @default(0) @db.Decimal(10, 2)
+  notes        String?
+  createdById  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items        PurchaseOrderItem[]
+  batches      InventoryBatch[]
+
+  @@index([tenantId])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  inventoryItemId String
+  orderedQty      Int           @default(0)
+  receivedQty     Int           @default(0)
+  unitCost        Decimal       @default(0) @db.Decimal(10, 2)
+  total           Decimal       @default(0) @db.Decimal(10, 2)
+  notes           String?
+  order           PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item            InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+}
+
+model PosSession {
+  id          String    @id @default(cuid())
+  tenantId    String
+  branchId    String?
+  staffId     String?
+  sessionRef  String?
+  openedAt    DateTime  @default(now())
+  closedAt    DateTime?
+  openingCash Decimal   @default(0) @db.Decimal(10, 2)
+  closingCash Decimal?  @db.Decimal(10, 2)
+  totalCash   Decimal?  @db.Decimal(10, 2)
+  totalCard   Decimal?  @db.Decimal(10, 2)
+  totalSales  Decimal?  @db.Decimal(10, 2)
+  status      String    @default("OPEN")
+  notes       String?
+  createdAt   DateTime  @default(now())
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model ChairSetup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  chairId   String?
+  staffId   String?
+  setupDate DateTime @default(now())
+  items     Json     @default("[]")
+  totalCost Decimal? @db.Decimal(10, 2)
+  status    String   @default("ACTIVE")
+  notes     String?
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([setupDate])
+}
+
+model PaymentPlan {
+  id           String                    @id @default(cuid())
+  tenantId     String
+  patientId    String
+  invoiceId    String?
+  planRef      String?
+  totalAmount  Decimal                   @db.Decimal(10, 2)
+  paidAmount   Decimal                   @default(0) @db.Decimal(10, 2)
+  installments Int                       @default(1)
+  frequency    String                    @default("MONTHLY")
+  startDate    DateTime
+  nextDueDate  DateTime?
+  status       String                    @default("ACTIVE")
+  notes        String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient      Patient                   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  planInstallments PaymentPlanInstallment[]
+
+  @@index([tenantId])
+  @@index([tenantId, patientId])
+}
+
+model PaymentPlanInstallment {
+  id            String      @id @default(cuid())
+  planId        String
+  installmentNo Int
+  amount        Decimal     @db.Decimal(10, 2)
+  dueDate       DateTime
+  paidDate      DateTime?
+  paidAmount    Decimal?    @db.Decimal(10, 2)
+  status        String      @default("PENDING")
+  paymentRef    String?
+  plan          PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
 }
 
 model Settings {

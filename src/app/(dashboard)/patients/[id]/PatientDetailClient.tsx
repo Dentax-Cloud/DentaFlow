@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import {
   Activity,
@@ -21,7 +22,9 @@ import {
   Camera,
   Sparkles,
   Stethoscope,
-  User,
+  Copy,
+  Printer,
+  Tag,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -31,11 +34,26 @@ import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { IMAGE_TYPE_CONFIG, PHOTO_CATEGORY_CONFIG, type ImageType, type PhotoCategory } from "@/lib/clinical/image-types";
 import { TRIAGE_CONFIG, getComplaintLabel, type TriageLevel } from "@/lib/clinical/emergency-types";
+import { PatientIdCard } from "@/components/patients/patient-id-card";
+import { PatientLabel } from "@/components/patients/patient-label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
   id: string;
   patientId: string;
+  structuredPatientId?: string;
+  patientNumber?: string;
+  branchCode?: string;
+  bloodGroup?: string;
+  photoUrl?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   firstName: string;
   lastName: string;
   dateOfBirth?: string;
@@ -102,6 +120,9 @@ export interface PatientDetailProfile {
 
 export interface PatientDetailClientProps {
   patient: PatientDetailProfile;
+  clinicName: string;
+  tenantCode: string;
+  clinicPhone?: string | null;
   uploadsEnabled: boolean;
   latestPerio?: {
     id: string;
@@ -225,12 +246,17 @@ function riskBadgeVariant(level: string) {
 
 export function PatientDetailClient({
   patient,
+  clinicName,
+  tenantCode,
+  clinicPhone,
   uploadsEnabled,
   latestPerio = null,
   clinicalImages,
   patientPhotos,
   emergencyHistory = [],
 }: PatientDetailClientProps) {
+  const [idCardOpen, setIdCardOpen] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const fullName = `${patient.firstName} ${patient.lastName}`;
@@ -312,7 +338,29 @@ export function PatientDetailClient({
                 <Badge variant="secondary" className="font-mono text-xs">
                   {patient.patientId}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(patient.patientId);
+                    toast.success("Patient ID copied");
+                  }}
+                  aria-label="Copy patient ID"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+                {patient.bloodGroup && (
+                  <Badge variant="destructive">{patient.bloodGroup}</Badge>
+                )}
               </div>
+              {(patient.emergencyContactName || patient.emergencyContact) && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Emergency: {patient.emergencyContactName ?? patient.emergencyContact}
+                  {(patient.emergencyContactPhone ?? patient.emergencyPhone) &&
+                    ` · ${patient.emergencyContactPhone ?? patient.emergencyPhone}`}
+                </p>
+              )}
               <p className="mt-1 text-sm text-muted-foreground">
                 {age != null && <span>{age} yrs · </span>}
                 {patient.gender && <span className="capitalize">{patient.gender} · </span>}
@@ -347,6 +395,14 @@ export function PatientDetailClient({
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button variant="outline" size="sm" onClick={() => setIdCardOpen(true)}>
+              <Printer className="mr-2 h-4 w-4" />
+              ID card
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setLabelOpen(true)}>
+              <Tag className="mr-2 h-4 w-4" />
+              Label
+            </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/patients">
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -374,6 +430,40 @@ export function PatientDetailClient({
           </div>
         </div>
       </div>
+
+      <Dialog open={idCardOpen} onOpenChange={setIdCardOpen}>
+        <DialogContent className="max-w-fit">
+          <DialogHeader>
+            <DialogTitle>Patient ID card</DialogTitle>
+          </DialogHeader>
+          <PatientIdCard
+            patientId={patient.patientId}
+            patientName={fullName}
+            dateOfBirth={patient.dateOfBirth}
+            bloodGroup={patient.bloodGroup}
+            criticalAllergy={patient.allergies?.[0]}
+            photoUrl={patient.photoUrl}
+            clinicName={clinicName}
+            tenantCode={tenantCode}
+            branchCode={patient.branchCode}
+            clinicPhone={clinicPhone}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={labelOpen} onOpenChange={setLabelOpen}>
+        <DialogContent className="max-w-fit">
+          <DialogHeader>
+            <DialogTitle>Patient label</DialogTitle>
+          </DialogHeader>
+          <PatientLabel
+            patientId={patient.patientId}
+            patientName={fullName}
+            dateOfBirth={patient.dateOfBirth}
+            bloodGroup={patient.bloodGroup}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

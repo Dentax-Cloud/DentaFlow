@@ -24,6 +24,7 @@ export default async function SuperadminTenantsPage() {
         name: true,
         slug: true,
         status: true,
+        tenantCode: true,
         subscriptionPlan: true,
         subscriptionStatus: true,
         stripeCustomerId: true,
@@ -97,6 +98,7 @@ export default async function SuperadminTenantsPage() {
           <thead className="bg-white/5 text-left text-zinc-400">
             <tr>
               <th className="px-4 py-3">Clinic</th>
+              <th className="px-4 py-3">Tenant code</th>
               <th className="px-4 py-3">Clinic status</th>
               <th className="px-4 py-3">Plan & subscription</th>
               <th className="px-4 py-3">Stripe</th>
@@ -114,6 +116,11 @@ export default async function SuperadminTenantsPage() {
                     {tenant.name}
                   </Link>
                   <div className="text-xs text-zinc-500">/{tenant.slug}</div>
+                </td>
+                <td className="px-4 py-3 font-mono text-xs">
+                  {tenant.tenantCode ?? (
+                    <span className="text-amber-400">Not migrated</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <TenantStatusBadge status={tenant.status} />

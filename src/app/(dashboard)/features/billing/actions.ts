@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
+import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { stripe } from "@/lib/stripe";
 
@@ -41,6 +42,7 @@ export const createInvoice = createAction({
         tenantId: ctx.tenant.id,
         patientId: input.patientId,
         invoiceNumber: generateInvoiceNumber(count + 1),
+        invoiceRef: await generateInvoiceRef(ctx.tenant.id),
         status: input.sendNow ? InvoiceStatus.SENT : InvoiceStatus.DRAFT,
         subtotal,
         tax,

@@ -19,7 +19,12 @@ import { AlertTriangle, History, Minus, Package, Plus } from "lucide-react";
 import { addStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
 import { cn } from "@/lib/utils";
 
-type ItemWithHistory = InventoryItem & { transactions?: StockTransaction[] };
+type ItemWithHistory = InventoryItem & {
+  transactions?: StockTransaction[];
+  itemRef?: string | null;
+  storageLocation?: string | null;
+  minStockAlert?: number | null;
+};
 
 type FilterTab = "all" | "low";
 
@@ -139,7 +144,8 @@ export function InventoryClient({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((item) => {
-          const isLow = item.quantity <= item.reorderLevel;
+          const reorderAt = item.minStockAlert ?? item.reorderLevel;
+          const isLow = item.quantity <= reorderAt;
           const maxStock = Math.max(item.reorderLevel * 3, item.quantity, 1);
           const pct = Math.min(100, Math.round((item.quantity / maxStock) * 100));
           return (
@@ -156,11 +162,20 @@ export function InventoryClient({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
+                <p className="text-sm text-muted-foreground">
+                  {item.itemRef ? (
+                    <span className="font-mono">{item.itemRef}</span>
+                  ) : (
+                    <>SKU: {item.sku}</>
+                  )}
+                  {item.storageLocation && (
+                    <span className="ml-2">· {item.storageLocation}</span>
+                  )}
+                </p>
                 <div className="flex items-end justify-between">
                   <span className="text-2xl font-bold">{item.quantity}</span>
                   <span className="text-xs text-muted-foreground">
-                    Reorder at {item.reorderLevel}
+                    Reorder at {reorderAt}
                   </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">

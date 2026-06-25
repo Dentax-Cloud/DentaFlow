@@ -11,6 +11,12 @@ import { tenantConfig } from "./config";
 import { ensureStripeCustomer } from "./billing";
 import { seedTenantDefaults } from "./defaults";
 import { getDefaultTrialSubscriptionFields, shouldExpireTrial } from "./trial";
+import {
+  generateTenantCode,
+  generateGlobalTenantId,
+  generateBranchCode,
+  getCityCode,
+} from "@/lib/ids/generate-ids";
 
 export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: boolean };
 
@@ -163,6 +169,21 @@ export async function provisionTenant(input: {
       phone: input.phone ?? null,
       isPrimary: true,
     },
+  });
+
+  const countryCode = "AE";
+  const tenantCode = await generateTenantCode(countryCode);
+  const globalTenantId = generateGlobalTenantId(tenantCode, tenant.id);
+  await db.tenant.update({
+    where: { id: tenant.id },
+    data: { tenantCode, globalTenantId, countryCode },
+  });
+
+  const cityCode = getCityCode(tenant.city ?? "Dubai");
+  const { branchCode, branchSeq } = await generateBranchCode(tenant.id, cityCode);
+  await db.branch.update({
+    where: { id: branch.id },
+    data: { branchCode, cityCode, branchSeq },
   });
 
   await ensureMinioBucket(tenant);

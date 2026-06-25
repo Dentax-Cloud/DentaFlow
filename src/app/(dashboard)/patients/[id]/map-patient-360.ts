@@ -32,7 +32,14 @@ export function mapPatientTo360Profile(p: PatientWith360): PatientDetailProfile 
 
   return {
     id: p.id,
-    patientId: p.patientNumber,
+    patientId: p.patientId ?? p.patientNumber,
+    structuredPatientId: p.patientId ?? undefined,
+    patientNumber: p.patientNumber,
+    branchCode: p.branchCode ?? undefined,
+    bloodGroup: p.bloodGroup ?? undefined,
+    photoUrl: p.photoUrl ?? undefined,
+    emergencyContactName: p.emergencyContactName ?? p.emergencyContact ?? undefined,
+    emergencyContactPhone: p.emergencyContactPhone ?? p.emergencyPhone ?? undefined,
     firstName: p.firstName,
     lastName: p.lastName,
     dateOfBirth: p.dateOfBirth?.toISOString(),

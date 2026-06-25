@@ -12,6 +12,7 @@ import {
   refreshPatientRiskScores,
 } from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
+import { generateAppointmentRef } from "@/lib/ids/generate-ids";
 import { AuditAction } from "@prisma/client";
 import {
   createAppointmentSchema,
@@ -77,6 +78,7 @@ export const createAppointment = createAction({
         type: input.type,
         notes: input.notes,
         noShowRisk: noShowRisk ?? undefined,
+        appointmentRef: await generateAppointmentRef(ctx.tenant.id),
       },
       include: { patient: true, chair: true, doctor: { include: { user: true } } },
     });
