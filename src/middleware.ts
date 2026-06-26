@@ -9,8 +9,23 @@ import { isPublicPath, isProtectedTenantAppRoute } from "@/lib/auth/middleware-h
 const BLOCKED_SUBSCRIPTION_STATUSES = ["EXPIRED", "CANCELED", "TRIAL_EXPIRED"];
 const BLOCKED_TENANT_STATUSES = ["SUSPENDED", "CLOSED"];
 
+async function isMaintenanceMode(requestUrl: string): Promise<boolean> {
+  try {
+    const baseUrl = new URL(requestUrl).origin;
+    const res = await fetch(`${baseUrl}/api/platform/maintenance`, {
+      headers: { "x-middleware-check": "1" },
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { maintenance?: boolean };
+    return data.maintenance === true;
+  } catch {
+    return false;
+  }
+}
+
 export default withAuth(
-  function middleware(req) {
+  async function middleware(req) {
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
 
@@ -54,17 +69,8 @@ export default withAuth(
       !pathname.startsWith("/superadmin") &&
       !pathname.startsWith("/api/platform/maintenance")
     ) {
-      try {
-        const maintenanceUrl = new URL("/api/platform/maintenance", req.url);
-        const res = await fetch(maintenanceUrl, { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as { maintenance?: boolean };
-          if (data.maintenance) {
-            return NextResponse.redirect(new URL("/maintenance", req.url));
-          }
-        }
-      } catch {
-        // fail open if settings unavailable
+      if (await isMaintenanceMode(req.url)) {
+        return NextResponse.redirect(new URL("/maintenance", req.url));
       }
     }
 
