@@ -1231,8 +1231,8 @@ model PlatformSetting {
   category    String
   description String?
   updatedById String?
-  createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
 
   @@index([category])
 }
