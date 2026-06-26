@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { DEFAULT_MODEL, openai, SYSTEM_SAFETY } from "./client";
+import { resolveOpenAIModel, SYSTEM_SAFETY } from "./client";
 
 const templateSchema = z.object({
   sms: z.string().max(160),
@@ -12,8 +12,11 @@ const templateSchema = z.object({
 export type CampaignTemplate = z.infer<typeof templateSchema>;
 
 export async function generateCampaignTemplate(intent: string): Promise<CampaignTemplate> {
+  const model = await resolveOpenAIModel();
+  if (!model) throw new Error("AI not configured");
+
   const { object } = await generateObject({
-    model: openai(DEFAULT_MODEL),
+    model,
     schema: templateSchema,
     system: `${SYSTEM_SAFETY} Generate marketing templates for a dental clinic. Professional, friendly tone.`,
     prompt: `Campaign intent: ${intent}`,

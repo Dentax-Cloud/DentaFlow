@@ -8,7 +8,7 @@ import { ensureStripeCustomer } from "@/lib/tenant/billing";
 import {
   createBillingPortalSession,
   createCheckoutSession,
-  stripe,
+  getStripeClient,
   PLAN_PRICE_IDS,
 } from "@/lib/stripe";
 import { getUsageSummary } from "@/lib/features/gate";
@@ -83,7 +83,10 @@ export type StripeInvoiceItem = {
 export async function getStripeBillingHistory(
   stripeCustomerId: string | null,
 ): Promise<StripeInvoiceItem[]> {
-  if (!stripeCustomerId || !process.env.STRIPE_SECRET_KEY) return [];
+  if (!stripeCustomerId) return [];
+
+  const stripe = await getStripeClient();
+  if (!stripe) return [];
 
   const invoices = await stripe.invoices.list({
     customer: stripeCustomerId,

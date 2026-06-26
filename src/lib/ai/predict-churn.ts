@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { DEFAULT_MODEL, openai } from "./client";
+import { resolveOpenAIModel } from "./client";
 
 const churnSchema = z.object({
   riskLevel: z.enum(["LOW", "MEDIUM", "HIGH"]),
@@ -17,8 +17,18 @@ export async function predictChurnRisk(patientHistory: {
   outstandingBalance: number;
   visitFrequencyPerYear: number;
 }): Promise<ChurnPrediction> {
+  const model = await resolveOpenAIModel();
+  if (!model) {
+    return {
+      riskLevel: "LOW",
+      score: 0,
+      factors: ["AI not configured"],
+      recommendedActions: [],
+    };
+  }
+
   const { object } = await generateObject({
-    model: openai(DEFAULT_MODEL),
+    model,
     schema: churnSchema,
     system: "Identify patients at risk of churning from the practice.",
     prompt: JSON.stringify(patientHistory),

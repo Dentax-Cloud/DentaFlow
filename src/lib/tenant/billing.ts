@@ -1,21 +1,24 @@
 import { db } from "@/lib/db";
 import type { Tenant } from "@prisma/client";
-import { stripe } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
-function isStripeConfigured(): boolean {
-  const key = process.env.STRIPE_SECRET_KEY;
-  return Boolean(key && !key.startsWith("sk_test_dummy"));
+async function isStripeConfigured(): Promise<boolean> {
+  const client = await getStripeClient();
+  return client !== null;
 }
 
 /**
  * Ensure Stripe customer exists for billing (registration + checkout).
  */
 export async function ensureStripeCustomer(tenant: Tenant): Promise<Tenant> {
-  if (tenant.stripeCustomerId || !isStripeConfigured()) {
+  if (tenant.stripeCustomerId || !(await isStripeConfigured())) {
     return tenant;
   }
 
   try {
+    const stripe = await getStripeClient();
+    if (!stripe) return tenant;
+
     const customer = await stripe.customers.create({
       email: tenant.email ?? undefined,
       name: tenant.name,

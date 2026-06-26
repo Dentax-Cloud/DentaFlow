@@ -1223,6 +1223,20 @@ model Settings {
   tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
+model PlatformSetting {
+  key         String   @id
+  value       String?
+  encrypted   Boolean  @default(false)
+  keyVersion  String?  @default("v1")
+  category    String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+}
+
 model AuditLog {
   id             String       @id @default(cuid())
   tenantId       String

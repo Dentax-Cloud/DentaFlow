@@ -7,7 +7,7 @@ import { buildTrialExpiryEmail } from "./templates/trial-expiry";
 import { buildWelcomeEmail } from "./templates/welcome";
 
 export { getMailConfig, isMailConfigured } from "./config";
-export { sendMail } from "./send";
+export { sendMail, getMailTransporter } from "./send";
 export type { SendMailParams } from "./send";
 
 export async function sendWelcomeEmail(params: {

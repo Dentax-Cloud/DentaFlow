@@ -216,6 +216,34 @@ AI never gives medical advice; outputs require dentist review for clinical use.
 
 The local git repository is the single source of truth — avoid manual edits on the VPS.
 
+### Platform settings & encryption key
+
+On the VPS, only a **small set** of secrets belong in `.env.docker` (or `.env.production`). API keys for OpenAI, Stripe, SMTP, Twilio, and UploadThing are managed in **Superadmin → Platform Settings** and stored encrypted in the database.
+
+Required `.env.docker` entries:
+
+```bash
+AUTH_SECRET=<your existing value>
+SETTINGS_ENCRYPTION_KEY=<openssl rand -hex 32>
+DATABASE_URL=<your existing value>
+NEXTAUTH_URL=<your existing value>
+```
+
+Secure the env file on the server:
+
+```bash
+chmod 600 /opt/DentaFlow/.env.docker
+chown root:root /opt/DentaFlow/.env.docker
+```
+
+`SETTINGS_ENCRYPTION_KEY` is separate from `AUTH_SECRET` and is used for AES-256-GCM encryption of sensitive platform settings at rest. After first deploy, open `/superadmin/settings` to configure integrations; changes take effect immediately without a restart.
+
+Apply the platform settings migration:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web pnpm prisma migrate deploy
+```
+
 ## License
 
 Private — All rights reserved.

@@ -1,16 +1,38 @@
 import Stripe from "stripe";
 import { InvoiceStatus, PaymentMethod, SubscriptionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getSetting } from "@/lib/settings/platform-settings";
 import {
   isSubscriptionPlan,
   SubscriptionPlan,
   type SubscriptionPlan as SubscriptionPlanType,
 } from "@/lib/subscription/plan-types";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia",
-  typescript: true,
-});
+const STRIPE_API_VERSION = "2025-02-24.acacia" as Stripe.LatestApiVersion;
+
+export async function getStripeClient(): Promise<Stripe | null> {
+  const [secretKey, enabled] = await Promise.all([
+    getSetting("STRIPE_SECRET_KEY"),
+    getSetting("STRIPE_ENABLED"),
+  ]);
+
+  if (!secretKey || enabled === "false") return null;
+
+  return new Stripe(secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+    typescript: true,
+  });
+}
+
+export async function getStripeWebhookSecret(): Promise<string | null> {
+  return getSetting("STRIPE_WEBHOOK_SECRET");
+}
+
+async function requireStripe(): Promise<Stripe> {
+  const client = await getStripeClient();
+  if (!client) throw new Error("Stripe not configured");
+  return client;
+}
 
 export const PLAN_PRICE_IDS: Record<SubscriptionPlanType, string | undefined> = {
   STARTER: process.env.STRIPE_PRICE_STARTER,
@@ -30,7 +52,7 @@ export async function createCheckoutSession(params: {
   const priceId = PLAN_PRICE_IDS[params.plan];
   if (!priceId) throw new Error("Price not configured");
 
-  return stripe.checkout.sessions.create({
+  return (await requireStripe()).checkout.sessions.create({
     mode: "subscription",
     customer: params.customerId,
     customer_email: params.customerId ? undefined : params.customerEmail,
@@ -47,7 +69,7 @@ export async function createCheckoutSession(params: {
 }
 
 export async function createBillingPortalSession(customerId: string, returnUrl: string) {
-  return stripe.billingPortal.sessions.create({
+  return (await requireStripe()).billingPortal.sessions.create({
     customer: customerId,
     return_url: returnUrl,
   });
@@ -257,7 +279,7 @@ async function handleSaasCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   let periodDates: ReturnType<typeof subscriptionPeriodDates> | undefined;
   if (session.subscription && typeof session.subscription === "string") {
-    const sub = await stripe.subscriptions.retrieve(session.subscription);
+    const sub = await (await requireStripe()).subscriptions.retrieve(session.subscription);
     periodDates = subscriptionPeriodDates(sub);
   }
 

@@ -16,6 +16,9 @@ export default async function SuperadminLayout({ children }: { children: React.R
             <a href="/superadmin/tenants" className="text-zinc-400 hover:text-white">
               Tenants
             </a>
+            <a href="/superadmin/settings" className="text-zinc-400 hover:text-white">
+              Platform Settings
+            </a>
             <a href="/dashboard" className="text-sky-400 hover:text-sky-300">
               Back to app
             </a>

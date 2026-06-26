@@ -1,82 +1,89 @@
 import type { Transporter } from "nodemailer";
-import { getMailConfig, isMailConfigured } from "./config";
+import { getSetting } from "@/lib/settings/platform-settings";
 
 export type SendMailParams = {
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
   html?: string;
 };
 
-let cachedTransport: Transporter | null = null;
+export async function getMailTransporter(): Promise<Transporter | null> {
+  const [host, port, user, pass, enabled] = await Promise.all([
+    getSetting("SMTP_HOST"),
+    getSetting("SMTP_PORT"),
+    getSetting("SMTP_USER"),
+    getSetting("SMTP_PASSWORD"),
+    getSetting("EMAIL_ENABLED"),
+  ]);
 
-function createTransport(): Transporter | null {
-  let nodemailer: typeof import("nodemailer") | null = null;
-  try {
-    nodemailer = require("nodemailer");
-  } catch {
+  if (!host || enabled === "false") {
+    const devHost = process.env.MAILHOG_HOST ?? "mailhog";
+    if (process.env.NODE_ENV === "development" || process.env.USE_MAILHOG === "true") {
+      const nodemailer = (await import("nodemailer")).default;
+      return nodemailer.createTransport({
+        host: devHost,
+        port: 1025,
+        secure: false,
+        ignoreTLS: true,
+      });
+    }
     return null;
   }
 
-  const config = getMailConfig();
+  const nodemailer = (await import("nodemailer")).default;
+  const portNum = parseInt(port ?? "587", 10);
   return nodemailer.createTransport({
-    host: config.smtpHost ?? "localhost",
-    port: config.smtpPort,
-    secure: config.smtpSecure,
-    auth:
-      config.smtpUser && config.smtpPassword
-        ? { user: config.smtpUser, pass: config.smtpPassword }
-        : undefined,
+    host,
+    port: portNum,
+    secure: portNum === 465,
+    auth: user && pass ? { user, pass } : undefined,
+    tls: { rejectUnauthorized: false },
   });
 }
 
-function getTransport(): Transporter | null {
-  if (!cachedTransport) {
-    cachedTransport = createTransport();
-  }
-  return cachedTransport;
-}
+export async function sendMail(params: SendMailParams): Promise<boolean> {
+  const transporter = await getMailTransporter();
 
-/**
- * Sends email via configured SMTP (MailHog in dev, SendGrid/Postmark in prod).
- * Logs to console when SMTP is not configured or nodemailer is unavailable.
- */
-export async function sendMail(params: SendMailParams): Promise<void> {
-  const config = getMailConfig();
-
-  const transport = getTransport();
-
-  if (!transport || !isMailConfigured()) {
+  if (!transporter) {
     if (process.env.NODE_ENV !== "production") {
       console.info("[mail:fallback]", {
-        from: config.from,
         to: params.to,
         subject: params.subject,
         text: params.text,
       });
+    } else {
+      console.log(`[Mail] Not configured — skipping: "${params.subject}"`);
     }
-    return;
+    return false;
   }
 
+  const [fromName, fromEmail] = await Promise.all([
+    getSetting("SMTP_FROM_NAME"),
+    getSetting("SMTP_FROM_EMAIL"),
+  ]);
+
+  const to = Array.isArray(params.to) ? params.to.join(", ") : params.to;
+  const from =
+    fromEmail != null
+      ? `"${fromName ?? "DentaFlow"}" <${fromEmail}>`
+      : process.env.SMTP_FROM?.trim() || "DentaFlow <no-reply@dentaflow.app>";
+
   try {
-    const info = await transport.sendMail({
-      from: config.from,
-      to: params.to,
+    const info = await transporter.sendMail({
+      from,
+      to,
       subject: params.subject,
       text: params.text,
       html: params.html ?? params.text.replace(/\n/g, "<br>"),
     });
-    console.log(`[mail] sent "${params.subject}" to ${params.to}`, info.messageId);
+    console.log(`[mail] sent "${params.subject}" to ${to}`, info.messageId);
+    return true;
   } catch (err) {
-    console.error(`[mail] failed "${params.subject}" to ${params.to}:`, err);
+    console.error(`[mail] failed "${params.subject}" to ${to}:`, err);
     if (process.env.NODE_ENV === "development") {
-      console.info("[mail:fallback]", {
-        from: config.from,
-        to: params.to,
-        subject: params.subject,
-        text: params.text,
-      });
-      return;
+      console.info("[mail:fallback]", { to, subject: params.subject, text: params.text });
+      return false;
     }
     throw err;
   }

@@ -9,7 +9,7 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
-import { stripe } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 const createInvoiceSchema = z.object({
   patientId: z.string(),
@@ -153,6 +153,9 @@ export async function createStripePaymentLink(tenantId: string, invoiceId: strin
     include: { patient: true },
   });
   if (!invoice) throw new Error("Invoice not found");
+
+  const stripe = await getStripeClient();
+  if (!stripe) throw new Error("Stripe not configured");
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

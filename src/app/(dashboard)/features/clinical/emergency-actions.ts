@@ -13,7 +13,7 @@ import {
   type Vitals,
 } from "@/lib/clinical/emergency-types";
 import { generateText } from "ai";
-import { openai, DEFAULT_MODEL, SYSTEM_SAFETY } from "@/lib/ai/client";
+import { isAIConfigured, resolveOpenAIModel, SYSTEM_SAFETY } from "@/lib/ai/client";
 
 async function requirePatient(tenantId: string, patientId: string) {
   const patient = await db.patient.findFirst({
@@ -328,14 +328,17 @@ export async function generateEmergencySOAP(intakeId: string) {
 
   let soap = buildTemplateSoap(intake);
 
-  if (process.env.OPENAI_API_KEY) {
+  if (await isAIConfigured()) {
     try {
-      const { text } = await generateText({
-        model: openai(DEFAULT_MODEL),
-        system: SYSTEM_SAFETY,
-        prompt: `Refine this emergency dental SOAP note. Keep the same structure (S/O/A/P). Do not add diagnoses.\n\n${soap}`,
-      });
-      if (text.trim()) soap = text.trim();
+      const model = await resolveOpenAIModel();
+      if (model) {
+        const { text } = await generateText({
+          model,
+          system: SYSTEM_SAFETY,
+          prompt: `Refine this emergency dental SOAP note. Keep the same structure (S/O/A/P). Do not add diagnoses.\n\n${soap}`,
+        });
+        if (text.trim()) soap = text.trim();
+      }
     } catch {
       // fall back to template
     }

@@ -5,6 +5,7 @@ import { getServerAuthSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getTenantContext } from "@/lib/tenant/context";
+import { isMaintenanceMode } from "@/lib/settings/platform-settings";
 
 export default async function DashboardLayout({
   children,
@@ -17,6 +18,10 @@ export default async function DashboardLayout({
   // Superadmin ALWAYS goes to superadmin panel — no clinic dashboard
   if (session.user.isSuperAdmin) {
     redirect("/superadmin/tenants");
+  }
+
+  if (await isMaintenanceMode()) {
+    redirect("/maintenance");
   }
 
   const ctx = await getTenantContext();

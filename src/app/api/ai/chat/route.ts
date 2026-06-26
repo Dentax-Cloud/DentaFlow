@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import { NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant/context";
 import { chatWithStaffOrPatient } from "@/lib/ai";
@@ -93,14 +94,19 @@ export async function POST(req: Request) {
       "You are a dental practice AI assistant. Provide general dental practice guidance.";
   }
 
-  const result = chatWithStaffOrPatient(
-    {
-      role: body.role ?? "staff",
-      tenantName: ctx.tenant.name,
-      pageContext,
-    },
-    body.messages,
-  );
+  try {
+    const result = await chatWithStaffOrPatient(
+      {
+        role: body.role ?? "staff",
+        tenantName: ctx.tenant.name,
+        pageContext,
+      },
+      body.messages,
+    );
 
-  return result.toDataStreamResponse();
+    return result.toDataStreamResponse();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "AI unavailable";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }

@@ -40,10 +40,31 @@ export default withAuth(
     }
 
     if (!isSuperAdminRoute && token?.isSuperAdmin) {
-      const allowedPaths = ["/api/", "/login", "/superadmin", "/verify-email"];
+      const allowedPaths = ["/api/", "/login", "/superadmin", "/verify-email", "/maintenance"];
       const isAllowed = allowedPaths.some((p) => pathname.startsWith(p));
       if (!isAllowed) {
         return NextResponse.redirect(new URL("/superadmin/tenants", req.url));
+      }
+    }
+
+    if (
+      token &&
+      !token.isSuperAdmin &&
+      !pathname.startsWith("/maintenance") &&
+      !pathname.startsWith("/superadmin") &&
+      !pathname.startsWith("/api/platform/maintenance")
+    ) {
+      try {
+        const maintenanceUrl = new URL("/api/platform/maintenance", req.url);
+        const res = await fetch(maintenanceUrl, { cache: "no-store" });
+        if (res.ok) {
+          const data = (await res.json()) as { maintenance?: boolean };
+          if (data.maintenance) {
+            return NextResponse.redirect(new URL("/maintenance", req.url));
+          }
+        }
+      } catch {
+        // fail open if settings unavailable
       }
     }
 

@@ -1,8 +1,9 @@
-const PUBLIC_PATHS = ["/", "/login", "/features", "/portal"];
+const PUBLIC_PATHS = ["/", "/login", "/features", "/portal", "/maintenance"];
 const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/auth",
   "/api/webhooks",
+  "/api/platform/maintenance",
   "/sign-up",
   "/invite/accept",
   "/verify-email",

@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { DEFAULT_MODEL, openai } from "./client";
+import { resolveOpenAIModel } from "./client";
 
 const predictionSchema = z.object({
   riskLevel: z.enum(["LOW", "MEDIUM", "HIGH"]),
@@ -19,8 +19,17 @@ export async function predictNoShowRisk(appointmentHistory: {
   hour: number;
   patientNoShowHistory: number;
 }): Promise<NoShowPrediction> {
+  const model = await resolveOpenAIModel();
+  if (!model) {
+    return {
+      riskLevel: "LOW",
+      confidence: 0,
+      factors: ["AI not configured"],
+    };
+  }
+
   const { object } = await generateObject({
-    model: openai(DEFAULT_MODEL),
+    model,
     schema: predictionSchema,
     system: "Predict appointment no-show risk based on historical patterns.",
     prompt: JSON.stringify(appointmentHistory),
