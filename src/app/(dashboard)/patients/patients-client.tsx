@@ -27,11 +27,14 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
     defaultValues: { firstName: "", lastName: "", allergies: [] },
   });
 
-  const filtered = initialPatients.filter(
-    (p) =>
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-      p.patientNumber.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = initialPatients.filter((p) => {
+    const q = search.toLowerCase();
+    return (
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+      p.patientNumber.toLowerCase().includes(q) ||
+      (p.patientId?.toLowerCase().includes(q) ?? false)
+    );
+  });
 
   async function onSubmit(data: CreatePatientInput) {
     setLoading(true);
@@ -125,7 +128,9 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
                   <p className="font-medium">
                     {patient.firstName} {patient.lastName}
                   </p>
-                  <p className="text-sm text-muted-foreground">{patient.patientNumber}</p>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {patient.patientId ?? patient.patientNumber}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {patient.churnRisk && (

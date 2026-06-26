@@ -22,6 +22,7 @@ import {
   Camera,
   Sparkles,
   Stethoscope,
+  User,
   Copy,
   Printer,
   Tag,
@@ -335,23 +336,38 @@ export function PatientDetailClient({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{fullName}</h1>
-                <Badge variant="secondary" className="font-mono text-xs">
-                  {patient.patientId}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(patient.patientId);
-                    toast.success("Patient ID copied");
-                  }}
-                  aria-label="Copy patient ID"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
                 {patient.bloodGroup && (
                   <Badge variant="destructive">{patient.bloodGroup}</Badge>
+                )}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {patient.structuredPatientId ? (
+                  <>
+                    <span className="font-mono text-base font-semibold tracking-tight sm:text-lg">
+                      {patient.structuredPatientId}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(patient.structuredPatientId!);
+                        toast.success("Patient ID copied");
+                      }}
+                      aria-label="Copy patient ID"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                    {patient.patientNumber && (
+                      <span className="font-mono text-xs text-muted-foreground">
+                        Legacy {patient.patientNumber}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="font-mono text-base font-semibold tracking-tight sm:text-lg">
+                    {patient.patientNumber ?? patient.patientId}
+                  </span>
                 )}
               </div>
               {(patient.emergencyContactName || patient.emergencyContact) && (
