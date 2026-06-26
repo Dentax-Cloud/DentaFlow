@@ -123,6 +123,7 @@ export interface PatientDetailClientProps {
   patient: PatientDetailProfile;
   clinicName: string;
   tenantCode: string;
+  tenantSlug?: string;
   clinicPhone?: string | null;
   uploadsEnabled: boolean;
   latestPerio?: {
@@ -249,6 +250,7 @@ export function PatientDetailClient({
   patient,
   clinicName,
   tenantCode,
+  tenantSlug,
   clinicPhone,
   uploadsEnabled,
   latestPerio = null,
@@ -461,6 +463,7 @@ export function PatientDetailClient({
             photoUrl={patient.photoUrl}
             clinicName={clinicName}
             tenantCode={tenantCode}
+            tenantSlug={tenantSlug}
             branchCode={patient.branchCode}
             clinicPhone={clinicPhone}
           />

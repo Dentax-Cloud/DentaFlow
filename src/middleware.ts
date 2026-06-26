@@ -27,6 +27,45 @@ async function isMaintenanceMode(requestUrl: string): Promise<boolean> {
 export default withAuth(
   async function middleware(req) {
     const { pathname } = req.nextUrl;
+
+    const isPortalRoute = pathname.startsWith("/portal/");
+
+    if (isPortalRoute) {
+      const slug = pathname.split("/")[2];
+
+      if (!slug) return NextResponse.next();
+
+      const portalPublicPaths = [
+        `/portal/${slug}/login`,
+        `/portal/${slug}/register`,
+        `/portal/${slug}/verify`,
+        `/portal/${slug}/verify-sent`,
+        `/portal/${slug}/forgot-password`,
+        `/portal/${slug}/reset-password`,
+        `/portal/${slug}`,
+        `/portal/${slug}/disabled`,
+      ];
+
+      const isPublicPortalPath = portalPublicPaths.some(
+        (p) =>
+          pathname === p ||
+          pathname.startsWith(`${p}/`) ||
+          pathname.startsWith(`${p}?`),
+      );
+
+      if (isPublicPortalPath) return NextResponse.next();
+
+      const token = req.cookies.get(`portal_token_${slug}`)?.value;
+
+      if (!token) {
+        return NextResponse.redirect(
+          new URL(`/portal/${slug}/login`, req.url),
+        );
+      }
+
+      return NextResponse.next();
+    }
+
     const token = req.nextauth.token;
 
     // Legacy sign-in URL → /login
@@ -55,7 +94,14 @@ export default withAuth(
     }
 
     if (!isSuperAdminRoute && token?.isSuperAdmin) {
-      const allowedPaths = ["/api/", "/login", "/superadmin", "/verify-email", "/maintenance"];
+      const allowedPaths = [
+        "/api/",
+        "/login",
+        "/superadmin",
+        "/verify-email",
+        "/maintenance",
+        "/portal/",
+      ];
       const isAllowed = allowedPaths.some((p) => pathname.startsWith(p));
       if (!isAllowed) {
         return NextResponse.redirect(new URL("/superadmin/tenants", req.url));

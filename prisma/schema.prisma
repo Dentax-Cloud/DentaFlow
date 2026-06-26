@@ -86,6 +86,16 @@ model Tenant {
   posSessions          PosSession[]
   chairSetups          ChairSetup[]
   paymentPlans         PaymentPlan[]
+  portalAccounts       PatientPortalAccount[]
+  bookingRequests      BookingRequest[]
+  portalEnabled        Boolean                 @default(false)
+  bookingEnabled       Boolean                 @default(false)
+  autoConfirmBooking   Boolean                 @default(false)
+  bookingLeadHours     Int                     @default(24)
+  bookingMaxDays       Int                     @default(60)
+  bookingBufferMins    Int                     @default(15)
+  portalWelcomeMsg     String?
+  portalLogoUrl        String?
 }
 
 model TenantApprovalRequest {
@@ -257,6 +267,8 @@ model Patient {
   casePresentations CasePresentation[]
   emergencyIntakes  EmergencyIntake[]
   paymentPlans      PaymentPlan[]
+  portalAccount     PatientPortalAccount?
+  bookingRequests   BookingRequest[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -1204,6 +1216,78 @@ model PaymentPlanInstallment {
   plan          PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@index([planId])
+}
+
+model PatientPortalAccount {
+  id            String    @id @default(cuid())
+  portalUserId  String    @unique
+  tenantId      String
+  patientId     String    @unique
+  email         String
+  passwordHash  String
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  verifyToken   String?
+  verifyExpiry  DateTime?
+  resetToken    String?
+  resetExpiry   DateTime?
+  lastLoginAt   DateTime?
+  loginAttempts Int       @default(0)
+  lockedUntil   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sessions      PatientPortalSession[]
+  bookings      BookingRequest[]
+
+  @@unique([tenantId, patientId])
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@index([patientId])
+}
+
+model PatientPortalSession {
+  id        String               @id @default(cuid())
+  accountId String
+  tenantId  String
+  token     String               @unique
+  expiresAt DateTime
+  createdAt DateTime             @default(now())
+  account   PatientPortalAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([accountId])
+}
+
+model BookingRequest {
+  id              String               @id @default(cuid())
+  bookingRef      String?              @unique
+  tenantId        String
+  patientId       String
+  portalAccountId String
+  serviceId       String?
+  doctorId        String?
+  branchId        String?
+  requestedDate   String
+  requestedTime   String
+  durationMins    Int                  @default(30)
+  notes           String?
+  status          String               @default("PENDING")
+  appointmentId   String?
+  confirmedAt     DateTime?
+  rejectedAt      DateTime?
+  rejectedReason  String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient         Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  portalAccount   PatientPortalAccount @relation(fields: [portalAccountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([status])
 }
 
 model Settings {

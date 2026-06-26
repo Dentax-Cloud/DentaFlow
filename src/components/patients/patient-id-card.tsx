@@ -15,6 +15,7 @@ export type PatientIdCardProps = {
   photoUrl?: string | null;
   clinicName: string;
   tenantCode: string;
+  tenantSlug?: string;
   branchCode?: string | null;
   clinicPhone?: string | null;
 };
@@ -38,6 +39,13 @@ export function PatientIdCard(props: PatientIdCardProps) {
       }
     }
     if (qrRef.current && props.patientId) {
+      const baseUrl =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_APP_URL ?? "";
+      const portalUrl = props.tenantSlug
+        ? `${baseUrl}/portal/${props.tenantSlug}`
+        : undefined;
       void QRCode.toCanvas(
         qrRef.current,
         buildQrPayload({
@@ -47,6 +55,7 @@ export function PatientIdCard(props: PatientIdCardProps) {
           branchCode: props.branchCode ?? "",
           bloodGroup: props.bloodGroup,
           criticalAllergy: props.criticalAllergy,
+          portalUrl,
         }),
         { width: 80, margin: 1 },
       );

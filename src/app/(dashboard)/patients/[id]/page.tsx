@@ -83,6 +83,7 @@ export default async function PatientDetailPage({
       patient={mapPatientTo360Profile(patient)}
       clinicName={ctx.tenant.name}
       tenantCode={ctx.tenant.tenantCode ?? "—"}
+      tenantSlug={ctx.tenant.slug}
       clinicPhone={ctx.tenant.phone}
       uploadsEnabled={isUploadthingConfigured()}
       latestPerio={

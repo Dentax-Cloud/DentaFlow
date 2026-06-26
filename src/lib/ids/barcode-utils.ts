@@ -9,6 +9,7 @@ export function buildQrPayload(data: {
   branchCode: string;
   bloodGroup?: string | null;
   criticalAllergy?: string | null;
+  portalUrl?: string;
 }): string {
   return JSON.stringify({
     t: "DF_PT",
@@ -18,7 +19,8 @@ export function buildQrPayload(data: {
     bc: data.branchCode,
     bg: data.bloodGroup ?? null,
     al: data.criticalAllergy ?? null,
-    v: 1,
+    portal: data.portalUrl ?? null,
+    v: 2,
   });
 }
 

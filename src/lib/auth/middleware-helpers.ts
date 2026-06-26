@@ -9,10 +9,13 @@ const PUBLIC_PREFIXES = [
   "/verify-email",
   "/plan",
   "/case",
+  "/consent",
+  "/education",
 ];
 
 export function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true;
+  if (pathname.startsWith("/portal/")) return true;
   if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
   if (pathname.startsWith("/sign-up")) return true;
   if (pathname.startsWith("/sign-in")) return true;

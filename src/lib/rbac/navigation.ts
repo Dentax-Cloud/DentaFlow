@@ -22,6 +22,8 @@ import {
   Sparkles,
   CreditCard,
   Building2,
+  Globe,
+  CalendarPlus,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { can, type Action, type Resource } from "./permissions";
@@ -63,6 +65,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     href: "/appointments",
     label: "Appointments",
     icon: Calendar,
+    resource: "appointments",
+    action: "read",
+  },
+  {
+    href: "/appointments/booking-requests",
+    label: "Booking Requests",
+    icon: CalendarPlus,
     resource: "appointments",
     action: "read",
   },
@@ -210,6 +219,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     href: "/admin/clinical-templates",
     label: "Clinical templates",
     icon: Stethoscope,
+    resource: "admin",
+    action: "read",
+  },
+  {
+    href: "/admin/portal-settings",
+    label: "Patient Portal",
+    icon: Globe,
     resource: "admin",
     action: "read",
   },
