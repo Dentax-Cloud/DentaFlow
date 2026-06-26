@@ -47,7 +47,9 @@ function SettingField({
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const isDirty = value !== (setting.displayValue ?? "");
+  const isDirty = setting.encrypted
+    ? value !== "" && !value.includes("•")
+    : value !== (setting.displayValue ?? "");
   const displayInField = setting.encrypted
     ? setting.hasValue
       ? "••••••••••••••••"
@@ -55,8 +57,11 @@ function SettingField({
     : value;
 
   async function handleSave() {
-    if (!value && !setting.encrypted) return;
-    if (setting.encrypted && !isDirty && !value) return;
+    if (!value) return;
+
+    if (value.includes("•") || value === "••••••••••••••••") return;
+
+    if (setting.encrypted && setting.hasValue && !isDirty) return;
 
     startTransition(async () => {
       try {
@@ -206,7 +211,12 @@ function SettingField({
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={isPending || (!value && !setting.hasValue)}
+          disabled={
+            isPending ||
+            !value ||
+            value.includes("•") ||
+            (setting.encrypted && setting.hasValue && !isDirty)
+          }
           className={isDirty ? "bg-blue-600 hover:bg-blue-700" : ""}
         >
           {isPending ? "..." : "Save"}
