@@ -70,8 +70,8 @@ export function decrypt(stored: string): string {
 }
 
 export function maskValue(value: string): string {
-  if (!value || value.length <= 8) return "••••••••";
-  return value.substring(0, 4) + "••••••••" + value.substring(value.length - 4);
+  if (!value || value.length <= 10) return "••••••••••••••••";
+  return value.substring(0, 6) + "••••••••" + value.substring(value.length - 4);
 }
 
 export function isEncryptedFormat(value: string): boolean {

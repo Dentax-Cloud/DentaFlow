@@ -327,7 +327,11 @@ export async function getSettingsDisplay(category: string): Promise<SettingDispl
       hasValue = true;
       keyVersion = record.keyVersion ?? "v1";
       if (def.encrypted) {
-        maskedValue = "sk-proj-••••••••";
+        try {
+          maskedValue = maskValue(decrypt(record.value));
+        } catch {
+          maskedValue = "••••••••••••••••";
+        }
         displayValue = null;
       } else {
         displayValue = record.value;

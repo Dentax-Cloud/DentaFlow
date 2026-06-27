@@ -8,7 +8,9 @@ import {
   clearSetting,
   seedPlatformDefaults,
   getSetting,
+  SETTING_DEFINITIONS,
   type SettingKey,
+  type SettingDisplay,
 } from "@/lib/settings/platform-settings";
 
 export async function getSettingsByCategory(category: string) {
@@ -35,6 +37,57 @@ export async function initializePlatformDefaults() {
   await seedPlatformDefaults();
   revalidatePath("/superadmin/settings");
   return { success: true };
+}
+
+export async function getSettingsOverview(): Promise<
+  Array<{
+    label: string;
+    key: SettingKey;
+    icon: string;
+    isConfigured: boolean;
+    source: SettingDisplay["source"];
+  }>
+> {
+  await requireSuperAdmin();
+
+  const items: Array<{
+    label: string;
+    key: SettingKey;
+    icon: string;
+    isToggle?: boolean;
+  }> = [
+    { label: "AI", key: "OPENAI_API_KEY", icon: "🤖" },
+    { label: "Email", key: "SMTP_HOST", icon: "📧" },
+    { label: "Storage", key: "UPLOADTHING_SECRET", icon: "📁" },
+    { label: "Stripe", key: "STRIPE_SECRET_KEY", icon: "💳" },
+    { label: "SMS", key: "TWILIO_AUTH_TOKEN", icon: "📱" },
+    { label: "AI On", key: "AI_ENABLED", icon: "⚡", isToggle: true },
+  ];
+
+  const displays = await Promise.all(
+    items.map(async (item) => {
+      const [value, display] = await Promise.all([
+        getSetting(item.key),
+        getSettingsDisplay(SETTING_DEFINITIONS[item.key].category).then((rows) =>
+          rows.find((r) => r.key === item.key),
+        ),
+      ]);
+
+      const isConfigured = item.isToggle
+        ? value === "true"
+        : Boolean(value && value.trim());
+
+      return {
+        label: item.label,
+        key: item.key,
+        icon: item.icon,
+        isConfigured,
+        source: display?.source ?? "none",
+      };
+    }),
+  );
+
+  return displays;
 }
 
 export async function testOpenAI(): Promise<{ success: boolean; message: string }> {
