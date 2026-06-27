@@ -4,6 +4,7 @@ import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCountryProfile } from "@/lib/countries";
+import { deriveInsuranceProviderCode } from "@/lib/insurance/provider-code";
 import type { Prisma } from "@prisma/client";
 
 export async function getTenantInsuranceProviders() {
@@ -42,7 +43,6 @@ export async function getTenantInsuranceProviders() {
 }
 
 export async function addCustomInsuranceProvider(input: {
-  code: string;
   name: string;
   nameAr?: string;
   shortName: string;
@@ -58,21 +58,47 @@ export async function addCustomInsuranceProvider(input: {
 }) {
   const ctx = await requireTenantContext();
 
+  const code = deriveInsuranceProviderCode(input.name);
+  if (!code) {
+    throw new Error("Provider name must contain letters or numbers");
+  }
+
+  if (input.networkTypes.length === 0) {
+    throw new Error("Add at least one network type");
+  }
+
+  const existing = await db.tenantInsuranceProvider.findFirst({
+    where: { tenantId: ctx.tenantId, code },
+  });
+  if (existing) {
+    throw new Error(`A provider with code "${code}" already exists`);
+  }
+
+  const maxOrder = await db.tenantInsuranceProvider.aggregate({
+    where: { tenantId: ctx.tenantId },
+    _max: { sortOrder: true },
+  });
+
   await db.tenantInsuranceProvider.create({
     data: {
       tenantId: ctx.tenantId,
       countryCode: ctx.tenant.countryCode ?? "AE",
-      code: input.code.toUpperCase().replace(/\s/g, "_"),
-      name: input.name,
-      nameAr: input.nameAr ?? null,
-      shortName: input.shortName,
+      code,
+      name: input.name.trim(),
+      nameAr: input.nameAr?.trim() || null,
+      shortName: input.shortName.trim(),
       isCustom: true,
       isActive: true,
       requiresPreAuth: input.requiresPreAuth,
-      claimEmail: input.claimEmail ?? null,
-      contactPhone: input.contactPhone ?? null,
-      notes: input.notes ?? null,
-      networkTypes: input.networkTypes,
+      claimEmail: input.claimEmail?.trim() || null,
+      contactPhone: input.contactPhone?.trim() || null,
+      notes: input.notes?.trim() || null,
+      networkTypes: input.networkTypes.map((n) => ({
+        code: n.code.toUpperCase().trim(),
+        name: n.name.trim(),
+        defaultCoPayPercent: Math.min(100, Math.max(0, n.defaultCoPayPercent)),
+      })),
+      sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
     },
   });
 
@@ -84,8 +110,10 @@ export async function updateInsuranceProvider(
   data: Partial<{
     name: string;
     nameAr: string;
+    shortName: string;
     requiresPreAuth: boolean;
     claimEmail: string;
+    contactPhone: string;
     notes: string;
     networkTypes: Array<{ code: string; name: string; defaultCoPayPercent: number }>;
     isActive: boolean;
@@ -93,9 +121,32 @@ export async function updateInsuranceProvider(
 ) {
   const ctx = await requireTenantContext();
 
+  const payload = { ...data };
+  if (payload.networkTypes) {
+    if (payload.networkTypes.length === 0) {
+      throw new Error("Add at least one network type");
+    }
+    payload.networkTypes = payload.networkTypes.map((n) => ({
+      code: n.code.toUpperCase().trim(),
+      name: n.name.trim(),
+      defaultCoPayPercent: Math.min(100, Math.max(0, n.defaultCoPayPercent)),
+    }));
+  }
+
   await db.tenantInsuranceProvider.updateMany({
-    where: { id, tenantId: ctx.tenantId },
-    data,
+    where: { id, tenantId: ctx.tenantId, isCustom: true },
+    data: payload,
+  });
+
+  revalidatePath("/admin/customization");
+}
+
+export async function deleteCustomInsuranceProvider(id: string) {
+  const ctx = await requireTenantContext();
+
+  await db.tenantInsuranceProvider.updateMany({
+    where: { id, tenantId: ctx.tenantId, isCustom: true },
+    data: { isActive: false },
   });
 
   revalidatePath("/admin/customization");
