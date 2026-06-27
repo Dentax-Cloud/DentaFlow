@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getServerAuthSession } from "@/lib/auth";
 
 export default async function SuperadminLayout({ children }: { children: React.ReactNode }) {
@@ -13,9 +14,9 @@ export default async function SuperadminLayout({ children }: { children: React.R
             <a href="/superadmin" className="text-zinc-400 hover:text-white">
               Overview
             </a>
-            <a href="/superadmin/tenants" className="text-zinc-400 hover:text-white">
+            <Link href="/superadmin/tenants" className="text-zinc-400 hover:text-white">
               Tenants
-            </a>
+            </Link>
             <a href="/superadmin/settings" className="text-zinc-400 hover:text-white">
               Platform Settings
             </a>

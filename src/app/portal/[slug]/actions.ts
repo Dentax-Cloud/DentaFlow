@@ -101,7 +101,9 @@ export async function registerForPortal(input: {
   email: string;
   phone?: string;
   dateOfBirth?: string;
+  idDocumentNumber?: string;
   password: string;
+  formValues?: Record<string, string>;
 }): Promise<{ success: boolean; error?: string }> {
   const rate = checkRateLimit(`portal-register:${input.slug}:${input.email.toLowerCase()}`, 5);
   if (!rate.allowed) {
@@ -128,25 +130,29 @@ export async function registerForPortal(input: {
     };
   }
 
-  let patient = await db.patient.findFirst({
+  const patient = await db.patient.findFirst({
     where: {
       tenantId: tenant.id,
-      email,
       deletedAt: null,
+      OR: [
+        { email },
+        ...(input.idDocumentNumber
+          ? [{ idDocumentNumber: input.idDocumentNumber }]
+          : []),
+        ...(input.dateOfBirth
+          ? [
+              {
+                AND: [
+                  { firstName: { equals: input.firstName, mode: "insensitive" as const } },
+                  { lastName: { equals: input.lastName, mode: "insensitive" as const } },
+                  { dateOfBirth: new Date(input.dateOfBirth) },
+                ],
+              },
+            ]
+          : []),
+      ],
     },
   });
-
-  if (!patient && input.dateOfBirth) {
-    patient = await db.patient.findFirst({
-      where: {
-        tenantId: tenant.id,
-        firstName: { equals: input.firstName, mode: "insensitive" },
-        lastName: { equals: input.lastName, mode: "insensitive" },
-        dateOfBirth: new Date(input.dateOfBirth),
-        deletedAt: null,
-      },
-    });
-  }
 
   if (!patient) {
     return {

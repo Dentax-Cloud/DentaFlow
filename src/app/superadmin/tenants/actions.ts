@@ -98,18 +98,19 @@ export async function updateStatusAction(tenantId: string, status: SubscriptionS
   return updateTenantPlan(tenantId, existing.subscriptionPlan, status);
 }
 
-export async function suspendTenantAction(tenantId: string, reason?: string) {
+export async function suspendTenantAction(
+  tenantId: string,
+  _formData?: FormData,
+): Promise<void> {
   await requireSuperAdmin();
 
-  const tenant = await setTenantActive(tenantId, false, reason);
+  const tenant = await setTenantActive(tenantId, false);
 
   if (tenant.email) {
     await sendMail({
       to: tenant.email,
       subject: "Your DentaFlow account has been suspended",
       text: `Your DentaFlow account for ${tenant.name} has been suspended.
-
-${reason ? `Reason: ${reason}` : ""}
 
 Please contact support to resolve this issue.
 Support: support@dentaflow.io`,
@@ -118,10 +119,12 @@ Support: support@dentaflow.io`,
 
   revalidatePath("/superadmin/tenants");
   revalidatePath(`/superadmin/tenants/${tenantId}`);
-  return { success: true };
 }
 
-export async function reinstateTenantAction(tenantId: string) {
+export async function reinstateTenantAction(
+  tenantId: string,
+  _formData?: FormData,
+): Promise<void> {
   await requireSuperAdmin();
 
   const tenant = await setTenantActive(tenantId, true);
@@ -143,7 +146,6 @@ You can now log in at: ${baseUrl}/login`,
 
   revalidatePath("/superadmin/tenants");
   revalidatePath(`/superadmin/tenants/${tenantId}`);
-  return { success: true };
 }
 
 /** Form action wrapper for plan updates from the tenants table. */
@@ -167,7 +169,10 @@ export async function updateTenantStatusForm(tenantId: string, formData: FormDat
   return updateStatusAction(tenantId, status as SubscriptionStatus);
 }
 
-export async function approveTenantAction(tenantId: string) {
+export async function approveTenantAction(
+  tenantId: string,
+  _formData?: FormData,
+): Promise<void> {
   await requireSuperAdmin();
 
   const tenant = await db.tenant.update({
@@ -192,10 +197,12 @@ export async function approveTenantAction(tenantId: string) {
 
   revalidatePath("/superadmin/tenants");
   revalidatePath(`/superadmin/tenants/${tenantId}`);
-  return { success: true };
 }
 
-export async function rejectTenantAction(tenantId: string, notes?: string) {
+export async function rejectTenantAction(
+  tenantId: string,
+  _formData?: FormData,
+): Promise<void> {
   await requireSuperAdmin();
 
   const tenant = await db.tenant.update({
@@ -206,17 +213,16 @@ export async function rejectTenantAction(tenantId: string, notes?: string) {
 
   await db.tenantApprovalRequest.updateMany({
     where: { tenantId, status: "PENDING" },
-    data: { status: "REJECTED", notes },
+    data: { status: "REJECTED" },
   });
 
   if (tenant.email) {
     await sendMail({
       to: tenant.email,
       subject: `DentaFlow registration — ${tenant.name}`,
-      text: `Thank you for your interest in DentaFlow. Unfortunately we were unable to approve ${tenant.name} at this time.${notes ? `\n\nReason: ${notes}` : ""}`,
+      text: `Thank you for your interest in DentaFlow. Unfortunately we were unable to approve ${tenant.name} at this time.`,
     }).catch((err) => console.error("[rejectTenant] email failed:", err));
   }
 
   revalidatePath("/superadmin/tenants");
-  return { success: true };
 }

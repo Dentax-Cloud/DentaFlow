@@ -7,7 +7,7 @@ export function useAutoSave<T>(
   saveFn: (data: T) => Promise<void>,
   delayMs = 30000,
 ) {
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const dataRef = useRef(data);
   dataRef.current = data;
 

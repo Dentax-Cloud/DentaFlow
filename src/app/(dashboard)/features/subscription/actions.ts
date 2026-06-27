@@ -13,6 +13,7 @@ import {
 } from "@/lib/stripe";
 import { getUsageSummary } from "@/lib/features/gate";
 import { getTenantMetrics } from "@/lib/tenant/metrics";
+import { getStaffActor } from "@/lib/tenant/context";
 import { getTenantUsage } from "@/lib/features/usage";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -41,7 +42,7 @@ export const createSubscriptionCheckoutAction = createAction({
 
     const session = await createCheckoutSession({
       customerId: tenant.stripeCustomerId ?? undefined,
-      customerEmail: tenant.email ?? ctx.user.email,
+      customerEmail: tenant.email ?? getStaffActor(ctx).email,
       plan: input.plan,
       tenantId: tenant.id,
       successUrl: `${appUrl}/billing/subscription?success=1`,

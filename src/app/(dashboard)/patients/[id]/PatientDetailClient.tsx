@@ -26,6 +26,7 @@ import {
   Copy,
   Printer,
   Tag,
+  Building2,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
@@ -55,6 +58,21 @@ export interface PatientDetailProfile {
   photoUrl?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  fatherName?: string;
+  grandfatherName?: string;
+  nationality?: string;
+  maritalStatus?: string;
+  occupation?: string;
+  employer?: string;
+  idDocumentType?: string;
+  idDocumentNumber?: string;
+  idDocumentExpiry?: string;
+  insuranceProvider?: string;
+  insuranceNetwork?: string;
+  insuranceMemberId?: string;
+  insurancePolicyNo?: string;
+  insuranceExpiry?: string;
+  customFieldValues?: Array<{ label: string; value: string; section: string }>;
   firstName: string;
   lastName: string;
   dateOfBirth?: string;
@@ -551,8 +569,72 @@ export function PatientDetailClient({
                         value={formatDate(patient.dateOfBirth)}
                       />
                     )}
+                    {patient.gender && (
+                      <InfoRow icon={User} label="Gender" value={patient.gender} />
+                    )}
                   </CardContent>
                 </Card>
+
+                {(patient.idDocumentNumber ||
+                  patient.insuranceProvider ||
+                  patient.nationality ||
+                  patient.occupation) && (
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="text-base">Identity & insurance</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+                      {patient.idDocumentType && (
+                        <InfoRow
+                          icon={Tag}
+                          label={patient.idDocumentType.replace(/_/g, " ")}
+                          value={patient.idDocumentNumber ?? "—"}
+                        />
+                      )}
+                      {patient.nationality && (
+                        <InfoRow icon={User} label="Nationality" value={patient.nationality} />
+                      )}
+                      {patient.fatherName && (
+                        <InfoRow icon={User} label="Father&apos;s name" value={patient.fatherName} />
+                      )}
+                      {patient.occupation && (
+                        <InfoRow icon={User} label="Occupation" value={patient.occupation} />
+                      )}
+                      {patient.employer && (
+                        <InfoRow icon={Building2} label="Employer" value={patient.employer} />
+                      )}
+                      {patient.insuranceProvider && (
+                        <InfoRow
+                          icon={Stethoscope}
+                          label="Insurance"
+                          value={`${patient.insuranceProvider}${
+                            patient.insuranceNetwork ? ` · ${patient.insuranceNetwork}` : ""
+                          }`}
+                        />
+                      )}
+                      {patient.insuranceMemberId && (
+                        <InfoRow
+                          icon={Tag}
+                          label="Member ID"
+                          value={patient.insuranceMemberId}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(patient.customFieldValues?.length ?? 0) > 0 && (
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="text-base">Custom fields</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+                      {patient.customFieldValues!.map((cf) => (
+                        <InfoRow key={cf.label} icon={FileText} label={cf.label} value={cf.value} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Card>
                   <CardHeader>

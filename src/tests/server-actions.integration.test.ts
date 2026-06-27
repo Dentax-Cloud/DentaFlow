@@ -28,7 +28,7 @@ describe("server actions integration (harness)", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-      } as any,
+      } as Parameters<typeof __setTestTenantContext>[0]["tenant"],
       user: {
         id: "user_test",
         tenantId: "tenant_test",
@@ -42,10 +42,10 @@ describe("server actions integration (harness)", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-      } as any,
+      } as Parameters<typeof __setTestTenantContext>[0]["user"],
       clerkUserId: "user_test",
       orgId: "org_test",
-    } as any);
+    } as Parameters<typeof __setTestTenantContext>[0]);
   });
 
   afterEach(() => {

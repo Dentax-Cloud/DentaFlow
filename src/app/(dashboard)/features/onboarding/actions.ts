@@ -7,6 +7,8 @@ import { SubscriptionPlan, subscriptionPlanSchema } from "@/lib/subscription/pla
 import { sendWelcomeEmail } from "@/lib/mail";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
 import { checkBranchLimit, requireActiveSubscription } from "@/lib/features/gate";
+import { getStaffActor } from "@/lib/tenant/context";
+import { formatAdminName } from "@/lib/auth/registration-schema";
 
 const onboardingSchema = z.object({
   clinicName: z.string().min(1),
@@ -87,10 +89,10 @@ export const completeOnboarding = createAction({
     }
 
     const adminName = formatAdminName(
-      ctx.user.firstName ?? "Clinic",
-      ctx.user.lastName ?? "Admin",
+      getStaffActor(ctx).firstName ?? "Clinic",
+      getStaffActor(ctx).lastName ?? "Admin",
     );
-    const recipient = input.email ?? ctx.user.email;
+    const recipient = input.email ?? getStaffActor(ctx).email;
 
     if (recipient) {
       await sendWelcomeEmail({

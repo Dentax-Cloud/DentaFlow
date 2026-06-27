@@ -7,6 +7,7 @@ import { syncTrialExpiry } from "./service";
 import { getActiveTenantOrThrow } from "./isolation";
 import { getTenantTrialInfo, type TenantTrialInfo } from "./trial";
 import { requireTenantMembership } from "./access";
+import { getCountryProfile, type CountryProfile } from "@/lib/countries";
 
 export type { TenantTrialInfo };
 
@@ -18,6 +19,10 @@ export type TenantContext = {
   tenantId: string;
   isSuperAdmin: boolean;
   trial: TenantTrialInfo;
+  countryProfile: CountryProfile;
+  currency: string;
+  taxRate: number;
+  taxName: string;
   /** @deprecated Use staffMember */
   user: StaffMember | null;
   /** @deprecated Use authUserId */
@@ -34,6 +39,7 @@ function buildTenantContext(params: {
   isSuperAdmin: boolean;
 }): TenantContext {
   const { tenant, staffMember, authUserId, tenantSlug, isSuperAdmin } = params;
+  const countryProfile = getCountryProfile(tenant.countryCode ?? "AE");
   return {
     tenant,
     staffMember,
@@ -42,6 +48,10 @@ function buildTenantContext(params: {
     tenantId: tenant.id,
     isSuperAdmin,
     trial: getTenantTrialInfo(tenant),
+    countryProfile,
+    currency: tenant.currency ?? countryProfile.currency,
+    taxRate: Number(tenant.taxRate ?? countryProfile.taxRate),
+    taxName: tenant.taxName ?? countryProfile.taxName,
     user: staffMember,
     clerkUserId: authUserId,
     orgId: tenant.id,
@@ -111,6 +121,12 @@ export async function requireActiveTenantContext(): Promise<TenantContext> {
   const ctx = await requireTenantContext();
   getActiveTenantOrThrow(ctx.tenant, ctx.authUserId);
   return ctx;
+}
+
+/** Staff member performing the action — throws if session has no clinic membership row. */
+export function getStaffActor(ctx: TenantContext): StaffMember {
+  if (!ctx.staffMember) throw new Error("UNAUTHORIZED");
+  return ctx.staffMember;
 }
 
 export async function getUserWithRole() {

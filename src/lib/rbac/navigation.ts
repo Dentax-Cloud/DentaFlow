@@ -24,6 +24,7 @@ import {
   Building2,
   Globe,
   CalendarPlus,
+  Settings2,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { can, type Action, type Resource } from "./permissions";
@@ -226,6 +227,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     href: "/admin/portal-settings",
     label: "Patient Portal",
     icon: Globe,
+    resource: "admin",
+    action: "read",
+  },
+  {
+    href: "/admin/customization",
+    label: "Customization",
+    icon: Settings2,
     resource: "admin",
     action: "read",
   },

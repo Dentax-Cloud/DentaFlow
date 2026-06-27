@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CLINICAL_TEMPLATE_TYPES, renderTemplateContent } from "@/lib/clinical/render-template";
+import { CLINICAL_TEMPLATE_TYPES, renderTemplateContent, type ClinicalTemplateType } from "@/lib/clinical/render-template";
 import { TEMPLATE_PLACEHOLDERS } from "@/lib/clinical/render-template";
 import {
   createTemplate,
@@ -103,8 +103,8 @@ export function ClinicalTemplatesClient({
   async function handleSave() {
     setSaving(true);
     const result = editing
-      ? await updateTemplate({ id: editing.id, ...form, type: form.type as typeof form.type })
-      : await createTemplate({ ...form, type: form.type as typeof form.type });
+      ? await updateTemplate({ id: editing.id, ...form, type: form.type as ClinicalTemplateType })
+      : await createTemplate({ ...form, type: form.type as ClinicalTemplateType });
     setSaving(false);
     if (result.success) {
       toast.success(editing ? "Template updated" : "Template created");

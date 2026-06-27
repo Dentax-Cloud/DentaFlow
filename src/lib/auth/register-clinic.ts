@@ -14,6 +14,7 @@ import { getCountryByCode } from "@/lib/auth/countries";
 import { sendWelcomeEmail, sendMail } from "@/lib/mail";
 import { ensureStripeCustomer } from "@/lib/tenant/billing";
 import { provisionTenant } from "@/lib/tenant/service";
+import { syncTenantCountryProfile } from "@/lib/tenant/sync-country-profile";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
 
 export type RegisterClinicResult =
@@ -185,6 +186,8 @@ async function finalizeClinicSetup(
 
   await ensureStripeCustomer(updatedTenant);
 
+  await syncTenantCountryProfile(tenantId, input.country);
+
   await db.settings.update({
     where: { tenantId },
     data: {
@@ -246,6 +249,7 @@ async function registerClinicNextAuth(
       phone: input.phone,
       address: fullAddress,
       timezone: input.timezone,
+      countryCode: input.country,
     });
   } catch (err) {
     await db.auth_users.delete({ where: { id: authUser.id } }).catch(() => null);
@@ -307,6 +311,7 @@ async function registerClinicForExistingUser(
       phone: input.phone,
       address: fullAddress,
       timezone: input.timezone,
+      countryCode: input.country,
     });
   } catch (err) {
     console.error("[registerClinic] provisioning failed:", err);

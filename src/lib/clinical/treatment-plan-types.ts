@@ -141,8 +141,8 @@ export function mapPlanItemForClient(item: {
     visitNumber: getVisitNumber(item),
     priority: (item.priority ?? "ELECTIVE") as Priority,
     toothNumbers: formatToothNumbers(item.toothNumbers),
-    surfaces: item.surfaces,
-    estimatedDuration: item.estimatedDuration,
-    linkedAppointmentId: item.linkedAppointmentId,
+    surfaces: item.surfaces ?? null,
+    estimatedDuration: item.estimatedDuration ?? null,
+    linkedAppointmentId: item.linkedAppointmentId ?? null,
   };
 }

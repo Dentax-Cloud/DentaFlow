@@ -25,16 +25,16 @@ import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pushe
 import { Radio, WifiOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
-import type { Appointment, Chair, Patient, Doctor, User } from "@prisma/client";
+import type { Appointment, Chair, Patient, Doctor, StaffMember } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
 
 type AppointmentWithRelations = Appointment & {
   patient: Patient;
   chair: Chair | null;
-  doctor: (Doctor & { user: User }) | null;
+  doctor: (Doctor & { user: StaffMember }) | null;
 };
 
-type DoctorWithRelations = Doctor & { user: User };
+type DoctorWithRelations = Doctor & { user: StaffMember };
 
 type ChairWithRelations = Chair & {
   doctor: DoctorWithRelations | null;
@@ -350,19 +350,19 @@ export function AppointmentsClient({
               <BigCalendar
                 localizer={localizer}
                 events={events}
-                startAccessor="start"
-                endAccessor="end"
+                startAccessor={(event) => (event as { start: Date }).start}
+                endAccessor={(event) => (event as { end: Date }).end}
                 views={["week", "day", "agenda"]}
                 defaultView="week"
                 selectable
                 resizable
                 onEventDrop={({ event, start, end }) => {
-                  const apt = (event as any).resource as AppointmentWithRelations | undefined;
+                  const apt = (event as { resource?: AppointmentWithRelations }).resource;
                   if (!apt || !start || !end) return;
                   void rescheduleAppointment(apt.id, new Date(start), new Date(end));
                 }}
                 onEventResize={({ event, start, end }) => {
-                  const apt = (event as any).resource as AppointmentWithRelations | undefined;
+                  const apt = (event as { resource?: AppointmentWithRelations }).resource;
                   if (!apt || !start || !end) return;
                   void rescheduleAppointment(apt.id, new Date(start), new Date(end));
                 }}
@@ -375,7 +375,7 @@ export function AppointmentsClient({
                   });
                 }}
                 onSelectEvent={(evt) => {
-                  const apt = evt.resource as AppointmentWithRelations | undefined;
+                  const apt = (evt as { resource?: AppointmentWithRelations }).resource;
                   if (!apt) return;
                   toast.message(`${apt.patient.firstName} ${apt.patient.lastName}`, {
                     description: `${format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — ${apt.title}`,

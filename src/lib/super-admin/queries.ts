@@ -15,7 +15,7 @@ export type TenantListItem = {
   trialEndsAt: Date | null;
   createdAt: Date;
   deletedAt: Date | null;
-  clerkOrgId: string;
+  clerkOrgId: string | null;
   activeUsers: number;
   totalPatients: number;
   totalAppointments: number;

@@ -44,8 +44,9 @@ export const PERMISSIONS = {
   },
 } as const;
 
-export type PermissionKey =
-  (typeof PERMISSIONS)[keyof typeof PERMISSIONS][keyof (typeof PERMISSIONS)[keyof typeof PERMISSIONS]];
+export type PermissionKey = {
+  [K in keyof typeof PERMISSIONS]: (typeof PERMISSIONS)[K][keyof (typeof PERMISSIONS)[K]];
+}[keyof typeof PERMISSIONS];
 
 /** Resources aligned with the product permission matrix. */
 export const RESOURCES = {
@@ -182,13 +183,10 @@ function accessAllows(level: AccessLevel, action: Action): boolean {
     case "write":
       return level === "write";
     case "delete":
-      return level === "full";
     case "export":
-      return level === "full";
     case "refund":
-      return level === "full";
     case "use":
-      return level === "full";
+      return false;
     default:
       return false;
   }

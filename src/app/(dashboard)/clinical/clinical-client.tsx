@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Odontogram } from "@/components/clinical/dental-chart";
@@ -337,7 +338,7 @@ export function ClinicalPageClient({
               />
             )}
             <Button variant="outline" size="sm" asChild>
-              <a href="/clinical/treatment-plans">Treatment plans</a>
+              <Link href="/clinical/treatment-plans">Treatment plans</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a href={patientId ? `/clinical/perio?patientId=${patientId}` : "/clinical/perio"}>

@@ -13,6 +13,8 @@ import { requireFeature } from "@/lib/features/gate";
 
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 
+import { getStaffActor } from "@/lib/tenant/context";
+
 import { tenantWhere } from "@/lib/tenant/scoped";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
@@ -154,21 +156,21 @@ export const createToothCondition = createAction({
         tenantId: ctx.tenant.id,
         patientId: input.patientId,
         toothId: tooth.id,
-        type: input.type,
+        type: input.type ?? ToothConditionType.CARIES,
         surfaces,
         severity: input.severity,
         mobility: input.mobility,
         pocketDepth: input.pocketDepth,
         notes: input.notes,
         appointmentId: input.appointmentId,
-        recordedBy: ctx.user.id,
+        recordedBy: getStaffActor(ctx).id,
         ...(input.recordedAt
           ? { recordedAt: new Date(input.recordedAt) }
           : {}),
       },
     });
 
-    const providerName = await resolveProviderName(ctx.tenant.id, ctx.user.id);
+    const providerName = await resolveProviderName(ctx.tenant.id, getStaffActor(ctx).id);
     revalidatePath("/clinical");
 
     return {
@@ -266,11 +268,11 @@ export const markToothMissing = createAction({
         toothId: tooth.id,
         type: ToothConditionType.MISSING,
         surfaces: [],
-        recordedBy: ctx.user.id,
+        recordedBy: getStaffActor(ctx).id,
       },
     });
 
-    const providerName = await resolveProviderName(ctx.tenant.id, ctx.user.id);
+    const providerName = await resolveProviderName(ctx.tenant.id, getStaffActor(ctx).id);
     revalidatePath("/clinical");
     return mapCondition(condition, providerName);
   },

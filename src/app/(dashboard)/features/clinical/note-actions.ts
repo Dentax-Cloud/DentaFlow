@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { AppointmentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
@@ -99,7 +100,7 @@ async function buildAutoFillVariables(
       tenantId,
       patientId,
       startTime: { gt: new Date() },
-      status: { notIn: ["CANCELLED", "NO_SHOW"] },
+      status: { notIn: [AppointmentStatus.CANCELED, AppointmentStatus.NO_SHOW] },
     },
     orderBy: { startTime: "asc" },
   });

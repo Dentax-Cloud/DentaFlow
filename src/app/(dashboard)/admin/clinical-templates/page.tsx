@@ -4,7 +4,7 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { UserRole } from "@prisma/client";
 import { listTemplates } from "@/app/(dashboard)/features/clinical/template-actions";
-import { ClinicalTemplatesClient } from "./clinical-templates-client";
+import { ClinicalTemplatesClient, type TemplateRow } from "./clinical-templates-client";
 
 export default async function ClinicalTemplatesPage() {
   const ctx = await requireRouteAccess("admin", "read");
@@ -12,7 +12,7 @@ export default async function ClinicalTemplatesPage() {
   const canEdit = hasPermission(role, PERMISSIONS.admin.write);
 
   const result = await listTemplates({});
-  const templates = result.success ? result.data : [];
+  const templates = (result.success ? result.data : []) as TemplateRow[];
 
   return (
     <ClinicalTemplatesClient initialTemplates={templates} canEdit={canEdit} />

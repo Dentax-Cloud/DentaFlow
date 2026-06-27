@@ -3,7 +3,7 @@ import { hasPermission, type PermissionKey } from "./permissions";
 
 export async function requirePermission(permission: PermissionKey) {
   const ctx = await requireTenantContext();
-  if (!hasPermission(ctx.user.role, permission)) {
+  if (!ctx.staffMember || !hasPermission(ctx.staffMember.role, permission)) {
     throw new Error("FORBIDDEN");
   }
   return ctx;

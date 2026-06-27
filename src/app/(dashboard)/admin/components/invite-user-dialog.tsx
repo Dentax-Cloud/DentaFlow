@@ -26,11 +26,15 @@ import {
 import { getRoleLabel } from "@/lib/rbac/permissions";
 import { INVITABLE_ROLES } from "@/lib/tenant/team-roles";
 import { inviteTeamMember } from "@/app/(dashboard)/features/admin/actions";
+import type { z } from "zod";
+import { inviteTeamMemberSchema } from "@/app/(dashboard)/features/admin/schemas";
+
+type InvitableRole = z.infer<typeof inviteTeamMemberSchema>["role"];
 
 export function InviteUserDialog() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<UserRole>(UserRole.RECEPTIONIST);
+  const [role, setRole] = useState<InvitableRole>(UserRole.RECEPTIONIST);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -81,7 +85,7 @@ export function InviteUserDialog() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="invite-role">Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+              <Select value={role} onValueChange={(v) => setRole(v as InvitableRole)}>
                 <SelectTrigger id="invite-role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>

@@ -3,29 +3,29 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { createPatient } from "@/app/(dashboard)/features/patients/actions";
-import { createPatientSchema, type CreatePatientInput } from "@/app/(dashboard)/features/patients/schemas";
+import { createPatientDynamic } from "@/app/(dashboard)/features/patients/actions";
+import { DynamicPatientForm } from "@/components/patients/dynamic-patient-form";
+import type { PatientFormField } from "@/lib/countries/patient-form-config";
 import type { Patient } from "@prisma/client";
 import { Plus, Search, Users } from "lucide-react";
 
-export function PatientsClient({ initialPatients }: { initialPatients: Patient[] }) {
+type Props = {
+  initialPatients: Patient[];
+  formFields: PatientFormField[];
+  countryCode: string;
+};
+
+export function PatientsClient({ initialPatients, formFields, countryCode }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const form = useForm<CreatePatientInput>({
-    resolver: zodResolver(createPatientSchema),
-    defaultValues: { firstName: "", lastName: "", allergies: [] },
-  });
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
 
   const filtered = initialPatients.filter((p) => {
     const q = search.toLowerCase();
@@ -36,14 +36,15 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
     );
   });
 
-  async function onSubmit(data: CreatePatientInput) {
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    const result = await createPatient(data);
+    const result = await createPatientDynamic({ values: formValues });
     setLoading(false);
     if (result.success) {
       toast.success("Patient created");
       setShowForm(false);
-      form.reset();
+      setFormValues({});
       router.refresh();
     } else {
       toast.error(result.error);
@@ -69,39 +70,14 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
             <CardTitle>New patient</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>First name</Label>
-                <Input {...form.register("firstName")} />
-                {form.formState.errors.firstName && (
-                  <p className="mt-1 text-xs text-destructive">
-                    {form.formState.errors.firstName.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Last name</Label>
-                <Input {...form.register("lastName")} />
-                {form.formState.errors.lastName && (
-                  <p className="mt-1 text-xs text-destructive">
-                    {form.formState.errors.lastName.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input type="email" {...form.register("email")} />
-                {form.formState.errors.email && (
-                  <p className="mt-1 text-xs text-destructive">
-                    {form.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input {...form.register("phone")} />
-              </div>
-              <Button type="submit" disabled={loading} className="sm:col-span-2">
+            <form onSubmit={onSubmit} className="space-y-4">
+              <DynamicPatientForm
+                fields={formFields}
+                countryCode={countryCode}
+                initialValues={formValues}
+                onChange={setFormValues}
+              />
+              <Button type="submit" disabled={loading}>
                 {loading ? "Saving..." : "Save patient"}
               </Button>
             </form>
@@ -121,47 +97,30 @@ export function PatientsClient({ initialPatients }: { initialPatients: Patient[]
 
       <div className="grid gap-3">
         {filtered.map((patient) => (
-          <Link key={patient.id} href={`/patients/${patient.id}`}>
-            <Card className="transition-colors hover:bg-accent/50">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">
-                    {patient.firstName} {patient.lastName}
-                  </p>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {patient.patientId ?? patient.patientNumber}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {patient.churnRisk && (
-                    <Badge variant={patient.churnRisk === "HIGH" ? "destructive" : "warning"}>
-                      Churn {patient.churnRisk}
-                    </Badge>
-                  )}
-                  {patient.phone && (
-                    <span className="text-sm text-muted-foreground">{patient.phone}</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+          <Link
+            key={patient.id}
+            href={`/patients/${patient.id}`}
+            className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">
+                  {patient.firstName} {patient.lastName}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {patient.patientNumber}
+                  {patient.patientId ? ` · ${patient.patientId}` : ""}
+                </p>
+              </div>
+            </div>
+            {patient.phone && <Badge variant="outline">{patient.phone}</Badge>}
           </Link>
         ))}
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-12 text-center">
-            <Users className="h-10 w-10 text-muted-foreground" />
-            <div>
-              <p className="font-medium">No patients found</p>
-              <p className="text-sm text-muted-foreground">
-                {search ? "Try a different search term" : "Add your first patient to get started"}
-              </p>
-            </div>
-            {!search && (
-              <Button onClick={() => setShowForm(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add first patient
-              </Button>
-            )}
-          </div>
+          <p className="py-8 text-center text-muted-foreground">No patients found</p>
         )}
       </div>
     </div>

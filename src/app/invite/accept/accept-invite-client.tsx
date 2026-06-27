@@ -37,6 +37,8 @@ export function AcceptInviteClient({ invite }: { invite: InviteInfo | null }) {
     );
   }
 
+  const inviteInfo = invite;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -68,16 +70,16 @@ export function AcceptInviteClient({ invite }: { invite: InviteInfo | null }) {
       return;
     }
 
-    toast.success(`Welcome to ${invite.tenantName}!`);
+    toast.success(`Welcome to ${inviteInfo.tenantName}!`);
     router.push("/dashboard");
     router.refresh();
   }
 
   return (
     <div className="mx-auto w-full max-w-md rounded-xl border border-white/10 bg-zinc-900 p-8">
-      <h1 className="text-xl font-semibold text-white">Join {invite.tenantName}</h1>
+      <h1 className="text-xl font-semibold text-white">Join {inviteInfo.tenantName}</h1>
       <p className="mt-2 text-sm text-zinc-400">
-        {invite.inviterName} invited you as <strong className="text-zinc-200">{invite.role}</strong>.
+        {inviteInfo.inviterName} invited you as <strong className="text-zinc-200">{inviteInfo.role}</strong>.
       </p>
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -97,7 +99,7 @@ export function AcceptInviteClient({ invite }: { invite: InviteInfo | null }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            readOnly={!!invite.email}
+            readOnly={!!inviteInfo.email}
             className="border-zinc-700 bg-zinc-800 text-white"
           />
         </div>

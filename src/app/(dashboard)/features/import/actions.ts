@@ -9,6 +9,7 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { generatePatientNumber } from "@/lib/utils";
 import { splitList } from "@/lib/import/csv";
 import { AuditAction } from "@prisma/client";
+import { getStaffActor } from "@/lib/tenant/context";
 import {
   importInventorySchema,
   importPatientsSchema,
@@ -101,7 +102,7 @@ export const importPatients = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "PatientImport",
       metadata: result,
@@ -161,7 +162,7 @@ export const importInventoryItems = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "InventoryImport",
       metadata: result,
@@ -222,7 +223,7 @@ export const importProcedures = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "ProcedureImport",
       metadata: result,

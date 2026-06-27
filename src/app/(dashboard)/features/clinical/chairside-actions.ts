@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
+import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
 import { ToothConditionType } from "@prisma/client";
 
 async function upsertTooth(tenantId: string, patientId: string, toothNumber: number) {
@@ -202,11 +203,8 @@ export async function finalizeChairsideSession(sessionId: string) {
     });
 
     const subtotal = items.reduce((sum, i) => sum + i.total, 0);
-    const settings = await db.settings.findUnique({
-      where: { tenantId: ctx.tenantId },
-    });
-    const taxRate = settings?.taxRate ?? 0;
-    const tax = subtotal * (taxRate / 100);
+    const taxInfo = await getTenantInvoiceTax(ctx.tenantId);
+    const tax = subtotal * taxInfo.taxRateDecimal;
     const total = subtotal + tax;
 
     const count = await db.invoice.count({ where: { tenantId: ctx.tenantId } });
@@ -219,6 +217,10 @@ export async function finalizeChairsideSession(sessionId: string) {
         subtotal,
         tax,
         total,
+        currency: taxInfo.currency,
+        taxName: taxInfo.taxName,
+        taxRateApplied: taxInfo.taxRatePercent,
+        taxNumber: taxInfo.taxNumber,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         notes: session.appointmentId
           ? `Chairside session · Appointment ${session.appointmentId}`

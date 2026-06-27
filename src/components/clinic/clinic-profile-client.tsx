@@ -30,6 +30,17 @@ import {
 type Props = {
   profile: ClinicProfileView;
   canEdit: boolean;
+  countryConfig?: {
+    code: string;
+    flag: string;
+    name: string;
+    currency: string;
+    taxName: string;
+    taxRate: number;
+    regulatoryBody: string;
+    toothNumbering: string;
+    workingDays: string;
+  };
 };
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -42,7 +53,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-export function ClinicProfileClient({ profile, canEdit }: Props) {
+export function ClinicProfileClient({ profile, canEdit, countryConfig }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [customFields, setCustomFields] = useState<ClinicCustomField[]>(
@@ -156,6 +167,32 @@ export function ClinicProfileClient({ profile, canEdit }: Props) {
           </div>
         </div>
       </div>
+
+      {countryConfig && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Country configuration</CardTitle>
+            <CardDescription>
+              These settings are determined by your registered country. Contact support to update your
+              country.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+            <DetailRow
+              label="Country"
+              value={`${countryConfig.flag} ${countryConfig.name} (${countryConfig.code})`}
+            />
+            <DetailRow label="Currency" value={countryConfig.currency} />
+            <DetailRow
+              label="Tax"
+              value={`${countryConfig.taxName} ${countryConfig.taxRate}%`}
+            />
+            <DetailRow label="Regulatory body" value={countryConfig.regulatoryBody} />
+            <DetailRow label="Tooth numbering" value={countryConfig.toothNumbering} />
+            <DetailRow label="Working days" value={countryConfig.workingDays.replace(/,/g, ", ")} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

@@ -13,6 +13,7 @@ import {
 } from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
 import { generateAppointmentRef } from "@/lib/ids/generate-ids";
+import { getStaffActor } from "@/lib/tenant/context";
 import { AuditAction } from "@prisma/client";
 import {
   createAppointmentSchema,
@@ -86,7 +87,7 @@ export const createAppointment = createAction({
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "Appointment",
       entityId: appointment.id,
@@ -135,7 +136,7 @@ export const updateAppointmentStatus = createAction({
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Appointment",
       entityId: appointment.id,
@@ -170,7 +171,7 @@ export const updateAppointmentChair = createAction({
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Appointment",
       entityId: appointment.id,
@@ -216,7 +217,7 @@ export const updateAppointmentTime = createAction({
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Appointment",
       entityId: appointment.id,

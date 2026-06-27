@@ -1,0 +1,225 @@
+import type { CountryProfile } from "../types";
+import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS } from "./shared";
+
+export const UK: CountryProfile = {
+  code: "GB",
+  name: "United Kingdom",
+  flag: "🇬🇧",
+  region: "EUROPE",
+
+  currency: "GBP",
+  currencySymbol: "£",
+  currencyPosition: "before",
+  currencyDecimals: 2,
+
+  taxName: "VAT",
+  taxRate: 0,
+  taxOnDental: false,
+  taxNumberLabel: "VAT Registration Number",
+  taxNumberRegexStr: "^GB[0-9]{9}$",
+  taxNumberExample: "GB123456789",
+  taxInvoiceRequired: false,
+  taxInvoiceNotes: "Dental services are VAT exempt in the UK",
+
+  defaultLanguage: "en",
+  rtlDefault: false,
+  dateFormat: "DD/MM/YYYY",
+  timeFormat: "24h",
+  locale: "en-GB",
+
+  dialCode: "+44",
+  phoneFormat: "+44 XXXX XXXXXX",
+  phoneRegexStr: "^\\+44[0-9]{10}$",
+  phoneExample: "+44 7700 900123",
+
+  nameFormat: "WESTERN",
+  nameFields: WESTERN_NAME_FIELDS,
+
+  mandatoryPatientFields: [
+    "dateOfBirth",
+    "gender",
+    "phone",
+    "address",
+    "postcode",
+    "nhsNumber",
+  ],
+  optionalPatientFields: [
+    "email",
+    "occupation",
+    "employer",
+    "bloodGroup",
+    "emergencyContactName",
+    "emergencyContactPhone",
+    "maritalStatus",
+    "gpName",
+    "gpPractice",
+  ],
+
+  identityDocuments: [
+    {
+      key: "NHS_NUMBER",
+      label: "NHS Number",
+      format: "XXX XXX XXXX",
+      regexStr: "^[0-9]{10}$",
+      mask: "___ ___ ____",
+      mandatory: false,
+      description: "10-digit NHS patient identifier",
+      example: "9434765919",
+    },
+    {
+      key: "PASSPORT",
+      label: "Passport",
+      format: "XX000000000",
+      regexStr: "^[0-9]{9}$",
+      mandatory: false,
+      description: "UK passport number",
+      example: "123456789",
+    },
+    {
+      key: "DRIVING_LICENCE",
+      label: "Driving Licence",
+      format: "XXXXX XXXXXX XXXXX",
+      regexStr: "^[A-Z0-9]{16}$",
+      mandatory: false,
+      description: "UK photocard driving licence number",
+      example: "MORGA657054SM9IJ",
+    },
+  ],
+
+  toothNumbering: "FDI",
+  consentAge: 16,
+  regulatoryBody: "CQC/GDC",
+  regulatoryBodyFull:
+    "Care Quality Commission / General Dental Council",
+  primaryCodeSystem: "SNOMED",
+
+  insuranceMandatory: false,
+  preAuthRequired: false,
+  claimFormat: "NHS FP17 / Private",
+  insuranceProviders: [
+    {
+      code: "NHS",
+      name: "NHS England / NHS Scotland / NHS Wales",
+      shortName: "NHS",
+      requiresPreAuth: false,
+      networkTypes: [
+        { code: "BAND_1", name: "Band 1 (Exam/Diagnosis)", defaultCoPayPercent: 0 },
+        { code: "BAND_2", name: "Band 2 (Fillings/Extractions)", defaultCoPayPercent: 0 },
+        { code: "BAND_3", name: "Band 3 (Crowns/Dentures)", defaultCoPayPercent: 0 },
+        { code: "URGENT", name: "Urgent Treatment", defaultCoPayPercent: 0 },
+      ],
+    },
+    tieredProvider(
+      "BUPA_UK",
+      "Bupa Dental Insurance",
+      "Bupa",
+      [
+        ["COMPREHENSIVE", "Comprehensive", 10],
+        ["STANDARD", "Standard", 20],
+        ["ESSENTIAL", "Essential", 30],
+      ],
+      { claimEmail: "claims@bupa.com" },
+    ),
+    tieredProvider(
+      "AXA_UK",
+      "AXA Health",
+      "AXA",
+      [
+        ["PREMIUM", "Premium", 10],
+        ["STANDARD", "Standard", 20],
+        ["BASIC", "Basic", 30],
+      ],
+      { claimEmail: "claims@axahealth.co.uk" },
+    ),
+    tieredProvider(
+      "AVIVA",
+      "Aviva Health",
+      "Aviva",
+      [
+        ["PREMIER", "Premier", 10],
+        ["STANDARD", "Standard", 20],
+        ["ESSENTIAL", "Essential", 30],
+      ],
+      { claimEmail: "claims@aviva.com" },
+    ),
+    tieredProvider(
+      "VITALITY",
+      "Vitality Health",
+      "Vitality",
+      [
+        ["GOLD", "Gold", 10],
+        ["SILVER", "Silver", 20],
+        ["BRONZE", "Bronze", 30],
+      ],
+      { claimEmail: "claims@vitality.co.uk" },
+    ),
+    tieredProvider(
+      "WPA",
+      "Western Provident Association",
+      "WPA",
+      [
+        ["COMPREHENSIVE", "Comprehensive", 15],
+        ["STANDARD", "Standard", 25],
+      ],
+      { claimEmail: "claims@wpa.org.uk" },
+    ),
+    selfPayProvider(),
+  ],
+
+  workingDays: ["MON", "TUE", "WED", "THU", "FRI"],
+  publicHolidays: [
+    {
+      id: "GB_NY",
+      name: "New Year's Day",
+      monthDay: "01-01",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_EASTER",
+      name: "Easter Monday",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_MAY_DAY",
+      name: "Early May Bank Holiday",
+      monthDay: "05-01",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_SPRING",
+      name: "Spring Bank Holiday",
+      monthDay: "05-29",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_SUMMER",
+      name: "Summer Bank Holiday",
+      monthDay: "08-28",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_XMAS",
+      name: "Christmas Day",
+      monthDay: "12-25",
+      isLunar: false,
+      daysOff: 1,
+    },
+    {
+      id: "GB_BOXING",
+      name: "Boxing Day",
+      monthDay: "12-26",
+      isLunar: false,
+      daysOff: 1,
+    },
+  ],
+
+  facilityLicenseRequired: true,
+  electronicClaimRequired: false,
+  patientRecordRetentionYears: 11,
+  hipaaRequired: false,
+};

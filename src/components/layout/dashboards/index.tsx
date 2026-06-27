@@ -6,7 +6,6 @@ type RoleDashboardLayoutProps = {
   role: UserRole;
   tenantName?: string;
   tenantLogoUrl?: string | null;
-  isSuperAdmin?: boolean;
   children: React.ReactNode;
 };
 
@@ -15,13 +14,11 @@ function createRoleLayout() {
     role,
     tenantName,
     tenantLogoUrl,
-    isSuperAdmin,
     children,
   }: RoleDashboardLayoutProps) {
     return (
       <DashboardShell
         userRole={role}
-        isSuperAdmin={isSuperAdmin}
         tenantName={tenantName}
         tenantLogoUrl={tenantLogoUrl}
       >

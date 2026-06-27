@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { AuditAction } from "@prisma/client";
+import { AuditAction, Prisma } from "@prisma/client";
 
 export async function logTenantAudit(params: {
   tenantId: string;
@@ -16,7 +16,7 @@ export async function logTenantAudit(params: {
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,
-      metadata: params.metadata ?? undefined,
+      metadata: (params.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   });
 }

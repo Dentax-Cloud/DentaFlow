@@ -1,7 +1,8 @@
+import type { ZodSchema } from "zod";
 import { LimitExceededError } from "@/lib/features/gate";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
-import { AuditAction } from "@prisma/client";
+import { AuditAction, Prisma } from "@prisma/client";
 
 let testTenantContext: Awaited<ReturnType<typeof requireTenantContext>> | null = null;
 
@@ -43,14 +44,16 @@ export async function createAuditLog(params: {
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,
-      metadata: params.metadata ?? undefined,
+      metadata: (params.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   });
 }
 
 export function createAction<TInput, TOutput>(config: {
   schema: ZodSchema<TInput>;
-  permission?: (ctx: Awaited<ReturnType<typeof requireTenantContext>>) => Promise<void>;
+  permission?: (
+    ctx: Awaited<ReturnType<typeof requireTenantContext>>,
+  ) => Promise<void | unknown>;
   handler: (
     input: TInput,
     ctx: Awaited<ReturnType<typeof requireTenantContext>>,

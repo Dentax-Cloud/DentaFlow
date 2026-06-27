@@ -4,52 +4,57 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { registerForPortal } from "../actions";
+import { DynamicPatientForm } from "@/components/patients/dynamic-patient-form";
+import type { PatientFormField } from "@/lib/countries/patient-form-config";
 
-export default function PortalRegisterClient({ slug }: { slug: string }) {
+export default function PortalRegisterClient({
+  slug,
+  formFields,
+  countryCode,
+}: {
+  slug: string;
+  formFields: PatientFormField[];
+  countryCode: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    dateOfBirth: "",
-    password: "",
-    confirmPassword: "",
-    terms: false,
-  });
-
-  function update(field: string, value: string | boolean) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [terms, setTerms] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    if (form.password !== form.confirmPassword) {
+    if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-    if (form.password.length < 8) {
+    if (password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
     }
-    if (!form.terms) {
+    if (!terms) {
       setError("Please accept the terms to continue");
       return;
     }
 
+    const idDocKey = Object.keys(formValues).find((k) => k.startsWith("idDoc_"));
+    const idDocumentNumber = idDocKey ? formValues[idDocKey] : undefined;
+
     startTransition(async () => {
       const result = await registerForPortal({
         slug,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        phone: form.phone || undefined,
-        dateOfBirth: form.dateOfBirth || undefined,
-        password: form.password,
+        firstName: formValues.firstName ?? "",
+        lastName: formValues.lastName ?? "",
+        email: formValues.email ?? "",
+        phone: formValues.phone || undefined,
+        dateOfBirth: formValues.dateOfBirth || undefined,
+        idDocumentNumber,
+        password,
+        formValues,
       });
 
       if (result.success) {
@@ -62,60 +67,12 @@ export default function PortalRegisterClient({ slug }: { slug: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-sm font-medium">First name</label>
-          <input
-            required
-            value={form.firstName}
-            onChange={(e) => update("firstName", e.target.value)}
-            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Last name</label>
-          <input
-            required
-            value={form.lastName}
-            onChange={(e) => update("lastName", e.target.value)}
-            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm font-medium">Email</label>
-        <input
-          type="email"
-          required
-          value={form.email}
-          onChange={(e) => update("email", e.target.value)}
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="text-sm font-medium">Phone (optional)</label>
-        <input
-          type="tel"
-          value={form.phone}
-          onChange={(e) => update("phone", e.target.value)}
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="text-sm font-medium">Date of birth</label>
-        <input
-          type="date"
-          value={form.dateOfBirth}
-          onChange={(e) => update("dateOfBirth", e.target.value)}
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          Used to match your existing patient record at the clinic
-        </p>
-      </div>
+      <DynamicPatientForm
+        fields={formFields}
+        countryCode={countryCode}
+        initialValues={formValues}
+        onChange={setFormValues}
+      />
 
       <div>
         <label className="text-sm font-medium">Password</label>
@@ -123,8 +80,8 @@ export default function PortalRegisterClient({ slug }: { slug: string }) {
           type="password"
           required
           minLength={8}
-          value={form.password}
-          onChange={(e) => update("password", e.target.value)}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
         />
       </div>
@@ -134,8 +91,8 @@ export default function PortalRegisterClient({ slug }: { slug: string }) {
         <input
           type="password"
           required
-          value={form.confirmPassword}
-          onChange={(e) => update("confirmPassword", e.target.value)}
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
           className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
         />
       </div>
@@ -143,8 +100,8 @@ export default function PortalRegisterClient({ slug }: { slug: string }) {
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
-          checked={form.terms}
-          onChange={(e) => update("terms", e.target.checked)}
+          checked={terms}
+          onChange={(e) => setTerms(e.target.checked)}
           className="mt-1"
         />
         <span>I agree to use this portal for my personal health information</span>

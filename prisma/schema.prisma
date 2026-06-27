@@ -96,6 +96,30 @@ model Tenant {
   bookingBufferMins    Int                     @default(15)
   portalWelcomeMsg     String?
   portalLogoUrl        String?
+  currency             String                  @default("AED")
+  currencySymbol       String                  @default("AED")
+  taxName              String                  @default("VAT")
+  taxRate              Decimal                 @default(5) @db.Decimal(5, 2)
+  taxNumber            String?
+  taxOnDental          Boolean                 @default(true)
+  regulatoryBody       String?
+  toothNumbering       String                  @default("FDI")
+  defaultLanguage      String                  @default("en")
+  secondaryLanguage    String?
+  dateFormat           String                  @default("DD/MM/YYYY")
+  workingDays          String                  @default("MON,TUE,WED,THU,FRI")
+  primaryCodeSystem    String                  @default("ICD10")
+  insuranceMandatory   Boolean                 @default(false)
+  hipaaRequired        Boolean                 @default(false)
+  patientRetentionYrs  Int                     @default(10)
+  customFields         TenantCustomField[]
+  insuranceProviders   TenantInsuranceProvider[]
+  feeSchedules         InsuranceFeeSchedule[]
+  membershipPlans      MembershipPlan[]
+  corporateAccounts    CorporateAccount[]
+  paymentMethods       TenantPaymentMethod[]
+  referralContacts     ReferralContact[]
+  patientMemberships   PatientMembership[]
 }
 
 model TenantApprovalRequest {
@@ -269,12 +293,37 @@ model Patient {
   paymentPlans      PaymentPlan[]
   portalAccount     PatientPortalAccount?
   bookingRequests   BookingRequest[]
+  countryCode           String?
+  idDocumentType        String?
+  idDocumentNumber      String?
+  idDocumentExpiry      DateTime?
+  id2DocumentType       String?
+  id2DocumentNumber     String?
+  fatherName            String?
+  grandfatherName       String?
+  nationality           String?
+  maritalStatus         String?
+  occupation            String?
+  employer              String?
+  insuranceProvider     String?
+  insuranceNetwork      String?
+  insurancePolicyNo     String?
+  insuranceMemberId     String?
+  insuranceExpiry       DateTime?
+  insuranceCoPayPercent Decimal?              @db.Decimal(5, 2)
+  regulatoryPatientId   String?
+  corporateAccountId    String?
+  customFieldValues     PatientCustomFieldValue[]
+  memberships           PatientMembership[]
+  corporateAccount      CorporateAccount?     @relation(fields: [corporateAccountId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
   @@index([tenantId, lastName, firstName])
   @@index([patientId])
   @@index([branchCode])
+  @@index([idDocumentNumber])
+  @@index([insuranceProvider])
 }
 
 model Attachment {
@@ -767,6 +816,17 @@ model Invoice {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   deletedAt             DateTime?
+  currency              String        @default("AED")
+  taxName               String?
+  taxRateApplied        Decimal?      @db.Decimal(5, 2)
+  taxNumber             String?
+  insuranceAmount       Decimal?      @default(0) @db.Decimal(10, 2)
+  patientAmount         Decimal?      @db.Decimal(10, 2)
+  coPayPercent          Decimal?      @db.Decimal(5, 2)
+  preAuthCode           String?
+  insuranceClaimRef     String?
+  providerCode          String?
+  networkType           String?
   patient               Patient       @relation(fields: [patientId], references: [id])
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items                 InvoiceItem[]
@@ -1216,6 +1276,177 @@ model PaymentPlanInstallment {
   plan          PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@index([planId])
+}
+
+model TenantInsuranceProvider {
+  id              String   @id @default(cuid())
+  tenantId        String
+  countryCode     String   @default("AE")
+  code            String
+  name            String
+  nameAr          String?
+  shortName       String
+  isCustom        Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  requiresPreAuth Boolean  @default(true)
+  claimEmail      String?
+  contactPhone    String?
+  notes           String?
+  networkTypes    Json     @default("[]")
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model InsuranceFeeSchedule {
+  id            String    @id @default(cuid())
+  tenantId      String
+  providerCode  String
+  networkType   String?
+  procedureCode String
+  insurerFee    Decimal   @default(0) @db.Decimal(10, 2)
+  patientFee    Decimal   @default(0) @db.Decimal(10, 2)
+  coPayPercent  Decimal?  @db.Decimal(5, 2)
+  notes         String?
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, providerCode])
+}
+
+model TenantCustomField {
+  id              String                    @id @default(cuid())
+  tenantId        String
+  entity          String                    @default("PATIENT")
+  fieldKey        String
+  fieldLabel      String
+  fieldLabelAr    String?
+  fieldType       String                    @default("TEXT")
+  isRequired      Boolean                   @default(false)
+  isActive        Boolean                   @default(true)
+  isPortalVisible Boolean                   @default(false)
+  sortOrder       Int                       @default(0)
+  options         Json?
+  validation      Json?
+  helpText        String?
+  section         String                    @default("ADDITIONAL")
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  values          PatientCustomFieldValue[]
+
+  @@unique([tenantId, entity, fieldKey])
+  @@index([tenantId, entity])
+}
+
+model PatientCustomFieldValue {
+  id        String            @id @default(cuid())
+  tenantId  String
+  patientId String
+  fieldId   String
+  value     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  patient   Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  field     TenantCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, fieldId])
+  @@index([tenantId, patientId])
+}
+
+model MembershipPlan {
+  id               String              @id @default(cuid())
+  tenantId         String
+  name             String
+  description      String?
+  price            Decimal             @db.Decimal(10, 2)
+  currency         String              @default("AED")
+  duration         String              @default("ANNUAL")
+  discountPercent  Decimal             @default(0) @db.Decimal(5, 2)
+  includedServices Json?
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members          PatientMembership[]
+
+  @@index([tenantId])
+}
+
+model PatientMembership {
+  id         String         @id @default(cuid())
+  tenantId   String
+  patientId  String
+  planId     String
+  startDate  DateTime
+  endDate    DateTime
+  status     String         @default("ACTIVE")
+  paidAmount Decimal        @default(0) @db.Decimal(10, 2)
+  createdAt  DateTime       @default(now())
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient    Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plan       MembershipPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, patientId])
+}
+
+model CorporateAccount {
+  id              String    @id @default(cuid())
+  tenantId        String
+  companyName     String
+  companyNameAr   String?
+  contactPerson   String?
+  contactEmail    String?
+  contactPhone    String?
+  billingEmail    String?
+  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
+  insuranceCode   String?
+  invoicingCycle  String    @default("MONTHLY")
+  notes           String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patients        Patient[]
+
+  @@index([tenantId])
+}
+
+model TenantPaymentMethod {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  type      String   @default("OTHER")
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  config    Json?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model ReferralContact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  type      String   @default("SPECIALIST")
+  name      String
+  specialty String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model PatientPortalAccount {

@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { getPortalTenant } from "@/lib/portal/portal-context";
 import { notFound } from "next/navigation";
+import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
 import PortalRegisterClient from "./register-client";
 
 export default async function PortalRegisterPage({
@@ -13,13 +14,23 @@ export default async function PortalRegisterPage({
   const tenant = await getPortalTenant(slug);
   if (!tenant || !tenant.portalEnabled) notFound();
 
+  const formFields = await buildPatientFormFields(
+    tenant.id,
+    tenant.countryCode ?? "AE",
+    { portalOnly: true },
+  );
+
   return (
     <div className="mx-auto max-w-md py-8">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold">Create your account</h1>
         <p className="mt-1 text-sm text-muted-foreground">{tenant.name} Patient Portal</p>
       </div>
-      <PortalRegisterClient slug={slug} />
+      <PortalRegisterClient
+        slug={slug}
+        formFields={formFields}
+        countryCode={tenant.countryCode ?? "AE"}
+      />
     </div>
   );
 }

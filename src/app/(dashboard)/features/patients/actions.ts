@@ -9,8 +9,116 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { generatePatientNumber } from "@/lib/utils";
 import { generatePatientId } from "@/lib/ids/generate-ids";
+import { getStaffActor } from "@/lib/tenant/context";
 import { AuditAction } from "@prisma/client";
 import { createPatientSchema, updatePatientSchema } from "./schemas";
+import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
+import {
+  extractCustomFieldValues,
+  mapDynamicFormToPatientData,
+} from "@/lib/tenant/sync-country-profile";
+
+export async function getPatientFormFieldsForTenant(tenantId: string, countryCode: string) {
+  return buildPatientFormFields(tenantId, countryCode);
+}
+
+const createPatientDynamicSchema = z.object({
+  values: z.record(z.string()),
+});
+
+export const createPatientDynamic = createAction({
+  schema: createPatientDynamicSchema,
+  permission: () => requirePermission(PERMISSIONS.patients.write),
+  handler: async (input, ctx) => {
+    await requireActiveSubscription();
+    if (!ctx.isSuperAdmin) {
+      await checkPatientLimit(ctx.tenant.id);
+    }
+
+    const countryCode = ctx.tenant.countryCode ?? "AE";
+    const mapped = mapDynamicFormToPatientData(input.values, countryCode);
+    if (!mapped.firstName?.trim() || !mapped.lastName?.trim()) {
+      throw new Error("First and last name are required");
+    }
+
+    const count = await db.patient.count({ where: { tenantId: ctx.tenant.id } });
+    const branch = await db.branch.findFirst({
+      where: { tenantId: ctx.tenant.id, deletedAt: null },
+      orderBy: { isPrimary: "desc" },
+    });
+    if (!branch) throw new Error("No active branch found");
+
+    const { patientId, patientSeq, branchCode } = await generatePatientId(branch.id);
+
+    const patient = await db.patient.create({
+      data: {
+        tenantId: ctx.tenant.id,
+        patientNumber: generatePatientNumber(count + 1),
+        patientId,
+        branchSeq: patientSeq,
+        branchCode,
+        firstName: mapped.firstName as string,
+        lastName: mapped.lastName as string,
+        fatherName: mapped.fatherName as string | undefined,
+        grandfatherName: mapped.grandfatherName as string | undefined,
+        email: mapped.email as string | undefined,
+        phone: mapped.phone as string | undefined,
+        dateOfBirth: mapped.dateOfBirth as Date | undefined,
+        gender: mapped.gender as string | undefined,
+        nationality: mapped.nationality as string | undefined,
+        maritalStatus: mapped.maritalStatus as string | undefined,
+        occupation: mapped.occupation as string | undefined,
+        employer: mapped.employer as string | undefined,
+        bloodGroup: mapped.bloodGroup as string | undefined,
+        countryCode,
+        idDocumentType: mapped.idDocumentType as string | undefined,
+        idDocumentNumber: mapped.idDocumentNumber as string | undefined,
+        idDocumentExpiry: mapped.idDocumentExpiry as Date | undefined,
+        insuranceProvider: mapped.insuranceProvider as string | undefined,
+        insuranceNetwork: mapped.insuranceNetwork as string | undefined,
+        insurancePolicyNo: mapped.insurancePolicyNo as string | undefined,
+        insuranceMemberId: mapped.insuranceMemberId as string | undefined,
+        insuranceExpiry: mapped.insuranceExpiry as Date | undefined,
+        emergencyContactName: mapped.emergencyContactName as string | undefined,
+        emergencyContactPhone: mapped.emergencyContactPhone as string | undefined,
+      },
+    });
+
+    const customValues = extractCustomFieldValues(input.values);
+    if (customValues.length > 0) {
+      const fields = await db.tenantCustomField.findMany({
+        where: {
+          tenantId: ctx.tenant.id,
+          entity: "PATIENT",
+          fieldKey: { in: customValues.map((c) => c.fieldKey) },
+        },
+      });
+      for (const cv of customValues) {
+        const field = fields.find((f) => f.fieldKey === cv.fieldKey);
+        if (!field || !cv.value) continue;
+        await db.patientCustomFieldValue.create({
+          data: {
+            tenantId: ctx.tenant.id,
+            patientId: patient.id,
+            fieldId: field.id,
+            value: cv.value,
+          },
+        });
+      }
+    }
+
+    await createAuditLog({
+      tenantId: ctx.tenant.id,
+      userId: ctx.staffMember?.id ?? ctx.user?.id,
+      action: AuditAction.CREATE,
+      entity: "Patient",
+      entityId: patient.id,
+      metadata: { patientName: `${patient.firstName} ${patient.lastName}` },
+    });
+
+    return patient;
+  },
+});
 
 export const createPatient = createAction({
   schema: createPatientSchema,
@@ -124,7 +232,7 @@ export const linkPatientPortalUser = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Patient",
       entityId: updated.id,
@@ -159,6 +267,7 @@ export async function getPatientById(tenantId: string, id: string) {
   return db.patient.findFirst({
     where: tenantWhere(tenantId, { id, deletedAt: null }),
     include: {
+      customFieldValues: { include: { field: true } },
       appointments: { orderBy: { startTime: "desc" }, take: 10 },
       treatmentPlans: {
         orderBy: { createdAt: "desc" },

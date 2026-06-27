@@ -10,6 +10,9 @@ import { generateInvoiceNumber } from "@/lib/utils";
 import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { getStripeClient } from "@/lib/stripe";
+import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
+import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
+import { getStaffActor } from "@/lib/tenant/context";
 
 const createInvoiceSchema = z.object({
   patientId: z.string(),
@@ -32,10 +35,19 @@ export const createInvoice = createAction({
   handler: async (input, ctx) => {
     const count = await db.invoice.count({ where: { tenantId: ctx.tenant.id } });
     const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-    const settings = await db.settings.findUnique({ where: { tenantId: ctx.tenant.id } });
-    const taxRate = settings?.taxRate ?? 0;
-    const tax = subtotal * (taxRate / 100);
+    const taxInfo = await getTenantInvoiceTax(ctx.tenant.id);
+    const tax = subtotal * taxInfo.taxRateDecimal;
     const total = subtotal + tax;
+
+    const procedureCodes = input.items
+      .map((i) => i.procedureCode)
+      .filter((c): c is string => Boolean(c));
+    const insuranceSplit = await calculateInsuranceSplit({
+      tenantId: ctx.tenant.id,
+      patientId: input.patientId,
+      procedureCodes,
+      totalAmount: total,
+    });
 
     const invoice = await db.invoice.create({
       data: {
@@ -47,6 +59,15 @@ export const createInvoice = createAction({
         subtotal,
         tax,
         total,
+        currency: taxInfo.currency,
+        taxName: taxInfo.taxName,
+        taxRateApplied: taxInfo.taxRatePercent,
+        taxNumber: taxInfo.taxNumber,
+        insuranceAmount: insuranceSplit?.insurerAmount ?? 0,
+        patientAmount: insuranceSplit?.patientAmount ?? total,
+        coPayPercent: insuranceSplit?.coPayPercent ?? null,
+        providerCode: insuranceSplit?.providerName ?? null,
+        networkType: insuranceSplit?.networkName ?? null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         notes: input.notes,
         items: {
@@ -65,7 +86,7 @@ export const createInvoice = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "Invoice",
       entityId: invoice.id,
@@ -120,7 +141,7 @@ export const recordPayment = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.CREATE,
       entity: "Payment",
       entityId: payment.id,

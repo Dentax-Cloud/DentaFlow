@@ -259,7 +259,7 @@ export function DashboardClient({
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Today's appointments</CardTitle>
+              <CardTitle className="text-sm font-medium">Today&apos;s appointments</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{kpis.todayAppointments}</div>

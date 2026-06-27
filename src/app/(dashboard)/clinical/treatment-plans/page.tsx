@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
-import { serializeEntity, serializeDecimal } from "@/lib/utils/serialize";
+import { serializeDecimal } from "@/lib/utils/serialize";
 import { getVisitNumber } from "@/lib/clinical/treatment-plan-types";
 import { TreatmentPlansListClient } from "./treatment-plans-list-client";
 
@@ -38,21 +38,22 @@ export default async function TreatmentPlansPage() {
 
   return (
     <TreatmentPlansListClient
-      plans={plans.map((plan) => {
-        const serialized = serializeEntity(plan, { patient: "object", items: "array" });
-        return {
-          ...serialized,
-          totalCost: Number(serializeDecimal(plan).totalCost ?? 0),
-          totalEstimate: Number(plan.totalEstimate ?? plan.totalCost ?? 0),
-          items: plan.items.map((item) => ({
-            id: item.id,
-            status: item.status,
-            estimatedCost: Number(serializeDecimal(item).totalCost ?? 0),
-            visitNumber: getVisitNumber(item),
-            priority: item.priority ?? "ELECTIVE",
-          })),
-        };
-      })}
+      plans={plans.map((plan) => ({
+        id: plan.id,
+        title: plan.title,
+        status: plan.status,
+        totalCost: Number(serializeDecimal(plan).totalCost ?? 0),
+        totalEstimate: Number(plan.totalEstimate ?? plan.totalCost ?? 0),
+        createdAt: plan.createdAt.toISOString(),
+        patient: plan.patient,
+        items: plan.items.map((item) => ({
+          id: item.id,
+          status: item.status,
+          estimatedCost: Number(serializeDecimal(item).totalCost ?? 0),
+          visitNumber: getVisitNumber(item),
+          priority: item.priority ?? "ELECTIVE",
+        })),
+      }))}
       patients={patients}
     />
   );

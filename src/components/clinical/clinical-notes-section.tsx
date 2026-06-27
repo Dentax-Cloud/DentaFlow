@@ -28,6 +28,11 @@ type Props = {
   onAutoFromChartChange: (enabled: boolean) => void;
 };
 
+type SpeechRecognitionResultEvent = {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+};
+
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
 type SpeechRecognitionInstance = {
@@ -36,7 +41,7 @@ type SpeechRecognitionInstance = {
   lang: string;
   start: () => void;
   stop: () => void;
-  onresult: ((event: { results: SpeechRecognitionResultList }) => void) | null;
+  onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
 };

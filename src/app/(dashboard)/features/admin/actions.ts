@@ -10,6 +10,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { clearPendingTeamInvite, sendTeamInvite, storePendingTeamInvite } from "@/lib/tenant/team-invites";
 import { checkStaffLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { getStaffActor } from "@/lib/tenant/context";
 import type { RecallSettings } from "@/lib/recall/helpers";
 import { DEFAULT_RECALL_SETTINGS } from "@/lib/recall/helpers";
 import {
@@ -23,6 +24,7 @@ export const inviteTeamMember = createAction({
   schema: inviteTeamMemberSchema,
   permission: () => requirePermission(PERMISSIONS.admin.users),
   handler: async (input, ctx) => {
+    const actor = getStaffActor(ctx);
     await requireActiveSubscription();
     if (!ctx.isSuperAdmin) {
       await checkStaffLimit(ctx.tenant.id);
@@ -45,8 +47,8 @@ export const inviteTeamMember = createAction({
     await storePendingTeamInvite(ctx.tenant.id, normalizedEmail, input.role);
 
     const inviterName =
-      [ctx.user.firstName, ctx.user.lastName].filter(Boolean).join(" ").trim() ||
-      ctx.user.email;
+      [actor.firstName, actor.lastName].filter(Boolean).join(" ").trim() ||
+      actor.email;
 
     await sendTeamInvite({
       tenantId: ctx.tenant.id,
@@ -57,7 +59,7 @@ export const inviteTeamMember = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: actor.id,
       action: AuditAction.CREATE,
       entity: "TeamInvitation",
       metadata: { email: normalizedEmail, role: input.role },
@@ -72,12 +74,13 @@ export const updateTeamMemberRole = createAction({
   schema: updateTeamMemberRoleSchema,
   permission: () => requirePermission(PERMISSIONS.admin.users),
   handler: async (input, ctx) => {
+    const actor = getStaffActor(ctx);
     const member = await db.staffMember.findFirst({
       where: tenantWhere(ctx.tenant.id, { id: input.userId, deletedAt: null }),
     });
     if (!member) throw new Error("Team member not found");
 
-    if (member.id === ctx.user.id) {
+    if (member.id === actor.id) {
       throw new Error("You cannot change your own role");
     }
 
@@ -92,7 +95,7 @@ export const updateTeamMemberRole = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: actor.id,
       action: AuditAction.UPDATE,
       entity: "User",
       entityId: member.id,
@@ -108,12 +111,13 @@ export const removeTeamMember = createAction({
   schema: removeTeamMemberSchema,
   permission: () => requirePermission(PERMISSIONS.admin.users),
   handler: async (input, ctx) => {
+    const actor = getStaffActor(ctx);
     const member = await db.staffMember.findFirst({
       where: tenantWhere(ctx.tenant.id, { id: input.userId, deletedAt: null }),
     });
     if (!member) throw new Error("Team member not found");
 
-    if (member.id === ctx.user.id) {
+    if (member.id === actor.id) {
       throw new Error("You cannot remove yourself");
     }
 
@@ -130,7 +134,7 @@ export const removeTeamMember = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: actor.id,
       action: AuditAction.DELETE,
       entity: "User",
       entityId: member.id,
@@ -146,6 +150,7 @@ export const updateClinicSettings = createAction({
   schema: updateClinicSettingsSchema,
   permission: () => requirePermission(PERMISSIONS.admin.write),
   handler: async (input, ctx) => {
+    const actor = getStaffActor(ctx);
     const settings = await db.settings.upsert({
       where: { tenantId: ctx.tenant.id },
       create: {
@@ -165,7 +170,7 @@ export const updateClinicSettings = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: actor.id,
       action: AuditAction.UPDATE,
       entity: "Settings",
       entityId: settings.id,

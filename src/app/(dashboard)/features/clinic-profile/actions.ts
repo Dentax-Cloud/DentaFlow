@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { AuditAction } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
@@ -12,6 +13,7 @@ import {
   parseMetadataForUpdate,
   type ClinicCustomField,
 } from "@/lib/tenant/clinic-profile";
+import { getStaffActor } from "@/lib/tenant/context";
 
 const updateClinicProfileSchema = z.object({
   name: z.string().min(2, "Clinic name is required"),
@@ -81,7 +83,7 @@ export const updateClinicProfile = createAction({
         country: input.country || ctx.tenant.country,
         timezone: input.timezone ?? ctx.tenant.timezone,
         locale: input.locale ?? ctx.tenant.locale,
-        metadata,
+        metadata: metadata as Prisma.InputJsonValue,
       },
     });
 
@@ -95,7 +97,7 @@ export const updateClinicProfile = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Tenant",
       entityId: tenant.id,
@@ -133,13 +135,13 @@ export const upsertClinicCustomField = createAction({
         metadata: mergeTenantMetadata(ctx.tenant.metadata, {
           ...meta,
           customFields: fields,
-        }),
+        }) as Prisma.InputJsonValue,
       },
     });
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.UPDATE,
       entity: "Tenant",
       entityId: tenant.id,
@@ -163,13 +165,13 @@ export const removeClinicCustomField = createAction({
         metadata: mergeTenantMetadata(ctx.tenant.metadata, {
           ...meta,
           customFields: fields,
-        }),
+        }) as Prisma.InputJsonValue,
       },
     });
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.user.id,
+      userId: getStaffActor(ctx).id,
       action: AuditAction.DELETE,
       entity: "Tenant",
       entityId: ctx.tenant.id,

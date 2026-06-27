@@ -11,6 +11,7 @@ const variant: Record<
   CANCELED: "secondary",
   PAUSED: "warning",
   EXPIRED: "destructive",
+  INCOMPLETE: "warning",
 };
 
 export function SubscriptionStatusBadge({ status }: { status: SubscriptionStatus }) {

@@ -17,6 +17,7 @@ import {
   generateBranchCode,
   getCityCode,
 } from "@/lib/ids/generate-ids";
+import { syncTenantCountryProfile } from "./sync-country-profile";
 
 export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: boolean };
 
@@ -115,6 +116,7 @@ export async function provisionTenant(input: {
   phone?: string;
   address?: string;
   timezone?: string;
+  countryCode?: string;
 }) {
   const now = new Date();
   const trialDefaults = getDefaultTrialSubscriptionFields(now);
@@ -171,13 +173,15 @@ export async function provisionTenant(input: {
     },
   });
 
-  const countryCode = "AE";
+  const countryCode = input.countryCode ?? "AE";
   const tenantCode = await generateTenantCode(countryCode);
   const globalTenantId = generateGlobalTenantId(tenantCode, tenant.id);
   await db.tenant.update({
     where: { id: tenant.id },
     data: { tenantCode, globalTenantId, countryCode },
   });
+
+  await syncTenantCountryProfile(tenant.id, countryCode);
 
   const cityCode = getCityCode(tenant.city ?? "Dubai");
   const { branchCode, branchSeq } = await generateBranchCode(tenant.id, cityCode);

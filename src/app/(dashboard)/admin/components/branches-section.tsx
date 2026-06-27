@@ -73,12 +73,13 @@ export function BranchesSection({
       toast.error(result.error);
       return;
     }
+    const branch = result.data as Branch;
     if (editId) {
-      setBranches((prev) => prev.map((b) => (b.id === editId ? { ...b, ...result.data } : b)));
+      setBranches((prev) => prev.map((b) => (b.id === editId ? { ...b, ...branch } : b)));
     } else {
       setBranches((prev) => [
         ...prev,
-        { ...result.data, _count: { chairs: 0, appointments: 0 }, staffCount: 0 },
+        { ...branch, _count: { chairs: 0, appointments: 0 }, staffCount: 0 },
       ]);
     }
     toast.success(editId ? "Branch updated" : "Branch created");

@@ -18,9 +18,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { createAppointment } from "@/app/(dashboard)/features/appointments/actions";
-import type { Chair, Doctor, Patient, User } from "@prisma/client";
+import type { Chair, Doctor, Patient, StaffMember } from "@prisma/client";
 
-type DoctorWithUser = Doctor & { user: User };
+type DoctorWithUser = Doctor & { user: StaffMember };
 type ChairWithDoctor = Chair & { doctor: DoctorWithUser | null };
 
 type Props = {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { User } from "@prisma/client";
+import type { StaffMember } from "@prisma/client";
 import { UserRole } from "@prisma/client";
 import { toast } from "sonner";
 import { Users } from "lucide-react";
@@ -39,10 +39,14 @@ import {
   updateTeamMemberRole,
   type PendingInvitation,
 } from "@/app/(dashboard)/features/admin/actions";
+import type { z } from "zod";
+import { updateTeamMemberRoleSchema } from "@/app/(dashboard)/features/admin/schemas";
+
+type InvitableRole = z.infer<typeof updateTeamMemberRoleSchema>["role"];
 import { InviteUserDialog } from "./invite-user-dialog";
 
 type TeamManagementSectionProps = {
-  users: User[];
+  users: StaffMember[];
   pendingInvitations: PendingInvitation[];
   currentUserId: string;
   canManage: boolean;
@@ -74,10 +78,10 @@ export function TeamManagementSection({
   currentUserId,
   canManage,
 }: TeamManagementSectionProps) {
-  const [removeTarget, setRemoveTarget] = useState<User | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  async function handleRoleChange(userId: string, role: UserRole) {
+  async function handleRoleChange(userId: string, role: InvitableRole) {
     setBusyUserId(userId);
     const result = await updateTeamMemberRole({ userId, role });
     setBusyUserId(null);
@@ -111,7 +115,7 @@ export function TeamManagementSection({
     return role;
   }
 
-  function canEditMember(user: User) {
+  function canEditMember(user: StaffMember) {
     if (!canManage || user.id === currentUserId || isAdminRole(user.role)) return false;
     const normalized = normalizeEditableRole(user.role);
     return isInvitableRole(normalized);
@@ -177,7 +181,7 @@ export function TeamManagementSection({
                         <Select
                           value={selectRole}
                           disabled={busyUserId === user.id}
-                          onValueChange={(v) => handleRoleChange(user.id, v as UserRole)}
+                          onValueChange={(v) => handleRoleChange(user.id, v as InvitableRole)}
                         >
                           <SelectTrigger className="h-8 w-[140px]">
                             <SelectValue />

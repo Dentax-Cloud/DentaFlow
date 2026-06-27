@@ -24,11 +24,11 @@ import { Badge } from "@/components/ui/badge";
 import { RegistrationStepper } from "./registration-stepper";
 import { registerClinicAction } from "@/app/(auth)/features/registration/actions";
 import {
-  COUNTRY_OPTIONS,
   getCountryByCode,
   SPECIALTY_OPTIONS,
   TIMEZONE_OPTIONS,
 } from "@/lib/auth/countries";
+import { SUPPORTED_COUNTRIES, getCountryProfile } from "@/lib/countries";
 import {
   DOCTOR_COUNT_OPTIONS,
   formatAdminName,
@@ -53,7 +53,7 @@ const selectClass =
   "flex h-11 w-full rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30";
 
 type Props = {
-  uploadsEnabled: boolean;
+  uploadsEnabled?: boolean;
   initialStep?: number;
 };
 
@@ -103,6 +103,10 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
   const watchedCountry = step2Form.watch("country");
   const watchedPassword = step1Form.watch("password");
   const countryMeta = useMemo(() => getCountryByCode(watchedCountry), [watchedCountry]);
+  const countryProfile = useMemo(
+    () => getCountryProfile(watchedCountry || "AE"),
+    [watchedCountry],
+  );
   const passwordStrength = useMemo(
     () => passwordStrengthScore(watchedPassword ?? ""),
     [watchedPassword],
@@ -335,14 +339,42 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="country">Country</Label>
-              <select id="country" className={selectClass} {...step2Form.register("country")}>
-                {COUNTRY_OPTIONS.map((c) => (
+              <Label htmlFor="country">Country *</Label>
+              <select id="country" className={selectClass} {...step2Form.register("country")} required>
+                <option value="" className="bg-zinc-900">
+                  — Select country —
+                </option>
+                {SUPPORTED_COUNTRIES.map((c) => (
                   <option key={c.code} value={c.code} className="bg-zinc-900">
-                    {c.name}
+                    {c.flag} {c.name} ({c.currency})
                   </option>
                 ))}
               </select>
+              {watchedCountry && (
+                <div className="mt-2 space-y-1 rounded-lg bg-blue-950/40 p-3 text-xs text-sky-100">
+                  <p>
+                    💱 Currency: <strong>{countryProfile.currency}</strong>
+                  </p>
+                  <p>
+                    🧾 Tax:{" "}
+                    <strong>
+                      {countryProfile.taxName} {countryProfile.taxRate}%
+                    </strong>
+                    {!countryProfile.taxOnDental && " (dental exempt)"}
+                  </p>
+                  <p>
+                    🏥 Regulatory: <strong>{countryProfile.regulatoryBody}</strong>
+                  </p>
+                  <p>
+                    🦷 Tooth numbering: <strong>{countryProfile.toothNumbering}</strong>
+                  </p>
+                  {countryProfile.insuranceMandatory && (
+                    <p className="text-orange-300">
+                      ⚠ Insurance is mandatory for patients in this country
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="clinicPhone">Phone number (optional)</Label>
