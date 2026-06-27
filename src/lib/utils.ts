@@ -17,6 +17,19 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
   }).format(new Date(date));
 }
 
+/** Stable date/time for SSR + client (fixed locale and timezone). */
+export function formatDateTime(
+  date: Date | string,
+  options?: Intl.DateTimeFormatOptions,
+) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+    ...options,
+  }).format(new Date(date));
+}
+
 export function generatePatientNumber(sequence: number) {
   return `P${String(sequence).padStart(6, "0")}`;
 }

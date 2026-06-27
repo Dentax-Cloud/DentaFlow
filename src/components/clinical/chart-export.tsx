@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { chartToHistory, chartToSummary, type ToothChartData } from "@/lib/clinical/chart-types";
 import { formatConditionType } from "@/lib/clinical/condition-config";
 import { getDisplayNumber, type ChartNotation } from "@/lib/clinical/odontogram-notation";
+import { formatDateTime } from "@/lib/utils";
 import { FileDown } from "lucide-react";
 
 type Props = {
@@ -21,13 +22,26 @@ export function ChartExportButton({
   clinicName = "DentaFlow Clinic",
 }: Props) {
   const printRef = useRef<HTMLDivElement>(null);
+  const metaRef = useRef<HTMLParagraphElement>(null);
 
   function handleExport() {
     const content = printRef.current;
-    if (!content) return;
+    const meta = metaRef.current;
+    if (!content || !meta) return;
+
+    const exportedAt = new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    }).format(new Date());
+
+    const staticMeta = `${clinicName} · Notation: ${notation}`;
+    meta.textContent = `${clinicName} · Exported ${exportedAt} · Notation: ${notation}`;
 
     const printWindow = window.open("", "_blank", "width=800,height=600");
-    if (!printWindow) return;
+    if (!printWindow) {
+      meta.textContent = staticMeta;
+      return;
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -51,18 +65,19 @@ export function ChartExportButton({
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
+
+    meta.textContent = staticMeta;
   }
 
   const history = chartToHistory(chartData);
   const summary = chartToSummary(chartData);
-  const exportedAt = new Date().toLocaleString();
 
   return (
     <>
       <div ref={printRef} className="hidden">
         <h1>Dental Chart — {patientName}</h1>
-        <p className="meta">
-          {clinicName} · Exported {exportedAt} · Notation: {notation}
+        <p ref={metaRef} className="meta">
+          {clinicName} · Notation: {notation}
         </p>
         <h2 style={{ fontSize: "14px", marginTop: "16px" }}>Summary</h2>
         <pre className="summary">{summary}</pre>
@@ -81,7 +96,7 @@ export function ChartExportButton({
           <tbody>
             {history.map((entry) => (
               <tr key={entry.id}>
-                <td>{new Date(entry.recordedAt).toLocaleString()}</td>
+                <td>{formatDateTime(entry.recordedAt)}</td>
                 <td>
                   {getDisplayNumber(entry.toothNumber, notation)} (FDI {entry.toothNumber})
                 </td>
