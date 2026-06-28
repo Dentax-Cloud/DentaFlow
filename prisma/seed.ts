@@ -297,9 +297,44 @@ async function main() {
       name: "Operatory 1",
       number: 1,
       doctorId: doctorA.id,
+      chairType: "GENERAL",
+      roomName: "Main floor — Room A",
+      colorCode: "#0ea5e9",
+      equipment: ["Intraoral camera", "Cavitron"],
+      status: "ACTIVE",
       isActive: true,
     },
-    update: { doctorId: doctorA.id },
+    update: {
+      doctorId: doctorA.id,
+      chairType: "GENERAL",
+      roomName: "Main floor — Room A",
+      colorCode: "#0ea5e9",
+      equipment: ["Intraoral camera", "Cavitron"],
+      status: "ACTIVE",
+    },
+  });
+
+  await db.chair.upsert({
+    where: { tenantId_branchId_number: { tenantId: tenantA.id, branchId: branchA.id, number: 2 } },
+    create: {
+      tenantId: tenantA.id,
+      branchId: branchA.id,
+      name: "Hygiene Bay",
+      number: 2,
+      chairType: "HYGIENE",
+      roomName: "Main floor — Room B",
+      colorCode: "#10b981",
+      equipment: ["Polisher", "Ultrasonic scaler"],
+      status: "ACTIVE",
+      isActive: true,
+    },
+    update: {
+      chairType: "HYGIENE",
+      roomName: "Main floor — Room B",
+      colorCode: "#10b981",
+      equipment: ["Polisher", "Ultrasonic scaler"],
+      status: "ACTIVE",
+    },
   });
 
   const patients = [

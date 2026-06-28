@@ -376,6 +376,11 @@ model Chair {
   name         String
   number       Int
   doctorId     String?
+  chairType    String        @default("GENERAL")
+  roomName     String?
+  equipment    Json?
+  colorCode    String        @default("#0ea5e9")
+  status       String        @default("ACTIVE")
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

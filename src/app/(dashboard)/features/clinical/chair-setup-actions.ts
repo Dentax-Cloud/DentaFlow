@@ -7,17 +7,10 @@ import { randomUUID } from "crypto";
 import { StockTransactionType } from "@prisma/client";
 import { createNotification } from "@/lib/notifications/notification-service";
 import { generateStockRef } from "@/lib/ids/generate-ids";
+import type { SetupItem, TrayTemplateItem, TrayItemCategory } from "@/lib/chair-setup/types";
+import { defaultColorForType, inferTrayCategory } from "@/lib/chair-setup/helpers";
 
-export type TrayTemplateItem = {
-  inventoryItemId: string;
-  itemName: string;
-  qty: number;
-  unit: string;
-};
-
-export type SetupItem = TrayTemplateItem & {
-  batchId?: string;
-};
+export type { SetupItem, TrayTemplateItem, TrayItemCategory };
 
 function todayIso() {
   return new Date().toISOString().split("T")[0];
@@ -42,7 +35,17 @@ export async function getTodaySession() {
     include: {
       chairSetups: {
         include: {
-          chair: { select: { id: true, name: true, number: true } },
+          chair: {
+            select: {
+              id: true,
+              name: true,
+              number: true,
+              chairType: true,
+              roomName: true,
+              colorCode: true,
+              status: true,
+            },
+          },
           template: { select: { id: true, name: true } },
         },
       },
@@ -141,7 +144,17 @@ export async function getDoctorChairSchedule(date?: string) {
   return db.doctorChairSchedule.findMany({
     where: { tenantId: ctx.tenantId, scheduleDate: targetDate },
     include: {
-      chair: { select: { id: true, name: true, number: true } },
+      chair: {
+        select: {
+          id: true,
+          name: true,
+          number: true,
+          chairType: true,
+          roomName: true,
+          colorCode: true,
+          status: true,
+        },
+      },
     },
     orderBy: [{ chairId: "asc" }, { startTime: "asc" }],
   });
@@ -216,6 +229,83 @@ export async function assignDoctorToChair(input: {
 
   revalidatePath("/clinical/chair-setup");
   return schedule;
+}
+
+// ── Chair management ──────────────────────────────────────────
+
+export async function updateChair(
+  chairId: string,
+  input: {
+    name: string;
+    number: number;
+    roomName?: string | null;
+    chairType: string;
+    colorCode: string;
+    equipment?: string[];
+    status: string;
+  },
+) {
+  const ctx = await requireTenantContext();
+  if (!["OWNER", "ADMIN"].includes(ctx.staffMember?.role ?? "")) {
+    throw new Error("Insufficient permissions");
+  }
+
+  const existing = await db.chair.findFirst({
+    where: { id: chairId, tenantId: ctx.tenantId },
+  });
+  if (!existing) throw new Error("Chair not found");
+
+  const chair = await db.chair.update({
+    where: { id: chairId },
+    data: {
+      name: input.name,
+      number: input.number,
+      roomName: input.roomName ?? null,
+      chairType: input.chairType,
+      colorCode: input.colorCode || defaultColorForType(input.chairType),
+      equipment: input.equipment ?? [],
+      status: input.status,
+      isActive: input.status === "ACTIVE",
+    },
+  });
+
+  revalidatePath("/clinical/chair-setup");
+  return chair;
+}
+
+export async function createChair(input: {
+  branchId: string;
+  name: string;
+  number: number;
+  roomName?: string | null;
+  chairType: string;
+  colorCode: string;
+  equipment?: string[];
+  status?: string;
+}) {
+  const ctx = await requireTenantContext();
+  if (!["OWNER", "ADMIN"].includes(ctx.staffMember?.role ?? "")) {
+    throw new Error("Insufficient permissions");
+  }
+
+  const chair = await db.chair.create({
+    data: {
+      id: randomUUID(),
+      tenantId: ctx.tenantId,
+      branchId: input.branchId,
+      name: input.name,
+      number: input.number,
+      roomName: input.roomName ?? null,
+      chairType: input.chairType,
+      colorCode: input.colorCode || defaultColorForType(input.chairType),
+      equipment: input.equipment ?? [],
+      status: input.status ?? "ACTIVE",
+      isActive: (input.status ?? "ACTIVE") === "ACTIVE",
+    },
+  });
+
+  revalidatePath("/clinical/chair-setup");
+  return chair;
 }
 
 export async function removeDoctorChairAssignment(scheduleId: string) {
@@ -344,6 +434,7 @@ export async function setupChairForDay(input: {
   }
 
   for (const item of input.items) {
+    if (item.category === "EQUIPMENT") continue;
     const inv = await db.inventoryItem.findFirst({
       where: { id: item.inventoryItemId, tenantId: ctx.tenantId, deletedAt: null },
       select: { quantity: true, name: true },
@@ -355,6 +446,7 @@ export async function setupChairForDay(input: {
 
   let setupCost = 0;
   for (const item of input.items) {
+    if (item.category === "EQUIPMENT") continue;
     const invItem = await db.inventoryItem.findFirst({
       where: { id: item.inventoryItemId, tenantId: ctx.tenantId },
       select: { cost: true },
@@ -378,6 +470,8 @@ export async function setupChairForDay(input: {
     });
 
     for (const item of input.items) {
+      if (item.category === "EQUIPMENT") continue;
+
       const transactionRef = await generateStockRef(ctx.tenantId);
 
       await tx.inventoryItem.update({
@@ -529,6 +623,7 @@ export async function deductProcedureConsumables(input: {
         itemName: item.itemName,
         qty: item.qty,
         unit: item.unit,
+        category: item.category ?? "CONSUMABLE",
       });
 
       await db.chairDaySetup.update({
@@ -594,6 +689,11 @@ export async function returnChairItems(input: {
   await db.$transaction(async (tx) => {
     for (const item of input.returnedItems) {
       if (item.qty <= 0) continue;
+
+      const setupItem = (setup.setupItems as SetupItem[]).find(
+        (s) => s.inventoryItemId === item.inventoryItemId,
+      );
+      if (setupItem?.category === "EQUIPMENT") continue;
 
       const transactionRef = await generateStockRef(ctx.tenantId);
 
