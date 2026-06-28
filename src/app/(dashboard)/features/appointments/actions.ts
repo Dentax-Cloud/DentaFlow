@@ -14,6 +14,7 @@ import {
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
 import { generateAppointmentRef } from "@/lib/ids/generate-ids";
 import { getStaffActor } from "@/lib/tenant/context";
+import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import { AuditAction } from "@prisma/client";
 import {
   createAppointmentSchema,
@@ -110,6 +111,14 @@ export const updateAppointmentStatus = createAction({
       data: { status: input.status },
       include: { patient: true, chair: true },
     });
+
+    const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
+    await notifyAppointmentStatus(
+      appointment.id,
+      ctx.tenant.id,
+      input.status,
+      patientName,
+    ).catch(() => null);
 
     if (input.status === "COMPLETED") {
       await db.patient.update({

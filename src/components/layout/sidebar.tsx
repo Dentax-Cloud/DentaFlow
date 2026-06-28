@@ -11,6 +11,7 @@ import { getNavItemsForRole } from "@/lib/rbac/navigation";
 import { getRoleLabel } from "@/lib/rbac/permissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 export type SidebarUser = {
   firstName?: string | null;
@@ -103,6 +104,7 @@ export function Sidebar({
               <p className="truncate text-sm font-medium">{displayName(user)}</p>
               <p className="truncate text-xs text-muted-foreground">{getRoleLabel(userRole)}</p>
             </div>
+            <NotificationBell />
           </div>
         )}
         <SignOutButton redirectUrl="/">

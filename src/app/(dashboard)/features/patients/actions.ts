@@ -17,6 +17,7 @@ import {
   extractCustomFieldValues,
   mapDynamicFormToPatientData,
 } from "@/lib/tenant/sync-country-profile";
+import { sendPatientWelcomeEmail } from "@/lib/email/send-patient-welcome";
 
 export async function getPatientFormFieldsForTenant(tenantId: string, countryCode: string) {
   return buildPatientFormFields(tenantId, countryCode);
@@ -116,6 +117,8 @@ export const createPatientDynamic = createAction({
       metadata: { patientName: `${patient.firstName} ${patient.lastName}` },
     });
 
+    await sendPatientWelcomeEmail(ctx.tenant.id, patient);
+
     return patient;
   },
 });
@@ -166,6 +169,7 @@ export const createPatient = createAction({
         entityId: patient.id,
         metadata: { patientName: `${patient.firstName} ${patient.lastName}` },
       });
+      await sendPatientWelcomeEmail(ctx.tenant.id, patient);
       return patient;
     } catch (err) {
       console.error("[createPatient]", err);

@@ -7,12 +7,12 @@ import { serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { AppointmentsClient } from "./appointments-client";
 
 type Props = {
-  searchParams: Promise<{ patientId?: string }>;
+  searchParams: Promise<{ patientId?: string; appointmentId?: string }>;
 };
 
 export default async function AppointmentsPage({ searchParams }: Props) {
   const ctx = await requireRouteAccess("appointments", "read");
-  const { patientId } = await searchParams;
+  const { patientId, appointmentId } = await searchParams;
   const now = new Date();
 
   const [appointments, chairs, patients, doctors, emergencyStats] = await Promise.all([
@@ -54,6 +54,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       doctors={doctors.map((doctor) => serializeEntity(doctor, { user: "object" }))}
       tenantId={ctx.tenant.id}
       defaultPatientId={patientId}
+      initialAppointmentId={appointmentId}
       emergencyWaiting={emergencyStats.filter((e) => e.status === "WAITING").length}
       emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}
     />

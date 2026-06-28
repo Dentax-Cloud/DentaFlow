@@ -120,6 +120,7 @@ model Tenant {
   paymentMethods       TenantPaymentMethod[]
   referralContacts     ReferralContact[]
   patientMemberships   PatientMembership[]
+  notifications        Notification[]
 }
 
 model TenantApprovalRequest {
@@ -1568,6 +1569,29 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, entity])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  tenantId    String
+  recipientId String
+  type        String
+  title       String
+  body        String
+  link        String?
+  entityType  String?
+  entityId    String?
+  channel     String    @default("IN_APP")
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  emailSentAt DateTime?
+  createdAt   DateTime  @default(now())
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([tenantId])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 model auth_users {

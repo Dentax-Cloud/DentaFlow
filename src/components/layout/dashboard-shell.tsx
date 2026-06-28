@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar, type SidebarUser } from "./sidebar";
 import { RoleRouteGuard } from "./role-route-guard";
+import { NotificationBell } from "./notification-bell";
 import type { UserRole } from "@prisma/client";
 
 export function DashboardShell({
@@ -44,6 +45,9 @@ export function DashboardShell({
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <span className="ml-3 font-semibold">{tenantName ?? "DentaFlow"}</span>
+        <div className="ml-auto">
+          <NotificationBell />
+        </div>
       </div>
 
       <div

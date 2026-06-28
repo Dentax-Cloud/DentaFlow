@@ -25,6 +25,7 @@ import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pushe
 import { Radio, WifiOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
+import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
 import type { Appointment, Chair, Patient, Doctor, StaffMember } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
 
@@ -40,15 +41,6 @@ type ChairWithRelations = Chair & {
   doctor: DoctorWithRelations | null;
   appointments: Appointment[];
 };
-
-const STATUS_FLOW: AppointmentStatus[] = [
-  "SCHEDULED",
-  "CONFIRMED",
-  "ARRIVED",
-  "IN_CHAIR",
-  "COMPLETED",
-  "INVOICED",
-];
 
 const statusLabel: Record<string, string> = {
   SCHEDULED: "Scheduled",
@@ -79,6 +71,7 @@ export function AppointmentsClient({
   doctors,
   tenantId,
   defaultPatientId,
+  initialAppointmentId,
   emergencyWaiting = 0,
   emergencyImmediate = 0,
 }: {
@@ -88,6 +81,7 @@ export function AppointmentsClient({
   doctors: DoctorWithRelations[];
   tenantId: string;
   defaultPatientId?: string;
+  initialAppointmentId?: string;
   emergencyWaiting?: number;
   emergencyImmediate?: number;
 }) {
@@ -97,7 +91,16 @@ export function AppointmentsClient({
   const [view, setView] = useState<"calendar" | "board">("calendar");
   const [slotStart, setSlotStart] = useState<Date | undefined>();
   const [slotEnd, setSlotEnd] = useState<Date | undefined>();
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(
+    initialAppointmentId ?? null,
+  );
   const realtimeEnabled = isRealtimeAvailable();
+
+  useEffect(() => {
+    if (initialAppointmentId) {
+      setSelectedAppointmentId(initialAppointmentId);
+    }
+  }, [initialAppointmentId]);
 
   const BigCalendar = useMemo(() => withDragAndDrop(BigCalendarBase), []);
 
@@ -377,9 +380,7 @@ export function AppointmentsClient({
                 onSelectEvent={(evt) => {
                   const apt = (evt as { resource?: AppointmentWithRelations }).resource;
                   if (!apt) return;
-                  toast.message(`${apt.patient.firstName} ${apt.patient.lastName}`, {
-                    description: `${format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — ${apt.title}`,
-                  });
+                  setSelectedAppointmentId(apt.id);
                 }}
               />
             </div>
@@ -436,9 +437,11 @@ export function AppointmentsClient({
                         </p>
                       ) : (
                         liveAppointments.map((a) => (
-                          <div
+                          <button
                             key={a.id}
-                            className="rounded-md border bg-muted/30 p-2 text-xs"
+                            type="button"
+                            onClick={() => setSelectedAppointmentId(a.id)}
+                            className="w-full rounded-md border bg-muted/30 p-2 text-left text-xs hover:bg-muted/50"
                           >
                             <div className="font-medium">
                               {a.patient.firstName} {a.patient.lastName}
@@ -446,7 +449,7 @@ export function AppointmentsClient({
                             <div className="text-muted-foreground">
                               {format(new Date(a.startTime), "h:mm a")} — {a.title}
                             </div>
-                          </div>
+                          </button>
                         ))
                       )}
                     </div>
@@ -484,6 +487,7 @@ export function AppointmentsClient({
                 <div
                   key={apt.id}
                   draggable
+                  onClick={() => setSelectedAppointmentId(apt.id)}
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/plain", apt.id);
                     setDraggingId(apt.id);
@@ -524,7 +528,11 @@ export function AppointmentsClient({
         <h2 className="mb-3 text-lg font-semibold">This week</h2>
         <div className="space-y-2">
           {appointments.map((apt) => (
-            <Card key={apt.id}>
+            <Card
+              key={apt.id}
+              className="cursor-pointer hover:bg-muted/30"
+              onClick={() => setSelectedAppointmentId(apt.id)}
+            >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="font-medium">{apt.patient.firstName} {apt.patient.lastName}</p>
@@ -552,6 +560,11 @@ export function AppointmentsClient({
           )}
         </div>
       </div>
+
+      <AppointmentDrawer
+        appointmentId={selectedAppointmentId}
+        onClose={() => setSelectedAppointmentId(null)}
+      />
     </div>
   );
 }
