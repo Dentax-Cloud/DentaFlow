@@ -85,6 +85,10 @@ model Tenant {
   purchaseOrders       PurchaseOrder[]
   posSessions          PosSession[]
   chairSetups          ChairSetup[]
+  chairTrayTemplates   ChairTrayTemplate[]
+  doctorChairSchedules DoctorChairSchedule[]
+  daySessions          DaySession[]
+  chairDaySetups       ChairDaySetup[]
   paymentPlans         PaymentPlan[]
   portalAccounts       PatientPortalAccount[]
   bookingRequests      BookingRequest[]
@@ -376,8 +380,10 @@ model Chair {
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
   branch       Branch        @relation(fields: [branchId], references: [id])
-  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  doctor       Doctor?               @relation(fields: [doctorId], references: [id])
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedules    DoctorChairSchedule[]
+  daySetups    ChairDaySetup[]
 
   @@unique([tenantId, branchId, number])
   @@index([tenantId])
@@ -1238,6 +1244,84 @@ model ChairSetup {
 
   @@index([tenantId])
   @@index([setupDate])
+}
+
+model ChairTrayTemplate {
+  id        String          @id @default(cuid())
+  tenantId  String
+  name      String
+  isDefault Boolean         @default(false)
+  items     Json            @default("[]")
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  setups    ChairDaySetup[]
+
+  @@index([tenantId])
+}
+
+model DoctorChairSchedule {
+  id           String   @id @default(cuid())
+  tenantId     String
+  chairId      String
+  doctorId     String
+  scheduleDate String
+  startTime    String   @default("09:00")
+  endTime      String   @default("17:00")
+  shiftType    String   @default("FULL_DAY")
+  status       String   @default("SCHEDULED")
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chair        Chair    @relation(fields: [chairId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scheduleDate])
+  @@index([chairId])
+}
+
+model DaySession {
+  id          String          @id @default(cuid())
+  tenantId    String
+  branchId    String?
+  sessionDate String
+  openedAt    DateTime?
+  openedById  String?
+  closedAt    DateTime?
+  closedById  String?
+  status      String          @default("PENDING")
+  summary     Json?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chairSetups ChairDaySetup[]
+
+  @@unique([tenantId, sessionDate, branchId])
+  @@index([tenantId])
+}
+
+model ChairDaySetup {
+  id            String             @id @default(cuid())
+  tenantId      String
+  chairId       String
+  daySessionId  String
+  doctorId      String?
+  templateId    String?
+  setupItems    Json               @default("[]")
+  returnedItems Json               @default("[]")
+  consumedItems Json               @default("[]")
+  setupCost     Decimal            @default(0) @db.Decimal(10, 2)
+  status        String             @default("PENDING")
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chair         Chair              @relation(fields: [chairId], references: [id], onDelete: Cascade)
+  session       DaySession         @relation(fields: [daySessionId], references: [id], onDelete: Cascade)
+  template      ChairTrayTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([daySessionId])
+  @@index([chairId])
 }
 
 model PaymentPlan {
