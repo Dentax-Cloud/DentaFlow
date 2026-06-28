@@ -89,6 +89,7 @@ model Tenant {
   doctorChairSchedules DoctorChairSchedule[]
   daySessions          DaySession[]
   chairDaySetups       ChairDaySetup[]
+  importBatches        ImportBatch[]
   paymentPlans         PaymentPlan[]
   portalAccounts       PatientPortalAccount[]
   bookingRequests      BookingRequest[]
@@ -1322,6 +1323,33 @@ model ChairDaySetup {
   @@index([tenantId])
   @@index([daySessionId])
   @@index([chairId])
+}
+
+model ImportBatch {
+  id           String    @id @default(cuid())
+  tenantId     String
+  entity       String    @default("PATIENT")
+  fileName     String
+  fileFormat   String    @default("XLSX")
+  totalRows    Int       @default(0)
+  successRows  Int       @default(0)
+  warningRows  Int       @default(0)
+  errorRows    Int       @default(0)
+  skippedRows  Int       @default(0)
+  mode         String    @default("UPSERT")
+  countryCode  String    @default("AE")
+  status       String    @default("PENDING")
+  importedById String?
+  errorReport  Json?
+  rollbackData Json?
+  canRollback  Boolean   @default(true)
+  rolledBackAt DateTime?
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
 }
 
 model PaymentPlan {
