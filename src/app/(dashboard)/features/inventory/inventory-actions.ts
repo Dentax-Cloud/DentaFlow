@@ -70,6 +70,42 @@ export async function scanSupplierBarcode(barcode: string) {
     }
   }
 
+  const trimmed = barcode.trim();
+  const normalized = trimmed.replace(/-/g, "").toUpperCase();
+
+  const itemByRef = await db.inventoryItem.findFirst({
+    where: { tenantId: ctx.tenantId, itemRef: trimmed, deletedAt: null },
+  });
+  if (itemByRef) {
+    return {
+      found: true,
+      item: serializeDecimal(itemByRef),
+      gs1Data: gs1Payload,
+      packSize: 1,
+      packUnit: itemByRef.unit,
+      barcodeType: "INTERNAL",
+    };
+  }
+
+  if (normalized.length >= 6) {
+    const itemsWithRef = await db.inventoryItem.findMany({
+      where: { tenantId: ctx.tenantId, itemRef: { not: null }, deletedAt: null },
+    });
+    const matched = itemsWithRef.find(
+      (i) => i.itemRef!.replace(/-/g, "").toUpperCase() === normalized,
+    );
+    if (matched) {
+      return {
+        found: true,
+        item: serializeDecimal(matched),
+        gs1Data: gs1Payload,
+        packSize: 1,
+        packUnit: matched.unit,
+        barcodeType: "INTERNAL",
+      };
+    }
+  }
+
   return {
     found: false,
     barcode,
@@ -119,6 +155,7 @@ export async function linkSupplierBarcode(input: {
   });
 
   revalidatePath("/inventory");
+  revalidatePath(`/inventory/${input.inventoryItemId}`);
 }
 
 export async function receiveStock(input: {

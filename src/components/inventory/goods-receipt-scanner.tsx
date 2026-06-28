@@ -2,11 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { useBarcodeScanner } from "@/lib/ids/use-barcode-scanner";
 import {
   scanSupplierBarcode,
   receiveStock,
 } from "@/app/(dashboard)/features/inventory/inventory-actions";
+import { BarcodeScanner } from "@/components/inventory/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +23,6 @@ type ReceiptLine = {
 };
 
 export function GoodsReceiptScanner({ purchaseOrderId }: { purchaseOrderId?: string }) {
-  const [barcode, setBarcode] = useState("");
   const [lines, setLines] = useState<ReceiptLine[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -55,8 +54,6 @@ export function GoodsReceiptScanner({ purchaseOrderId }: { purchaseOrderId?: str
       setBusy(false);
     }
   }, []);
-
-  useBarcodeScanner((code) => void handleScan(code));
 
   const totalCost = lines.reduce((s, l) => s + l.quantity * l.unitCost, 0);
 
@@ -91,25 +88,11 @@ export function GoodsReceiptScanner({ purchaseOrderId }: { purchaseOrderId?: str
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleScan(barcode);
-            setBarcode("");
-          }}
-        >
-          <Input
-            className="font-mono"
-            placeholder="Scan supplier barcode (GS1 supported)..."
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            autoFocus
-          />
-          <Button type="submit" disabled={busy}>
-            Scan
-          </Button>
-        </form>
+        <BarcodeScanner
+          onScan={(code) => void handleScan(code)}
+          mode="both"
+          placeholder="Scan supplier barcode (GS1 supported)..."
+        />
 
         {lines.length > 0 && (
           <div className="space-y-2">

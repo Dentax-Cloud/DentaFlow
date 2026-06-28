@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { InventoryItem, StockTransaction } from "@prisma/client";
-import { AlertTriangle, History, Minus, Package, Plus } from "lucide-react";
+import { AlertTriangle, History, Minus, Package, Plus, ScanLine } from "lucide-react";
 import { addStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
+import {
+  scanSupplierBarcode,
+  receiveStock,
+  issueStockToProcedure,
+} from "@/app/(dashboard)/features/inventory/inventory-actions";
+import { BarcodeScanner } from "@/components/inventory/barcode-scanner";
 import { cn } from "@/lib/utils";
 
 type ItemWithHistory = InventoryItem & {
@@ -37,12 +44,19 @@ export function InventoryClient({
 }) {
   const [items, setItems] = useState(initialItems);
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [dialog, setDialog] = useState<"add" | "remove" | "history" | null>(null);
+  const [dialog, setDialog] = useState<"add" | "remove" | "history" | "scan" | null>(null);
   const [selected, setSelected] = useState<ItemWithHistory | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [busy, setBusy] = useState(false);
+  const [scanResult, setScanResult] = useState<{
+    id: string;
+    name: string;
+    quantity: number;
+    itemRef?: string | null;
+  } | null>(null);
+  const [scanQty, setScanQty] = useState("1");
 
   const filtered = useMemo(() => {
     if (filter === "low") return items.filter((i) => i.quantity <= i.reorderLevel);
@@ -110,6 +124,87 @@ export function InventoryClient({
     }
   }
 
+  async function handleBarcodeScan(code: string) {
+    setBusy(true);
+    try {
+      const result = await scanSupplierBarcode(code);
+      if (!result.found || !result.item) {
+        toast.error("Item not found for this barcode");
+        setScanResult(null);
+        return;
+      }
+      const item = result.item as {
+        id: string;
+        name: string;
+        quantity: number;
+        itemRef?: string | null;
+      };
+      setScanResult(item);
+      setScanQty(String(result.gs1Data?.quantity ?? result.packSize ?? 1));
+      toast.success(`Found: ${item.name}`);
+    } catch {
+      toast.error("Lookup failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleScanReceive() {
+    if (!scanResult) return;
+    const qty = Number(scanQty);
+    if (!qty || qty < 1) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    setBusy(true);
+    try {
+      await receiveStock({
+        inventoryItemId: scanResult.id,
+        quantity: qty,
+        scannedBarcode: scanResult.itemRef ?? undefined,
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === scanResult.id ? { ...i, quantity: i.quantity + qty } : i,
+        ),
+      );
+      setScanResult((prev) => (prev ? { ...prev, quantity: prev.quantity + qty } : null));
+      toast.success("Stock received");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Receive failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleScanIssue(notesLabel: string) {
+    if (!scanResult) return;
+    const qty = Number(scanQty);
+    if (!qty || qty < 1) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    setBusy(true);
+    try {
+      await issueStockToProcedure({
+        inventoryItemId: scanResult.id,
+        quantity: qty,
+        notes: notesLabel,
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === scanResult.id ? { ...i, quantity: i.quantity - qty } : i,
+        ),
+      );
+      setScanResult((prev) => (prev ? { ...prev, quantity: prev.quantity - qty } : null));
+      toast.success("Stock issued");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Issue failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {criticalCount > 0 && (
@@ -125,6 +220,18 @@ export function InventoryClient({
           <p className="text-muted-foreground">{items.length} items tracked</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setScanResult(null);
+              setScanQty("1");
+              setDialog("scan");
+            }}
+          >
+            <ScanLine className="mr-1 h-4 w-4" />
+            Scan item
+          </Button>
           <Button
             variant={filter === "all" ? "default" : "outline"}
             size="sm"
@@ -153,7 +260,9 @@ export function InventoryClient({
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Package className="h-4 w-4" />
-                  {item.name}
+                  <Link href={`/inventory/${item.id}`} className="hover:underline">
+                    {item.name}
+                  </Link>
                   {isLow && (
                     <Badge variant="destructive" className="ml-auto">
                       Low
@@ -199,6 +308,9 @@ export function InventoryClient({
                   <Button size="sm" variant="ghost" onClick={() => openDialog("history", item)}>
                     <History className="mr-1 h-3 w-3" />
                     History
+                  </Button>
+                  <Button size="sm" variant="ghost" asChild>
+                    <Link href={`/inventory/${item.id}`}>View</Link>
                   </Button>
                 </div>
               </CardContent>
@@ -278,6 +390,72 @@ export function InventoryClient({
               </div>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "scan"}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialog(null);
+            setScanResult(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Scan inventory item</DialogTitle>
+          </DialogHeader>
+          <BarcodeScanner
+            onScan={(code) => void handleBarcodeScan(code)}
+            mode="both"
+            placeholder="Scan supplier or internal barcode..."
+          />
+
+          {scanResult && (
+            <div className="space-y-3 rounded-lg border p-4">
+              <div>
+                <p className="font-medium">{scanResult.name}</p>
+                {scanResult.itemRef && (
+                  <p className="font-mono text-xs text-muted-foreground">{scanResult.itemRef}</p>
+                )}
+                <p className="text-2xl font-bold">{scanResult.quantity} in stock</p>
+              </div>
+              <div>
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={scanQty}
+                  onChange={(e) => setScanQty(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => void handleScanReceive()} disabled={busy}>
+                  Receive stock
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleScanIssue("Issued to procedure")}
+                  disabled={busy}
+                >
+                  Issue to procedure
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleScanIssue("Issued to chair")}
+                  disabled={busy}
+                >
+                  Issue to chair
+                </Button>
+                <Button size="sm" variant="ghost" asChild>
+                  <Link href={`/inventory/${scanResult.id}`}>View details</Link>
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
