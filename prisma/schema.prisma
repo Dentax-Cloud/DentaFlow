@@ -126,6 +126,8 @@ model Tenant {
   referralContacts     ReferralContact[]
   patientMemberships   PatientMembership[]
   notifications        Notification[]
+  procedureBundles      ProcedureBundle[]
+  complianceRecords     ClinicalComplianceRecord[]
 }
 
 model TenantApprovalRequest {
@@ -802,7 +804,17 @@ model ProcedureCatalog {
 
   @@unique([tenantId, code])
   @@index([tenantId])
-}
+  gpmrId           String?
+  nameAr           String?
+  branchPrices     Json?
+  requiresConsent  Boolean   @default(false)
+  requiresXray     Boolean   @default(false)
+  requiresPreAuth  Boolean   @default(false)
+  workflowConfig   Json?
+  isOnlineBookable Boolean   @default(false)
+  sortOrder        Int       @default(0)
+  globalProcedure  GlobalProcedure? @relation(fields: [gpmrId], references: [id], onDelete: SetNull)
+  }
 
 model Invoice {
   id                    String        @id @default(cuid())
@@ -1903,4 +1915,116 @@ enum RiskLevel {
   LOW
   MEDIUM
   HIGH
+}
+model GlobalProcedure {
+  id                   String   @id @default(cuid())
+  gpmrCode             String   @unique
+  canonicalName        String
+  names                Json     @default("{}")
+  category             String
+  subCategory          String?
+  clinicalDescription  String?
+  defaultDurationMins  Int      @default(30)
+  toothRequired        Boolean  @default(false)
+  surfaceRequired      Boolean  @default(false)
+  archRequired         Boolean  @default(false)
+  quadrantRequired     Boolean  @default(false)
+  requiredInputs       Json     @default("[]")
+  optionalInputs       Json     @default("[]")
+  prerequisites        Json     @default("[]")
+  contraindications    Json     @default("[]")
+  postProcedureActions Json     @default("[]")
+  requiredAttachments  Json     @default("[]")
+  optionalAttachments  Json     @default("[]")
+  globalCodes          Json     @default("{}")
+  modules              Json     @default("[]")
+  isBillable           Boolean  @default(true)
+  canBundle            Boolean  @default(true)
+  aiSuggestTriggers    Json     @default("[]")
+  isActive             Boolean  @default(true)
+  version              String   @default("1.0.0")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  countryPacks         CountryProcedurePack[]
+  tenantProcedures     ProcedureCatalog[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model CountryProcedurePack {
+  id                String    @id @default(cuid())
+  gpmrId            String
+  countryCode       String
+  packVersion       String    @default("1.0.0")
+  localName         String?
+  localNameAr       String?
+  localNames        Json      @default("{}")
+  localCodes        Json      @default("{}")
+  taxRules          Json      @default("{}")
+  insuranceCodes    Json      @default("{}")
+  complianceRules   Json      @default("{}")
+  workflowAdditions Json      @default("{}")
+  isActive          Boolean   @default(true)
+  effectiveFrom     DateTime  @default(now())
+  effectiveTo       DateTime?
+  createdAt         DateTime  @default(now())
+  globalProcedure   GlobalProcedure @relation(fields: [gpmrId], references: [id], onDelete: Cascade)
+  
+  @@unique([gpmrId, countryCode])
+  @@index([countryCode])
+  @@index([gpmrId])
+}
+
+model ProcedureBundle {
+  id               String   @id @default(cuid())
+  tenantId         String
+  name             String
+  description      String?
+  bundlePrice      Decimal? @db.Decimal(10, 2)
+  currency         String   @default("AED")
+  durationMins     Int      @default(60)
+  items            Json     @default("[]")
+  isActive         Boolean  @default(true)
+  isOnlineBookable Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId])
+}
+
+model ClinicalComplianceRecord {
+  id             String    @id @default(cuid())
+  tenantId       String
+  patientId      String
+  appointmentId  String?
+  gpmrId         String?
+  procedureCode  String?
+  localCode      String?
+  countryPack    String?
+  performedById  String
+  licenseNumber  String?
+  performedAt    DateTime
+  toothNumbers   Json      @default("[]")
+  surfaces       Json      @default("[]")
+  checklist      Json      @default("{}")
+  billedAmount   Decimal?  @db.Decimal(10, 2)
+  insurerAmount  Decimal?  @db.Decimal(10, 2)
+  patientAmount  Decimal?  @db.Decimal(10, 2)
+  currencyCode   String    @default("AED")
+  preAuthCode    String?
+  claimCode      String?
+  claimSubmitted Boolean   @default(false)
+  auditHash      String?
+  signedByDoctor Boolean   @default(false)
+  signedAt       DateTime?
+  regulatoryRef  String?
+  complianceStd  String?
+  retentionUntil DateTime?
+  createdAt      DateTime  @default(now())
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, patientId])
+  @@index([performedAt])
 }
