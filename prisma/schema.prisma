@@ -93,6 +93,8 @@ model Tenant {
   paymentPlans         PaymentPlan[]
   portalAccounts       PatientPortalAccount[]
   bookingRequests      BookingRequest[]
+  doctorSchedules      DoctorSchedule[]
+  scheduleExceptions   DoctorScheduleException[]
   portalEnabled        Boolean                 @default(false)
   bookingEnabled       Boolean                 @default(false)
   autoConfirmBooking   Boolean                 @default(false)
@@ -413,8 +415,15 @@ model Appointment {
   notes        String?
   reminderSent Boolean           @default(false)
   noShowRisk     RiskLevel?
-  appointmentRef String?
-  createdAt      DateTime          @default(now())
+  appointmentRef       String?
+  procedureId          String?
+  bookedById           String?
+  bookedVia            String?           @default("RECEPTION")
+  preAuthStatus        String?           @default("NOT_REQUIRED")
+  preAuthCode          String?
+  cancellationReason   String?
+  cancelledById        String?
+  createdAt            DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   deletedAt      DateTime?
   branch         Branch?           @relation(fields: [branchId], references: [id])
@@ -1295,6 +1304,43 @@ model DoctorChairSchedule {
 
   @@index([tenantId, scheduleDate])
   @@index([chairId])
+}
+
+model DoctorSchedule {
+  id               String   @id @default(cuid())
+  tenantId         String
+  doctorId         String
+  branchId         String?
+  dayOfWeek        Int
+  isWorkingDay     Boolean  @default(true)
+  startTime        String   @default("09:00")
+  endTime          String   @default("17:00")
+  breaks           Json     @default("[]")
+  slotDurationMins Int      @default(30)
+  bufferMins       Int      @default(10)
+  maxAppointments  Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, doctorId])
+}
+
+model DoctorScheduleException {
+  id        String   @id @default(cuid())
+  tenantId  String
+  doctorId  String
+  date      String
+  type      String   @default("OFF")
+  startTime String?
+  endTime   String?
+  reason    String?
+  allDay    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, doctorId, date])
+  @@index([tenantId, doctorId])
 }
 
 model DaySession {

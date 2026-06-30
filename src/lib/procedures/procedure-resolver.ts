@@ -6,8 +6,33 @@
 // ============================================================
 
 import { db } from "@/lib/db"
+import type { Prisma } from "@prisma/client"
 
 // ── Types ─────────────────────────────────────────────────────
+
+type WorkflowJson = Record<string, unknown> | null
+
+type ComplianceRules = {
+  consentRequired?: boolean
+  xrayRequired?: boolean
+}
+
+type InsuranceCodes = {
+  requiresPreAuth?: boolean
+  claimCode?: string
+}
+
+type TaxRules = {
+  vatApplicable?: boolean
+  vatRate?: number
+  gstRate?: number
+  nhsBand?: number
+  nhsChargePence?: number
+}
+
+type BranchPriceEntry = {
+  sellingPrice?: number
+}
 
 export type ResolvedProcedure = {
   // Identity
@@ -57,8 +82,8 @@ export type ResolvedProcedure = {
   nhsChargePence:number | null
 
   // Workflow
-  workflowConfig:    any
-  workflowAdditions: any
+  workflowConfig:    WorkflowJson
+  workflowAdditions: Record<string, unknown>
 
   // Flags
   isActive:         boolean
@@ -171,7 +196,7 @@ export async function resolveProcedure(
   // ── Resolve branch price ────────────────────────────────────
   let branchPrice: number | null = null
   if (branchId && tenantProc.branchPrices) {
-    const bp = tenantProc.branchPrices as Record<string, any>
+    const bp = tenantProc.branchPrices as Record<string, BranchPriceEntry>
     branchPrice = bp[branchId]?.sellingPrice ?? null
   }
 
@@ -192,7 +217,7 @@ export async function resolveProcedure(
 
   // ── Resolve compliance ──────────────────────────────────────
   // Tenant override takes priority, then country pack
-  const packCompliance = (countryPack?.complianceRules ?? {}) as any
+  const packCompliance = (countryPack?.complianceRules ?? {}) as ComplianceRules
 
   const requiresConsent =
     tenantProc.requiresConsent ||
@@ -202,16 +227,18 @@ export async function resolveProcedure(
     tenantProc.requiresXray ||
     packCompliance.xrayRequired === true
 
+  const insuranceCodes = (countryPack?.insuranceCodes ?? {}) as InsuranceCodes
+
   const requiresPreAuth =
     tenantProc.requiresPreAuth ||
-    (countryPack?.insuranceCodes as any)?.requiresPreAuth === true
+    insuranceCodes.requiresPreAuth === true
 
   // ── Resolve local codes ─────────────────────────────────────
   const localCodes =
     (countryPack?.localCodes ?? {}) as Record<string, string>
 
   const claimCode =
-    (countryPack?.insuranceCodes as any)?.claimCode ??
+    insuranceCodes.claimCode ??
     localCodes.DHA ??
     localCodes.CDT ??
     localCodes.NHS ??
@@ -220,7 +247,7 @@ export async function resolveProcedure(
     null
 
   // ── Resolve tax ─────────────────────────────────────────────
-  const packTax = (countryPack?.taxRules ?? {}) as any
+  const packTax = (countryPack?.taxRules ?? {}) as TaxRules
   const taxApplicable = packTax.vatApplicable === true
   const taxRate =
     packTax.vatRate ??
@@ -277,8 +304,8 @@ export async function resolveProcedure(
     nhsBand,
     nhsChargePence,
 
-    workflowConfig:    tenantProc.workflowConfig ?? null,
-    workflowAdditions: countryPack?.workflowAdditions ?? {},
+    workflowConfig:    (tenantProc.workflowConfig as WorkflowJson) ?? null,
+    workflowAdditions: (countryPack?.workflowAdditions ?? {}) as Record<string, unknown>,
 
     isActive:          tenantProc.isActive,
     isOnlineBookable:  tenantProc.isOnlineBookable,
@@ -306,8 +333,8 @@ export async function resolveTenantProcedures(
     branchId?:    string
   }
 ): Promise<ResolvedProcedure[]> {
-  const where: any = { tenantId }
-  if (options?.category)            where.category = options.category
+  const where: Prisma.ProcedureCatalogWhereInput = { tenantId }
+  if (options?.category) where.category = options.category
   if (options?.activeOnly !== false) where.isActive = true
 
   const procs = await db.procedureCatalog.findMany({
@@ -347,15 +374,15 @@ export async function runPreClinicalChecks(
   const patient = await db.patient.findFirst({
     where: { id: patientId, tenantId },
     select: {
-      allergies:     true,
-      dateOfBirth:   true,
-      gender:        true,
-    } as any,
+      allergies: true,
+      dateOfBirth: true,
+      gender: true,
+    },
   })
 
   // Build patient condition list from what we know
   const patientConditions: string[] = []
-  const allergies = ((patient as any)?.allergies as string[]) ?? []
+  const allergies = patient?.allergies ?? []
 
   // Allergy-based conditions
   if (allergies.some(a =>
@@ -398,7 +425,12 @@ export async function runPreClinicalChecks(
   for (const ci of resolved.contraindications) {
     if (patientConditions.includes(ci.condition)) {
       checks.push({
-        type:        ci.severity === "WARNING" ? "WARN" : ci.severity as any,
+        type:
+          ci.severity === "WARNING"
+            ? "WARN"
+            : ci.severity === "BLOCK"
+              ? "BLOCK"
+              : "INFO",
         code:        `CI_${ci.condition.toUpperCase()}`,
         message:     ci.message,
         canOverride: ci.severity !== "BLOCK",

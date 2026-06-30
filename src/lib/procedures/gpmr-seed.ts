@@ -1539,7 +1539,7 @@ export const GPMR_PROCEDURES = [
 // Only codes, compliance rules, and tax applicability
 // ============================================================
 
-export const COUNTRY_PACKS: Record
+export const COUNTRY_PACKS: Record<
   string,
   Array<{
     gpmrCode: string

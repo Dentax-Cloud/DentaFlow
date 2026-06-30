@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { StaffMember } from "@prisma/client";
 import { UserRole } from "@prisma/client";
 import { toast } from "sonner";
-import { Users } from "lucide-react";
+import { Calendar, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,14 @@ function initials(firstName?: string | null, lastName?: string | null, email?: s
   const b = lastName?.charAt(0) ?? "";
   if (a || b) return `${a}${b}`.toUpperCase();
   return email?.charAt(0).toUpperCase() ?? "?";
+}
+
+function isClinicalStaffRole(role: UserRole): boolean {
+  return (
+    role === UserRole.DOCTOR ||
+    role === UserRole.DENTIST ||
+    role === UserRole.HYGIENIST
+  );
 }
 
 export function TeamManagementSection({
@@ -205,19 +214,31 @@ export function TeamManagementSection({
                     </TableCell>
                     {canManage && (
                       <TableCell className="text-right">
-                        {canEditRow ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            disabled={busyUserId === user.id}
-                            onClick={() => setRemoveTarget(user)}
-                          >
-                            Remove
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {isClinicalStaffRole(user.role) && (
+                            <Button variant="outline" size="sm" asChild>
+                              <Link href={`/admin/staff/${user.id}/schedule`}>
+                                <Calendar className="mr-1 h-3.5 w-3.5" />
+                                Schedule
+                              </Link>
+                            </Button>
+                          )}
+                          {canEditRow ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              disabled={busyUserId === user.id}
+                              onClick={() => setRemoveTarget(user)}
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            !isClinicalStaffRole(user.role) && (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )
+                          )}
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>

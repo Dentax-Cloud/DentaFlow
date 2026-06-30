@@ -22,7 +22,7 @@ import {
   updateAppointmentTime,
 } from "@/app/(dashboard)/features/appointments/actions";
 import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pusher-client";
-import { Radio, WifiOff, AlertCircle } from "lucide-react";
+import { Radio, WifiOff, AlertCircle, CalendarPlus } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
@@ -317,6 +317,12 @@ export function AppointmentsClient({
                   {emergencyImmediate} urgent
                 </Badge>
               )}
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/appointments/book">
+              <CalendarPlus className="mr-2 h-4 w-4" />
+              Book
             </Link>
           </Button>
           <BookAppointmentDialog

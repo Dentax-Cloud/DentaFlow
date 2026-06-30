@@ -288,6 +288,16 @@ export function getRolePermissions(role: UserRole): PermissionKey[] {
   return all.filter((permission) => hasPermission(role, permission));
 }
 
+const CLINICAL_ROLES: UserRole[] = [
+  UserRole.DOCTOR,
+  UserRole.DENTIST,
+  UserRole.HYGIENIST,
+];
+
+export function isClinicalRole(role: UserRole | string): boolean {
+  return CLINICAL_ROLES.includes(role as UserRole);
+}
+
 export function getRoleLabel(role: UserRole): string {
   switch (normalizeDashboardRole(role)) {
     case "ADMIN":

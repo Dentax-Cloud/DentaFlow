@@ -64,12 +64,14 @@ export async function POST() {
           : `GPMR seeded with ${result.errors.length} error(s). ` +
             `Check errors array for details.`,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[GPMR Seed] Fatal error:", err)
+    const message =
+      err instanceof Error ? err.message : "Unexpected error during GPMR seed"
     return NextResponse.json(
       {
         success: false,
-        error:   err.message ?? "Unexpected error during GPMR seed",
+        error:   message,
       },
       { status: 500 }
     )
@@ -98,9 +100,10 @@ export async function GET() {
       missingPacks:    verification.missingPacks,
       isSeeded:        verification.totalProcedures > 0,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
     return NextResponse.json(
-      { error: err.message },
+      { error: message },
       { status: 500 }
     )
   }

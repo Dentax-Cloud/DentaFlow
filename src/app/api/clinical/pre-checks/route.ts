@@ -70,10 +70,11 @@ export async function GET(request: Request) {
         ? blocks.map(b => b.message).join(" | ")
         : null,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Pre-Checks] Error:", err)
+    const message = err instanceof Error ? err.message : "Unexpected error"
     return NextResponse.json(
-      { error: err.message ?? "Unexpected error" },
+      { error: message },
       { status: 500 }
     )
   }

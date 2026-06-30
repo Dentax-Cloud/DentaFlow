@@ -10,6 +10,20 @@ import { requireTenantContext } from "@/lib/tenant/context"
 import { db }                   from "@/lib/db"
 import { revalidatePath }       from "next/cache"
 import { randomUUID }           from "crypto"
+import type { Prisma } from "@prisma/client"
+import type {
+  ContraindicationRule,
+  PrerequisiteRule,
+} from "@/lib/procedures/procedure-resolver"
+
+type PackComplianceRules = {
+  consentRequired?: boolean
+  xrayRequired?: boolean
+}
+
+type PackInsuranceCodes = {
+  requiresPreAuth?: boolean
+}
 
 // ── Import procedures from GPMR into tenant catalog ──────────
 // Prices imported as NULL — tenant admin must set all prices
@@ -81,9 +95,9 @@ export async function importFromGPMR(
 
       // Resolve compliance from country pack
       const packCompliance =
-        (pack?.complianceRules ?? {}) as Record<string, any>
+        (pack?.complianceRules ?? {}) as PackComplianceRules
       const packInsurance  =
-        (pack?.insuranceCodes  ?? {}) as Record<string, any>
+        (pack?.insuranceCodes  ?? {}) as PackInsuranceCodes
 
       // CRITICAL: All prices are null
       // Tenant admin must set prices before procedures can be invoiced
@@ -112,9 +126,10 @@ export async function importFromGPMR(
       })
 
       imported++
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
       errors.push(
-        `Failed to import ${gpmr.gpmrCode}: ${err.message}`
+        `Failed to import ${gpmr.gpmrCode}: ${message}`
       )
     }
   }
@@ -164,7 +179,9 @@ export async function setProcedurePrice(
     throw new Error("Cost price cannot be negative")
   }
 
-  const updateData: any = { updatedAt: new Date() }
+  const updateData: Prisma.ProcedureCatalogUpdateInput = {
+    updatedAt: new Date(),
+  }
 
   if (prices.sellingPrice !== undefined) {
     updateData.sellingPrice = prices.sellingPrice
@@ -235,9 +252,10 @@ export async function bulkSetPrices(
       })
 
       updated++
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
       errors.push(
-        `Failed to update ${item.procedureId}: ${err.message}`
+        `Failed to update ${item.procedureId}: ${message}`
       )
     }
   }
@@ -257,7 +275,7 @@ export async function getTenantProcedures(options?: {
 }) {
   const ctx = await requireTenantContext()
 
-  const where: any = { tenantId: ctx.tenantId }
+  const where: Prisma.ProcedureCatalogWhereInput = { tenantId: ctx.tenantId }
 
   if (options?.activeOnly !== false) {
     where.isActive = true
@@ -354,9 +372,9 @@ export async function getTenantProcedures(options?: {
       modules:
         (p.globalProcedure?.modules as string[]) ?? [],
       contraindications:
-        (p.globalProcedure?.contraindications as any[]) ?? [],
+        (p.globalProcedure?.contraindications as ContraindicationRule[]) ?? [],
       prerequisites:
-        (p.globalProcedure?.prerequisites as any[]) ?? [],
+        (p.globalProcedure?.prerequisites as PrerequisiteRule[]) ?? [],
     }
   })
 }
@@ -389,7 +407,7 @@ export async function getAvailableGPMRProcedures(options?: {
     .map(p => p.gpmrId)
     .filter(Boolean) as string[]
 
-  const where: any = {
+  const where: Prisma.GlobalProcedureWhereInput = {
     isActive: true,
     id:       { notIn: importedIds },
   }
@@ -533,7 +551,7 @@ export async function updateProcedure(
     requiresXray?:   boolean
     requiresPreAuth?:boolean
     sortOrder?:      number
-    workflowConfig?: any
+    workflowConfig?: Prisma.InputJsonValue
   }
 ): Promise<void> {
   const ctx = await requireTenantContext()

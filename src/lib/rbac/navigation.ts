@@ -70,6 +70,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/appointments/book",
+    label: "Book Appointment",
+    icon: CalendarPlus,
+    resource: "appointments",
+    action: "write",
+  },
+  {
     href: "/appointments/booking-requests",
     label: "Booking Requests",
     icon: CalendarPlus,

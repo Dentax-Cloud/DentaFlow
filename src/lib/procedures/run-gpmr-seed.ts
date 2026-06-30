@@ -8,6 +8,28 @@
 import { db } from "@/lib/db"
 import { GPMR_PROCEDURES, COUNTRY_PACKS } from "./gpmr-seed"
 import { randomUUID } from "crypto"
+import type { Prisma } from "@prisma/client"
+
+type GpmrSeedProcedure = (typeof GPMR_PROCEDURES)[number] & {
+  subCategory?: string | null
+  clinicalDescription?: string | null
+  archRequired?: boolean
+  quadrantRequired?: boolean
+  requiredInputs?: Prisma.InputJsonValue
+  optionalInputs?: Prisma.InputJsonValue
+  prerequisites?: Prisma.InputJsonValue
+  contraindications?: Prisma.InputJsonValue
+  postProcedureActions?: Prisma.InputJsonValue
+  requiredAttachments?: Prisma.InputJsonValue
+  optionalAttachments?: Prisma.InputJsonValue
+  globalCodes?: Prisma.InputJsonValue
+  modules?: Prisma.InputJsonValue
+  aiSuggestTriggers?: Prisma.InputJsonValue
+}
+
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue
+}
 
 export type SeedResult = {
   procedures: { created: number; updated: number }
@@ -27,33 +49,34 @@ export async function seedGPMR(): Promise<SeedResult> {
   // ── Step 1: Seed GlobalProcedure records ─────────────────────
   for (const proc of GPMR_PROCEDURES) {
     try {
+      const seedProc = proc as GpmrSeedProcedure
       const existing = await db.globalProcedure.findUnique({
         where: { gpmrCode: proc.gpmrCode },
       })
 
       const data = {
         canonicalName:        proc.canonicalName,
-        names:                proc.names as any,
+        names:                toJson(proc.names),
         category:             proc.category,
-        subCategory:          (proc as any).subCategory ?? null,
-        clinicalDescription:  (proc as any).clinicalDescription ?? null,
+        subCategory:          seedProc.subCategory ?? null,
+        clinicalDescription:  seedProc.clinicalDescription ?? null,
         defaultDurationMins:  proc.defaultDurationMins,
         toothRequired:        proc.toothRequired,
         surfaceRequired:      proc.surfaceRequired,
-        archRequired:         (proc as any).archRequired ?? false,
-        quadrantRequired:     (proc as any).quadrantRequired ?? false,
-        requiredInputs:       (proc.requiredInputs as any) ?? [],
-        optionalInputs:       (proc.optionalInputs as any) ?? [],
-        prerequisites:        (proc.prerequisites as any) ?? [],
-        contraindications:    (proc.contraindications as any) ?? [],
-        postProcedureActions: (proc.postProcedureActions as any) ?? [],
-        requiredAttachments:  (proc.requiredAttachments as any) ?? [],
-        optionalAttachments:  (proc.optionalAttachments as any) ?? [],
-        globalCodes:          (proc.globalCodes as any) ?? {},
-        modules:              (proc.modules as any) ?? [],
+        archRequired:         seedProc.archRequired ?? false,
+        quadrantRequired:     seedProc.quadrantRequired ?? false,
+        requiredInputs:       toJson(seedProc.requiredInputs ?? []),
+        optionalInputs:       toJson(seedProc.optionalInputs ?? []),
+        prerequisites:        toJson(seedProc.prerequisites ?? []),
+        contraindications:    toJson(seedProc.contraindications ?? []),
+        postProcedureActions: toJson(seedProc.postProcedureActions ?? []),
+        requiredAttachments:  toJson(seedProc.requiredAttachments ?? []),
+        optionalAttachments:  toJson(seedProc.optionalAttachments ?? []),
+        globalCodes:          toJson(seedProc.globalCodes ?? {}),
+        modules:              toJson(seedProc.modules ?? []),
         isBillable:           proc.isBillable,
         canBundle:            proc.canBundle,
-        aiSuggestTriggers:    (proc.aiSuggestTriggers as any) ?? [],
+        aiSuggestTriggers:    toJson(seedProc.aiSuggestTriggers ?? []),
         isActive:             true,
         version:              "1.0.0",
       }
@@ -76,8 +99,9 @@ export async function seedGPMR(): Promise<SeedResult> {
         result.procedures.created++
         console.log(`[GPMR Seed] Created: ${proc.gpmrCode}`)
       }
-    } catch (err: any) {
-      const msg = `Failed to seed ${proc.gpmrCode}: ${err.message}`
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      const msg = `Failed to seed ${proc.gpmrCode}: ${message}`
       console.error(`[GPMR Seed] ERROR: ${msg}`)
       result.errors.push(msg)
     }
@@ -111,12 +135,12 @@ export async function seedGPMR(): Promise<SeedResult> {
           packVersion:       "1.0.0",
           localName:         pack.localName ?? null,
           localNameAr:       pack.localNameAr ?? null,
-          localNames:        {} as any,
-          localCodes:        pack.localCodes as any,
-          taxRules:          pack.taxRules as any,
-          insuranceCodes:    pack.insuranceCodes as any,
-          complianceRules:   pack.complianceRules as any,
-          workflowAdditions: pack.workflowAdditions ?? {},
+          localNames:        toJson({}),
+          localCodes:        toJson(pack.localCodes),
+          taxRules:          toJson(pack.taxRules),
+          insuranceCodes:    toJson(pack.insuranceCodes),
+          complianceRules:   toJson(pack.complianceRules),
+          workflowAdditions: toJson(pack.workflowAdditions ?? {}),
           isActive:          true,
           effectiveFrom:     new Date(),
         }
@@ -152,10 +176,11 @@ export async function seedGPMR(): Promise<SeedResult> {
           })
           result.countryPacks.created++
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
         const msg =
           `Failed to seed pack ${countryCode}/${pack.gpmrCode}: ` +
-          `${err.message}`
+          `${message}`
         console.error(`[GPMR Seed] ERROR: ${msg}`)
         result.errors.push(msg)
       }

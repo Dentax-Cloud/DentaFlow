@@ -14,7 +14,7 @@ import {
   getBundles,
   getProcedureCategories,
   getUnpricedProcedureCount,
-}                                     from "@/app/(dashboard)/features/admin/procedure-actions"
+}                                     from "@/app/(dashboard)/admin/procedure-actions"
 import ProcedureCatalogClient         from "./procedure-catalog-client"
 
 export default async function ProcedureCatalogPage() {

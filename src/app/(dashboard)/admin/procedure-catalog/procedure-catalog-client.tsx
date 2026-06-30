@@ -26,7 +26,7 @@ import {
   deleteCustomProcedure,
   createBundle,
   updateBundle,
-} from "@/app/(dashboard)/features/admin/procedure-actions"
+} from "@/app/(dashboard)/admin/procedure-actions"
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -156,9 +156,7 @@ function EditPricingPanel({
     useState(procedure.requiresPreAuth)
   const [isOnlineBookable, setIsOnlineBookable] =
     useState(procedure.isOnlineBookable)
-  const [branchPrices, setBranchPrices] = useState
-    Record<string, string>
-  >({})
+  const [branchPrices, setBranchPrices] = useState<Record<string, string>>({})
 
   async function handleSave() {
     startTransition(async () => {
@@ -186,8 +184,9 @@ function EditPricingPanel({
         toast.success("Procedure updated")
         onSave()
         onClose()
-      } catch (err: any) {
-        toast.error(err.message ?? "Failed to save")
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to save"
+        toast.error(message)
       }
     })
   }
@@ -541,8 +540,9 @@ export default function ProcedureCatalogClient({
         setSelectedGPMR(new Set())
         setUnpricedCount(prev => prev + result.imported)
         router.refresh()
-      } catch (err: any) {
-        toast.error(err.message ?? "Import failed")
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Import failed"
+        toast.error(message)
       }
     })
   }
@@ -575,8 +575,9 @@ export default function ProcedureCatalogClient({
           sellingPrice: "", costPrice: "",
         })
         router.refresh()
-      } catch (err: any) {
-        toast.error(err.message ?? "Failed to create")
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to create"
+        toast.error(message)
       }
     })
   }
@@ -625,8 +626,10 @@ export default function ProcedureCatalogClient({
           selectedProcedures: [],
         })
         router.refresh()
-      } catch (err: any) {
-        toast.error(err.message ?? "Failed to create bundle")
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to create bundle"
+        toast.error(message)
       }
     })
   }
@@ -738,7 +741,9 @@ export default function ProcedureCatalogClient({
               <select
                 value={filterPriced}
                 onChange={e =>
-                  setFilterPriced(e.target.value as any)
+                  setFilterPriced(
+                    e.target.value as "ALL" | "PRICED" | "UNPRICED",
+                  )
                 }
                 className="rounded-lg border px-3 py-2 text-sm bg-white"
               >

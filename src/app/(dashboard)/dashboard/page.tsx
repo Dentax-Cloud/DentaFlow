@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { getTenantContext } from "@/lib/tenant/context";
 import { getServerAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { isClinicalRole } from "@/lib/rbac/permissions";
 import {
   getDashboardKPIs,
   getRoleDashboardExtras,
@@ -21,6 +24,11 @@ export default async function DashboardPage() {
   if (!ctx) redirect("/select-org");
 
   const userRole = ctx.staffMember?.role ?? "RECEPTIONIST";
+
+  if (isClinicalRole(userRole)) {
+    redirect("/dashboard/doctor");
+  }
+
   const staffMemberId = ctx.staffMember?.id ?? null;
 
   const [kpis, extras, checklist] = await Promise.all([
@@ -35,7 +43,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {checklist.showChecklist && <OnboardingChecklist items={checklist.items} compact />}
+      {checklist.showChecklist && (
+        <OnboardingChecklist items={checklist.items} compact />
+      )}
       <DashboardClient
         kpis={serializeDecimal(kpis)}
         extras={extras}

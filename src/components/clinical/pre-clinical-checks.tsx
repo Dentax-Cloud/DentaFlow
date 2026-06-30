@@ -197,8 +197,10 @@ export function PreClinicalChecks({
       if (!data.checks || data.checks.length === 0) {
         onChecksComplete(true)
       }
-    } catch (err: any) {
-      setError(err.message ?? "Failed to load pre-clinical checks")
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to load pre-clinical checks";
+      setError(message);
     } finally {
       setLoading(false)
     }

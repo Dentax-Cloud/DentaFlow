@@ -65,17 +65,14 @@ export async function createComplianceRecord(
   const performer = await db.staffMember.findUnique({
     where: { id: input.performedById },
     select: {
-      id:        true,
+      id: true,
       firstName: true,
-      lastName:  true,
-    } as any,
-  }).catch(() => null)
+      lastName: true,
+      doctor: { select: { licenseNo: true } },
+    },
+  }).catch(() => null);
 
-  // Get license number if available
-  const licenseNumber =
-    (performer as any)?.licenseNumber ??
-    (performer as any)?.dhaPractitionerNumber ??
-    null
+  const licenseNumber = performer?.doctor?.licenseNo ?? null;
 
   // Get tenant settings
   const tenant = await db.tenant.findUnique({
