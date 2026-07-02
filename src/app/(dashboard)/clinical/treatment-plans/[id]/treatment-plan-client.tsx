@@ -161,7 +161,9 @@ export function TreatmentPlanClient({
       try {
         const result = await createPlanShareLink(plan.id);
         setShareUrl(result.shareUrl);
-        await navigator.clipboard.writeText(result.shareUrl).catch(() => null);
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(result.shareUrl).catch(() => null);
+        }
         toast.success("Share link copied");
       } catch {
         toast.error("Could not create share link");

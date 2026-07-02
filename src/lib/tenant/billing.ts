@@ -25,7 +25,6 @@ export async function ensureStripeCustomer(tenant: Tenant): Promise<Tenant> {
       metadata: {
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
-        ...(tenant.clerkOrgId ? { clerkOrgId: tenant.clerkOrgId } : {}),
       },
     });
 

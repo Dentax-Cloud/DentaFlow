@@ -25,10 +25,6 @@ export type TenantContext = {
   taxName: string;
   /** @deprecated Use staffMember */
   user: StaffMember | null;
-  /** @deprecated Use authUserId */
-  clerkUserId: string;
-  /** @deprecated Use tenantId */
-  orgId: string;
 };
 
 function buildTenantContext(params: {
@@ -53,8 +49,6 @@ function buildTenantContext(params: {
     taxRate: Number(tenant.taxRate ?? countryProfile.taxRate),
     taxName: tenant.taxName ?? countryProfile.taxName,
     user: staffMember,
-    clerkUserId: authUserId,
-    orgId: tenant.id,
   };
 }
 

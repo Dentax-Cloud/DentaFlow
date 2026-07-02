@@ -42,68 +42,6 @@ export async function createTenantMembership(input: {
   });
 }
 
-/** Upsert staff row for a tenant (C5 — replaces db.user staff writes). */
-export async function upsertStaffMember(input: {
-  tenantId: string;
-  clerkUserId: string;
-  authUserId?: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  avatarUrl?: string;
-  role: UserRole;
-}) {
-  return db.staffMember.upsert({
-    where: {
-      tenantId_clerkUserId: { tenantId: input.tenantId, clerkUserId: input.clerkUserId },
-    },
-    create: {
-      tenantId: input.tenantId,
-      clerkUserId: input.clerkUserId,
-      authUserId: input.authUserId,
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      avatarUrl: input.avatarUrl,
-      role: input.role,
-      isActive: true,
-    },
-    update: {
-      authUserId: input.authUserId ?? undefined,
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      avatarUrl: input.avatarUrl,
-      role: input.role,
-    },
-  });
-}
-
-async function linkAuthUserToTenant(params: {
-  tenantId: string;
-  email: string;
-  staffMemberId: string;
-  membershipRole?: string;
-}) {
-  const authUser = await db.auth_users.findUnique({
-    where: { email: params.email.toLowerCase().trim() },
-  });
-  if (!authUser) return null;
-
-  await createTenantMembership({
-    tenantId: params.tenantId,
-    authUserId: authUser.id,
-    role: params.membershipRole ?? "ADMIN",
-  });
-
-  await db.staffMember.update({
-    where: { id: params.staffMemberId },
-    data: { authUserId: authUser.id },
-  });
-
-  return authUser;
-}
-
 /**
  * NextAuth-native provisioning: tenant + membership + staff + default branch.
  */
@@ -195,70 +133,6 @@ export async function provisionTenant(input: {
   const tenantWithBilling = await ensureStripeCustomer(tenant);
 
   return { tenant: tenantWithBilling, membership, staffMember, branch };
-}
-
-/** Webhook / legacy provisioning without full auth session */
-export async function provisionTenantFromWebhook(params: {
-  clerkOrgId: string;
-  orgName?: string;
-  clerkUserId?: string;
-  authUserId?: string;
-  ownerEmail?: string;
-  ownerFirstName?: string;
-  ownerLastName?: string;
-}) {
-  const orgName = params.orgName ?? "New Clinic";
-  const now = new Date();
-  const trialDefaults = getDefaultTrialSubscriptionFields(now);
-
-  const tenant = await syncTrialExpiry(
-    await db.tenant.upsert({
-      where: { clerkOrgId: params.clerkOrgId },
-      create: {
-        clerkOrgId: params.clerkOrgId,
-        name: orgName,
-        slug: slugify(orgName, params.clerkOrgId),
-        status: TenantStatus.ACTIVE,
-        locale: tenantConfig.defaultLocale,
-        timezone: tenantConfig.defaultTimezone,
-        onboardingCompleted: false,
-        featureFlags: {},
-        metadata: {},
-        ...trialDefaults,
-        settings: { create: {} },
-      },
-      update: { name: orgName },
-    }),
-  );
-
-  if (params.clerkUserId) {
-    const staffMember = await upsertStaffMember({
-      tenantId: tenant.id,
-      clerkUserId: params.clerkUserId,
-      authUserId: params.authUserId,
-      email: params.ownerEmail ?? "",
-      firstName: params.ownerFirstName,
-      lastName: params.ownerLastName,
-      role: UserRole.OWNER,
-    });
-
-    if (params.authUserId) {
-      await createTenantMembership({
-        tenantId: tenant.id,
-        authUserId: params.authUserId,
-        role: "OWNER",
-      });
-    } else if (params.ownerEmail) {
-      await linkAuthUserToTenant({
-        tenantId: tenant.id,
-        email: params.ownerEmail,
-        staffMemberId: staffMember.id,
-        membershipRole: "OWNER",
-      });
-    }
-  }
-
-  return tenant;
 }
 
 /**

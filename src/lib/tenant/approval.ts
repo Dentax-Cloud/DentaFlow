@@ -24,7 +24,7 @@ export async function listPendingApprovalRequests() {
 
 export async function approveTenant(
   tenantId: string,
-  reviewerClerkUserId: string,
+  reviewerAuthUserId: string,
   notes?: string,
 ) {
   const tenant = await db.tenant.update({
@@ -44,7 +44,7 @@ export async function approveTenant(
     action: AuditAction.UPDATE,
     entity: "Tenant",
     entityId: tenantId,
-    metadata: { status: "ACTIVE", reviewedBy: reviewerClerkUserId },
+    metadata: { status: "ACTIVE", reviewedBy: reviewerAuthUserId },
   });
 
   return activated;
@@ -52,7 +52,7 @@ export async function approveTenant(
 
 export async function rejectTenant(
   tenantId: string,
-  reviewerClerkUserId: string,
+  reviewerAuthUserId: string,
   notes?: string,
 ) {
   const tenant = await db.tenant.update({
@@ -70,7 +70,7 @@ export async function rejectTenant(
     action: AuditAction.UPDATE,
     entity: "Tenant",
     entityId: tenantId,
-    metadata: { status: "SUSPENDED", reviewedBy: reviewerClerkUserId, rejected: true },
+    metadata: { status: "SUSPENDED", reviewedBy: reviewerAuthUserId, rejected: true },
   });
 
   return tenant;

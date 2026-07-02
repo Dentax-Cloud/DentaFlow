@@ -371,8 +371,11 @@ export function PatientDetailClient({
                       size="icon"
                       className="h-7 w-7"
                       onClick={() => {
-                        void navigator.clipboard.writeText(patient.structuredPatientId!);
-                        toast.success("Patient ID copied");
+                        const id = patient.structuredPatientId;
+                        if (id && navigator.clipboard?.writeText) {
+                          void navigator.clipboard.writeText(id);
+                          toast.success("Patient ID copied");
+                        }
                       }}
                       aria-label="Copy patient ID"
                     >

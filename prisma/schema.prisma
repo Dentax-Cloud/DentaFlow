@@ -9,7 +9,6 @@ datasource db {
 
 model Tenant {
   id                   String                  @id @default(cuid())
-  clerkOrgId           String?                 @unique
   name                 String
   slug                 String                  @unique
   email                String?
@@ -171,7 +170,6 @@ model Branch {
 model StaffMember {
   id              String           @id @default(cuid())
   tenantId        String
-  clerkUserId     String?
   email           String
   firstName       String?
   lastName        String?
@@ -191,9 +189,8 @@ model StaffMember {
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userPermissions UserPermission[]
 
-  @@unique([tenantId, clerkUserId])
   @@index([tenantId])
-  @@index([clerkUserId])
+  @@index([authUserId])
   @@map("User")
 }
 

@@ -63,8 +63,22 @@ export default async function CustomizationPage() {
 
   return (
     <CustomizationClient
-      tenant={tenant}
-      countryProfile={profile}
+      tenant={
+        tenant
+          ? {
+              countryCode: tenant.countryCode,
+              currency: tenant.currency,
+              taxName: tenant.taxName,
+              taxRate: Number(tenant.taxRate ?? 0),
+              regulatoryBody: tenant.regulatoryBody,
+              name: tenant.name,
+            }
+          : null
+      }
+      countryProfile={{
+        flag: profile.flag,
+        name: profile.name,
+      }}
       customFields={customFields}
       platformProviders={profile.insuranceProviders}
       customProviders={customProviders.map((p) => ({

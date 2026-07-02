@@ -15,7 +15,6 @@ export type TenantListItem = {
   trialEndsAt: Date | null;
   createdAt: Date;
   deletedAt: Date | null;
-  clerkOrgId: string | null;
   activeUsers: number;
   totalPatients: number;
   totalAppointments: number;
@@ -86,7 +85,6 @@ export async function listTenantsWithStats(): Promise<TenantListItem[]> {
       trialEndsAt: true,
       createdAt: true,
       deletedAt: true,
-      clerkOrgId: true,
     },
   });
 

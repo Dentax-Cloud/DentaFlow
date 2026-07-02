@@ -34,7 +34,7 @@ export default async function ProcedureCatalogPage() {
 
   // Fetch branches for branch price overrides
   const branches = await db.branch.findMany({
-    where:   { tenantId: ctx.tenantId, isActive: true },
+    where:   { tenantId: ctx.tenantId, deletedAt: null },
     select:  { id: true, name: true },
     orderBy: { name: "asc" },
   }).catch(() => [])

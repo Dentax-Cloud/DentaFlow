@@ -220,7 +220,7 @@ export const deletePatient = createAction({
 export const linkPatientPortalUser = createAction({
   schema: z.object({
     patientId: z.string(),
-    clerkUserId: z.string().min(5, "Enter a valid Clerk user id"),
+    portalUserId: z.string().min(5, "Enter a valid portal user id"),
   }),
   permission: () => requirePermission(PERMISSIONS.patients.write),
   handler: async (input, ctx) => {
@@ -231,7 +231,7 @@ export const linkPatientPortalUser = createAction({
 
     const updated = await db.patient.update({
       where: { id: input.patientId },
-      data: { portalUserId: input.clerkUserId },
+      data: { portalUserId: input.portalUserId },
     });
 
     await createAuditLog({
@@ -240,7 +240,7 @@ export const linkPatientPortalUser = createAction({
       action: AuditAction.UPDATE,
       entity: "Patient",
       entityId: updated.id,
-      metadata: { portalUserId: input.clerkUserId },
+      metadata: { portalUserId: input.portalUserId },
     });
 
     return updated;

@@ -9,7 +9,6 @@ describe("server actions integration (harness)", () => {
     __setTestTenantContext({
       tenant: {
         id: "tenant_test",
-        clerkOrgId: "org_test",
         name: "Test Clinic",
         slug: "test-clinic",
         email: null,
@@ -32,7 +31,7 @@ describe("server actions integration (harness)", () => {
       user: {
         id: "user_test",
         tenantId: "tenant_test",
-        clerkUserId: "user_test",
+        authUserId: "user_test",
         email: "test@example.com",
         firstName: "Test",
         lastName: "User",
@@ -43,8 +42,20 @@ describe("server actions integration (harness)", () => {
         updatedAt: new Date(),
         deletedAt: null,
       } as Parameters<typeof __setTestTenantContext>[0]["user"],
-      clerkUserId: "user_test",
-      orgId: "org_test",
+      authUserId: "user_test",
+      tenantSlug: "test-clinic",
+      tenantId: "tenant_test",
+      isSuperAdmin: false,
+      trial: {
+        isTrialing: false,
+        daysRemaining: 0,
+        trialEndsAt: null,
+        isExpired: false,
+      },
+      countryProfile: {} as Parameters<typeof __setTestTenantContext>[0]["countryProfile"],
+      currency: "AED",
+      taxRate: 5,
+      taxName: "VAT",
     } as Parameters<typeof __setTestTenantContext>[0]);
   });
 
@@ -56,7 +67,7 @@ describe("server actions integration (harness)", () => {
     const testAction = createAction({
       schema: z.object({ x: z.number() }),
       handler: async (input, ctx) => {
-        return { x: input.x, tenantId: ctx.tenant.id, role: ctx.user.role };
+        return { x: input.x, tenantId: ctx.tenant.id, role: ctx.user?.role ?? UserRole.RECEPTIONIST };
       },
     });
 

@@ -173,7 +173,7 @@ export async function resolveProcedure(
   // ── Resolve duration ────────────────────────────────────────
   // Tenant override > GPMR default > system default
   const durationMins =
-    tenantProc.durationMins ??
+    tenantProc.duration ??
     gpmr?.defaultDurationMins ??
     30
 
@@ -204,9 +204,7 @@ export async function resolveProcedure(
   // CRITICAL: Prices ONLY from tenant — never from GPMR or pack
   const sellingPrice =
     branchPrice ??
-    (tenantProc.sellingPrice != null
-      ? Number(tenantProc.sellingPrice)
-      : null)
+    sellingPriceFromCatalogPrice(tenantProc.price)
 
   const costPrice =
     tenantProc.costPrice != null
@@ -262,7 +260,7 @@ export async function resolveProcedure(
     code:        tenantProc.code,
     name:        resolvedName,
     nameAr:      resolvedNameAr,
-    category:    tenantProc.category,
+    category:    tenantProc.category ?? "UNCATEGORIZED",
     subCategory: gpmr?.subCategory ?? null,
 
     durationMins,
@@ -440,27 +438,14 @@ export async function runPreClinicalChecks(
 
   // ── Check consent requirement ────────────────────────────────
   if (resolved.requiresConsent) {
-    // Check if a signed consent exists for this patient
-    const hasConsent = await db.consentForm
-      .findFirst({
-        where: {
-          tenantId,
-          patientId,
-          status: "SIGNED",
-        },
-      })
-      .catch(() => null)
-
-    if (!hasConsent) {
-      checks.push({
-        type:        "WARN",
-        code:        "CONSENT_REQUIRED",
-        message:
-          "This procedure requires a signed consent form. " +
-          "Please obtain patient consent before proceeding.",
-        canOverride: true,
-      })
-    }
+    checks.push({
+      type:        "WARN",
+      code:        "CONSENT_REQUIRED",
+      message:
+        "This procedure requires a signed consent form. " +
+        "Please obtain patient consent before proceeding.",
+      canOverride: true,
+    })
   }
 
   // ── Check X-ray requirement ──────────────────────────────────
@@ -512,7 +497,14 @@ export async function getUnpricedCount(
     where: {
       tenantId,
       isActive: true,
-      sellingPrice: null,
+      price: 0,
     },
   })
+}
+
+function sellingPriceFromCatalogPrice(
+  price: Prisma.Decimal | number,
+): number | null {
+  const n = Number(price)
+  return n > 0 ? n : null
 }

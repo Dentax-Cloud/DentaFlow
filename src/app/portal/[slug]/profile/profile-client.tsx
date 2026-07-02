@@ -33,7 +33,7 @@ export default function PortalProfileClient({ slug, patient }: ProfileProps) {
   const [message, setMessage] = useState("");
 
   function copyPatientId() {
-    if (patient.patientId) {
+    if (patient.patientId && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(patient.patientId);
       setMessage("Patient ID copied");
     }

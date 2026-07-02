@@ -12,7 +12,7 @@ export const approveTenantAction = createAction({
     void ctx;
   },
   handler: async (input, ctx) => {
-    const tenant = await approveTenant(input.tenantId, ctx.clerkUserId, input.notes);
+    const tenant = await approveTenant(input.tenantId, ctx.authUserId, input.notes);
     return tenant;
   },
 });
@@ -24,7 +24,7 @@ export const rejectTenantAction = createAction({
     void ctx;
   },
   handler: async (input, ctx) => {
-    const tenant = await rejectTenant(input.tenantId, ctx.clerkUserId, input.notes);
+    const tenant = await rejectTenant(input.tenantId, ctx.authUserId, input.notes);
     return tenant;
   },
 });

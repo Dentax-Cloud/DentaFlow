@@ -75,11 +75,14 @@ type Props = {
     countryCode: string | null;
     currency: string;
     taxName: string;
-    taxRate: unknown;
+    taxRate: number;
     regulatoryBody: string | null;
     name: string;
   } | null;
-  countryProfile: CountryProfile;
+  countryProfile: {
+    flag: string;
+    name: string;
+  };
   customFields: Array<{
     id: string;
     fieldKey: string;

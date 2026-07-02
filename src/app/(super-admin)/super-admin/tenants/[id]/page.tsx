@@ -89,8 +89,8 @@ export default async function TenantDetailPage({ params }: Props) {
                 <p className="font-medium">{tenant.createdAt.toLocaleDateString()}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Clerk Org</p>
-                <p className="truncate font-mono text-xs">{tenant.clerkOrgId}</p>
+                <p className="text-xs text-muted-foreground">Tenant ID</p>
+                <p className="truncate font-mono text-xs">{tenant.id}</p>
               </div>
             </div>
           </CardContent>

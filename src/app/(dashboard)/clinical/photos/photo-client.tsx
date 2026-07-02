@@ -75,7 +75,9 @@ export default function PhotoPageClient({
     try {
       const result = await shareCasePresentation(presentationId);
       setShareUrls((prev) => ({ ...prev, [presentationId]: result.shareUrl }));
-      await navigator.clipboard.writeText(result.shareUrl).catch(() => null);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(result.shareUrl).catch(() => null);
+      }
       toast.success("Share link copied");
     } catch {
       toast.error("Failed to share presentation");

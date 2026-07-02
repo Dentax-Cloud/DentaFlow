@@ -25,6 +25,22 @@ type PackInsuranceCodes = {
   requiresPreAuth?: boolean
 }
 
+/** DB `price` uses 0 as the unpriced sentinel; API layer exposes `sellingPrice: null`. */
+const UNPRICED_DB_PRICE = 0
+
+function sellingPriceFromDb(price: Prisma.Decimal | number): number | null {
+  const n = Number(price)
+  return n > UNPRICED_DB_PRICE ? n : null
+}
+
+function dbPriceFromSelling(selling: number | null | undefined): number {
+  return selling != null && selling > UNPRICED_DB_PRICE ? selling : UNPRICED_DB_PRICE
+}
+
+function durationMinsFromDb(duration: number | null | undefined): number {
+  return duration ?? 30
+}
+
 // ── Import procedures from GPMR into tenant catalog ──────────
 // Prices imported as NULL — tenant admin must set all prices
 
@@ -110,12 +126,10 @@ export async function importFromGPMR(
           name:            localName,
           nameAr:          pack?.localNameAr ?? null,
           category:        gpmr.category,
-          durationMins:    gpmr.defaultDurationMins,
-          // ── PRICES: intentionally null ──────────────────────
-          // Tenant admin sets all prices — DentaFlow sets none
-          sellingPrice:    null,
+          duration:        gpmr.defaultDurationMins,
+          // ── PRICES: intentionally unpriced (0 sentinel) ─────
+          price:           UNPRICED_DB_PRICE,
           costPrice:       null,
-          // ────────────────────────────────────────────────────
           isActive:        true,
           isOnlineBookable:false,
           requiresConsent: packCompliance.consentRequired  === true,
@@ -184,7 +198,7 @@ export async function setProcedurePrice(
   }
 
   if (prices.sellingPrice !== undefined) {
-    updateData.sellingPrice = prices.sellingPrice
+    updateData.price = dbPriceFromSelling(prices.sellingPrice)
   }
   if (prices.costPrice !== undefined) {
     updateData.costPrice = prices.costPrice
@@ -245,9 +259,9 @@ export async function bulkSetPrices(
           tenantId: ctx.tenantId,
         },
         data: {
-          sellingPrice: item.sellingPrice,
-          costPrice:    item.costPrice,
-          updatedAt:    new Date(),
+          price:     dbPriceFromSelling(item.sellingPrice),
+          costPrice: item.costPrice,
+          updatedAt: new Date(),
         },
       })
 
@@ -284,10 +298,10 @@ export async function getTenantProcedures(options?: {
     where.category = options.category
   }
   if (options?.pricedOnly) {
-    where.sellingPrice = { not: null }
+    where.price = { gt: UNPRICED_DB_PRICE }
   }
   if (options?.unpricedOnly) {
-    where.sellingPrice = null
+    where.price = UNPRICED_DB_PRICE
   }
   if (options?.search) {
     where.OR = [
@@ -321,8 +335,7 @@ export async function getTenantProcedures(options?: {
   })
 
   return procs.map(p => {
-    const sellingPrice =
-      p.sellingPrice != null ? Number(p.sellingPrice) : null
+    const sellingPrice = sellingPriceFromDb(p.price)
     const costPrice =
       p.costPrice != null ? Number(p.costPrice) : null
 
@@ -343,8 +356,8 @@ export async function getTenantProcedures(options?: {
       code:            p.code,
       name:            p.name,
       nameAr:          p.nameAr,
-      category:        p.category,
-      durationMins:    p.durationMins,
+      category:        p.category ?? "UNCATEGORIZED",
+      durationMins:    durationMinsFromDb(p.duration),
       isActive:        p.isActive,
       isOnlineBookable:p.isOnlineBookable,
       requiresConsent: p.requiresConsent,
@@ -521,9 +534,9 @@ export async function createCustomProcedure(input: {
       name:            input.name.trim(),
       nameAr:          input.nameAr?.trim() ?? null,
       category:        input.category,
-      durationMins:    input.durationMins,
-      sellingPrice:    input.sellingPrice  ?? null,
-      costPrice:       input.costPrice     ?? null,
+      duration:        input.durationMins,
+      price:           dbPriceFromSelling(input.sellingPrice),
+      costPrice:       input.costPrice ?? null,
       isActive:        true,
       isOnlineBookable:input.isOnlineBookable ?? false,
       requiresConsent: input.requiresConsent  ?? false,
@@ -556,9 +569,14 @@ export async function updateProcedure(
 ): Promise<void> {
   const ctx = await requireTenantContext()
 
+  const { durationMins, ...rest } = input
   await db.procedureCatalog.updateMany({
     where: { id: procedureId, tenantId: ctx.tenantId },
-    data:  { ...input, updatedAt: new Date() },
+    data: {
+      ...rest,
+      ...(durationMins !== undefined ? { duration: durationMins } : {}),
+      updatedAt: new Date(),
+    },
   })
 
   revalidatePath("/admin/procedure-catalog")
@@ -718,7 +736,9 @@ export async function getProcedureCategories(): Promise<string[]> {
     orderBy:  { category: "asc" },
   })
 
-  return result.map(r => r.category)
+  return result
+    .map(r => r.category)
+    .filter((c): c is string => c != null)
 }
 
 // ── Get unpriced count for sidebar badge ─────────────────────
@@ -730,7 +750,7 @@ export async function getUnpricedProcedureCount(): Promise<number> {
     where: {
       tenantId:     ctx.tenantId,
       isActive:     true,
-      sellingPrice: null,
+      price:        UNPRICED_DB_PRICE,
     },
   })
 }
