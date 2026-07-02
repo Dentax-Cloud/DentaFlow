@@ -127,6 +127,7 @@ type EditProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   uploadsEnabled: boolean;
+  showUploadConfigHint?: boolean;
   onSaved?: () => void;
 };
 
@@ -135,6 +136,7 @@ export function StaffMemberEditDialog({
   open,
   onOpenChange,
   uploadsEnabled,
+  showUploadConfigHint = false,
   onSaved,
 }: EditProps) {
   const [firstName, setFirstName] = useState(user.firstName ?? "");
@@ -201,6 +203,7 @@ export function StaffMemberEditDialog({
             lastName={lastName}
             email={user.email}
             uploadsEnabled={uploadsEnabled}
+            showAdminConfigHint={showUploadConfigHint}
             onPhotoUpdated={setAvatarUrl}
           />
 

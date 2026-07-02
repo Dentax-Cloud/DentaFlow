@@ -25,6 +25,10 @@ export default async function PatientDetailPage({
   const ctx = await requireRouteAccess("patients", "read");
   const role = ctx.staffMember?.role ?? UserRole.OWNER;
   const canWrite = hasPermission(role, PERMISSIONS.patients.write);
+  const showUploadConfigHint =
+    role === UserRole.OWNER ||
+    role === UserRole.ADMIN ||
+    hasPermission(role, PERMISSIONS.admin.write);
 
   const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields] =
     await Promise.all([
@@ -99,6 +103,7 @@ export default async function PatientDetailPage({
       tenantSlug={ctx.tenant.slug}
       clinicPhone={ctx.tenant.phone}
       uploadsEnabled={isUploadthingConfigured()}
+      showUploadConfigHint={showUploadConfigHint}
       latestPerio={
         latestPerio
           ? {

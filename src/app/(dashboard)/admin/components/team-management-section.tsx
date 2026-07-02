@@ -58,6 +58,7 @@ type TeamManagementSectionProps = {
   currentUserId: string;
   canManage: boolean;
   uploadsEnabled: boolean;
+  showUploadConfigHint?: boolean;
 };
 
 function roleBadgeVariant(role: UserRole): "default" | "secondary" | "outline" {
@@ -94,6 +95,7 @@ export function TeamManagementSection({
   currentUserId,
   canManage,
   uploadsEnabled,
+  showUploadConfigHint = false,
 }: TeamManagementSectionProps) {
   const router = useRouter();
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
@@ -318,6 +320,7 @@ export function TeamManagementSection({
           open={!!editTarget}
           onOpenChange={(open) => !open && setEditTarget(null)}
           uploadsEnabled={uploadsEnabled}
+          showUploadConfigHint={showUploadConfigHint}
           onSaved={() => {
             setEditTarget(null);
             router.refresh();

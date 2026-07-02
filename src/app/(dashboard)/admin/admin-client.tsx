@@ -69,6 +69,8 @@ export function AdminClient({
 
   uploadsEnabled,
 
+  showUploadConfigHint,
+
 }: {
 
   users: StaffMember[];
@@ -94,6 +96,8 @@ export function AdminClient({
   tenantId: string;
 
   uploadsEnabled: boolean;
+
+  showUploadConfigHint: boolean;
 
 }) {
 
@@ -192,6 +196,8 @@ export function AdminClient({
         canManage={canManageTeam}
 
         uploadsEnabled={uploadsEnabled}
+
+        showUploadConfigHint={showUploadConfigHint}
 
       />
 

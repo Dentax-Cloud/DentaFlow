@@ -11,8 +11,11 @@ import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 
 export default async function AdminPage() {
   const ctx = await requireRouteAccess("admin", "read");
-
   const role = ctx.staffMember?.role ?? ctx.user?.role ?? UserRole.OWNER;
+  const showUploadConfigHint =
+    role === UserRole.OWNER ||
+    role === UserRole.ADMIN ||
+    hasPermission(role, PERMISSIONS.admin.write);
   const userId = ctx.staffMember?.id ?? ctx.user?.id ?? "";
   const canManageTeam = hasPermission(role, PERMISSIONS.admin.users);
 
@@ -51,6 +54,7 @@ export default async function AdminPage() {
       recallSettings={recallSettings}
       tenantId={ctx.tenant.id}
       uploadsEnabled={isUploadthingConfigured()}
+      showUploadConfigHint={showUploadConfigHint}
     />
   );
 }

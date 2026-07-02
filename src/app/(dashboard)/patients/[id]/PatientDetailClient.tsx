@@ -148,6 +148,7 @@ export interface PatientDetailClientProps {
   tenantSlug?: string;
   clinicPhone?: string | null;
   uploadsEnabled: boolean;
+  showUploadConfigHint?: boolean;
   latestPerio?: {
     id: string;
     chartDate: string;
@@ -280,6 +281,7 @@ export function PatientDetailClient({
   tenantSlug,
   clinicPhone,
   uploadsEnabled,
+  showUploadConfigHint = false,
   latestPerio = null,
   clinicalImages,
   patientPhotos,
@@ -597,6 +599,7 @@ export function PatientDetailClient({
                   lastName={patient.lastName}
                   email={patient.email}
                   uploadsEnabled={uploadsEnabled}
+                  showUploadConfigHint={showUploadConfigHint}
                   onCancel={() => setEditingProfile(false)}
                   onSaved={() => setEditingProfile(false)}
                 />
@@ -1231,6 +1234,7 @@ export function PatientDetailClient({
                 <PatientAttachmentUploader
                   patientId={patient.id}
                   uploadsEnabled={uploadsEnabled}
+                  showAdminConfigHint={showUploadConfigHint}
                 />
               </CardContent>
             </Card>

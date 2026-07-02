@@ -20,6 +20,7 @@ type Props = {
   lastName: string;
   email?: string | null;
   uploadsEnabled: boolean;
+  showUploadConfigHint?: boolean;
   onCancel: () => void;
   onSaved?: () => void;
 };
@@ -34,6 +35,7 @@ export function PatientProfileEditor({
   lastName,
   email,
   uploadsEnabled,
+  showUploadConfigHint = false,
   onCancel,
   onSaved,
 }: Props) {
@@ -72,6 +74,7 @@ export function PatientProfileEditor({
           lastName={lastName}
           email={email ?? undefined}
           uploadsEnabled={uploadsEnabled}
+          showAdminConfigHint={showUploadConfigHint}
           onPhotoUpdated={setCurrentPhotoUrl}
         />
 
