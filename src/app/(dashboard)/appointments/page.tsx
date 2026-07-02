@@ -1,5 +1,6 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getPatients } from "@/app/(dashboard)/features/patients/actions";
+import { getPrimaryInsuranceStatusMap } from "@/app/(dashboard)/features/insurance/insurance-policy-actions";
 import { getAppointments, getChairs, getDoctors } from "@/app/(dashboard)/features/appointments/actions";
 import { db } from "@/lib/db";
 import { startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
@@ -15,7 +16,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
   const { patientId, appointmentId } = await searchParams;
   const now = new Date();
 
-  const [appointments, chairs, patients, doctors, emergencyStats] = await Promise.all([
+  const [appointments, chairs, patients, doctors, emergencyStats, insuranceStatusMap] = await Promise.all([
     getAppointments(ctx.tenant.id, {
       start: startOfWeek(now),
       end: endOfWeek(now),
@@ -31,6 +32,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       },
       select: { status: true, triageLevel: true },
     }),
+    getPrimaryInsuranceStatusMap(ctx.tenant.id),
   ]);
 
   const serializedAppointments = appointments.map((appointment) => {
@@ -57,6 +59,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       initialAppointmentId={appointmentId}
       emergencyWaiting={emergencyStats.filter((e) => e.status === "WAITING").length}
       emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}
+      insuranceStatusMap={insuranceStatusMap}
     />
   );
 }

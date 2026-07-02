@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
+import { saveInsuranceCardPhotoFromUpload } from "@/lib/insurance/save-card-photo";
 
 const f = createUploadthing();
 
@@ -177,6 +178,40 @@ export const ourFileRouter = {
       }
 
       return { url, entityType: metadata.entityType, entityId: metadata.entityId };
+    }),
+
+  insuranceCardPhoto: f({
+    image: { maxFileSize: "8MB", maxFileCount: 1 },
+  })
+    .input(
+      z.object({
+        policyId: z.string().min(1),
+        side: z.enum(["front", "back"]),
+      }),
+    )
+    .middleware(async ({ input }) => {
+      const metadata = await requireTenantUpload();
+
+      const policy = await db.patientInsurancePolicy.findFirst({
+        where: tenantWhere(metadata.tenantId, { id: input.policyId, isActive: true }),
+      });
+      if (!policy) throw new Error("Insurance policy not found");
+
+      return {
+        ...metadata,
+        policyId: policy.id,
+        side: input.side,
+      };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      const url = file.ufsUrl ?? file.url;
+      await saveInsuranceCardPhotoFromUpload(
+        metadata.tenantId,
+        metadata.policyId,
+        metadata.side,
+        url,
+      );
+      return { url, policyId: metadata.policyId, side: metadata.side };
     }),
 } satisfies FileRouter;
 

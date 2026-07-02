@@ -22,6 +22,7 @@ import {
   Camera,
   Sparkles,
   Stethoscope,
+  Shield,
   User,
   Copy,
   Printer,
@@ -50,6 +51,9 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
+import { PatientInsuranceTab } from "@/components/insurance/patient-insurance-tab";
+import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
+import type { SerializedInsurancePolicy } from "@/lib/insurance/policy-types";
 
 /** Core demographics from the server (matches product spec). */
 export interface PatientDetailProfile {
@@ -191,6 +195,16 @@ export interface PatientDetailClientProps {
   formFields?: PatientFormField[];
   profileFormValues?: Record<string, string>;
   startInEditMode?: boolean;
+  insurancePolicies?: SerializedInsurancePolicy[];
+  insuranceProviders?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    shortName: string;
+    networkTypes: Array<{ code: string; name: string }>;
+    source: "platform" | "tenant";
+  }>;
+  primaryInsuranceStatus?: SerializedInsurancePolicy["effectiveVerificationStatus"] | null;
 }
 
 type TabId =
@@ -202,6 +216,7 @@ type TabId =
   | "photos"
   | "treatment"
   | "billing"
+  | "insurance"
   | "documents";
 
 const TABS: { id: TabId; label: string; icon: typeof User }[] = [
@@ -213,6 +228,7 @@ const TABS: { id: TabId; label: string; icon: typeof User }[] = [
   { id: "photos", label: "Photos", icon: Camera },
   { id: "treatment", label: "Treatment plans", icon: Heart },
   { id: "billing", label: "Invoice history", icon: Receipt },
+  { id: "insurance", label: "Insurance", icon: Shield },
   { id: "documents", label: "Documents", icon: FileText },
 ];
 
@@ -291,6 +307,9 @@ export function PatientDetailClient({
   formFields = [],
   profileFormValues = {},
   startInEditMode = false,
+  insurancePolicies = [],
+  insuranceProviders = [],
+  primaryInsuranceStatus = null,
 }: PatientDetailClientProps) {
   const [idCardOpen, setIdCardOpen] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
@@ -375,6 +394,9 @@ export function PatientDetailClient({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{fullName}</h1>
+                {primaryInsuranceStatus && (
+                  <InsuranceStatusBadge status={primaryInsuranceStatus} />
+                )}
                 {patient.bloodGroup && (
                   <Badge variant="destructive">{patient.bloodGroup}</Badge>
                 )}
@@ -1200,6 +1222,17 @@ export function PatientDetailClient({
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === "insurance" && (
+            <PatientInsuranceTab
+              patientId={patient.id}
+              policies={insurancePolicies}
+              providers={insuranceProviders}
+              canWrite={canWrite}
+              uploadsEnabled={uploadsEnabled}
+              showUploadConfigHint={showUploadConfigHint}
+            />
           )}
 
           {activeTab === "documents" && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Camera, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useCamera } from "@/lib/clinical/use-camera";
@@ -13,7 +13,8 @@ import { PersonAvatar } from "@/components/profile/person-avatar";
 
 type ProfileEntityType = "patient" | "staff";
 
-type Props = {
+type ProfilePhotoCaptureProps = {
+  mode?: "profile";
   entityType: ProfileEntityType;
   entityId: string;
   currentPhotoUrl?: string | null;
@@ -25,26 +26,47 @@ type Props = {
   onPhotoUpdated?: (url: string) => void;
 };
 
+type InsuranceCardPhotoCaptureProps = {
+  mode: "insuranceCard";
+  policyId: string;
+  side: "front" | "back";
+  currentPhotoUrl?: string | null;
+  label?: string;
+  uploadsEnabled?: boolean;
+  showAdminConfigHint?: boolean;
+  onPhotoUpdated?: (url: string) => void;
+};
+
+type Props = ProfilePhotoCaptureProps | InsuranceCardPhotoCaptureProps;
+
 type PreviewState = {
   blob: Blob;
   previewUrl: string;
 };
 
-export function PhotoCapture({
-  entityType,
-  entityId,
-  currentPhotoUrl,
-  firstName,
-  lastName,
-  email,
-  uploadsEnabled = true,
-  showAdminConfigHint = false,
-  onPhotoUpdated,
-}: Props) {
+export function PhotoCapture(props: Props) {
+  const isInsuranceCard = props.mode === "insuranceCard";
+  const uploadsEnabled = props.uploadsEnabled ?? true;
+  const showAdminConfigHint = props.showAdminConfigHint ?? false;
+  const onPhotoUpdated = props.onPhotoUpdated;
+
+  const entityType = !isInsuranceCard ? props.entityType : undefined;
+  const entityId = !isInsuranceCard ? props.entityId : props.policyId;
+  const currentPhotoUrl = props.currentPhotoUrl;
+  const firstName = !isInsuranceCard ? props.firstName : undefined;
+  const lastName = !isInsuranceCard ? props.lastName : undefined;
+  const email = !isInsuranceCard ? props.email : undefined;
+  const insuranceSide = isInsuranceCard ? props.side : undefined;
+  const insuranceLabel = isInsuranceCard ? (props.label ?? "Insurance card") : "Profile photo";
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [displayUrl, setDisplayUrl] = useState(currentPhotoUrl ?? null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayUrl(currentPhotoUrl ?? null);
+  }, [currentPhotoUrl]);
 
   const {
     videoRef,
@@ -57,19 +79,36 @@ export function PhotoCapture({
     capturePhoto,
   } = useCamera();
 
-  const { startUpload, isUploading } = useUploadThing("profilePhoto", {
+  const onUploadComplete = useCallback(
+    (url: string) => {
+      setDisplayUrl(url);
+      onPhotoUpdated?.(url);
+      toast.success("Photo saved");
+    },
+    [onPhotoUpdated],
+  );
+
+  const profileUpload = useUploadThing("profilePhoto", {
     onClientUploadComplete: (res) => {
       const url = res?.[0]?.url;
-      if (url) {
-        setDisplayUrl(url);
-        onPhotoUpdated?.(url);
-        toast.success("Photo saved");
-      }
+      if (url) onUploadComplete(url);
     },
     onUploadError: (err) => {
       toast.error(err.message);
     },
   });
+
+  const insuranceUpload = useUploadThing("insuranceCardPhoto", {
+    onClientUploadComplete: (res) => {
+      const url = res?.[0]?.url;
+      if (url) onUploadComplete(url);
+    },
+    onUploadError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const isUploading = isInsuranceCard ? insuranceUpload.isUploading : profileUpload.isUploading;
 
   const notifyUploadDisabled = useCallback(() => {
     const message = getUploadDisabledMessage(showAdminConfigHint);
@@ -119,33 +158,58 @@ export function PhotoCapture({
       notifyUploadDisabled();
       return;
     }
-    const file = new File([preview.blob], `profile-${entityId}.jpg`, {
-      type: "image/jpeg",
-    });
-    await startUpload([file], { entityType, entityId });
+    const file = new File(
+      [preview.blob],
+      isInsuranceCard ? `insurance-${entityId}-${insuranceSide}.jpg` : `profile-${entityId}.jpg`,
+      { type: "image/jpeg" },
+    );
+    if (isInsuranceCard) {
+      await insuranceUpload.startUpload([file], {
+        policyId: entityId,
+        side: insuranceSide!,
+      });
+    } else {
+      await profileUpload.startUpload([file], {
+        entityType: entityType!,
+        entityId,
+      });
+    }
     clearPreview();
   }, [
     preview,
     uploadsEnabled,
     notifyUploadDisabled,
-    startUpload,
+    profileUpload,
+    insuranceUpload,
     entityType,
     entityId,
     clearPreview,
+    isInsuranceCard,
+    insuranceSide,
   ]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <PersonAvatar
-          photoUrl={displayUrl}
-          firstName={firstName}
-          lastName={lastName}
-          email={email}
-          size="lg"
-        />
+        {isInsuranceCard ? (
+          <div className="flex h-20 w-32 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+            {displayUrl ? (
+              <img src={displayUrl} alt={insuranceLabel} className="h-full w-full object-cover" />
+            ) : (
+              <span className="px-2 text-center text-xs text-muted-foreground">No image</span>
+            )}
+          </div>
+        ) : (
+          <PersonAvatar
+            photoUrl={displayUrl}
+            firstName={firstName}
+            lastName={lastName}
+            email={email}
+            size="lg"
+          />
+        )}
         <div>
-          <p className="text-sm font-medium">Profile photo</p>
+          <p className="text-sm font-medium">{insuranceLabel}</p>
           <p className="text-xs text-muted-foreground">
             Square crop applied automatically. Upload or use your camera.
           </p>

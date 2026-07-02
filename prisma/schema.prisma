@@ -50,7 +50,8 @@ model Tenant {
   communicationLogs    CommunicationLog[]
   doctors              Doctor[]
   feedbacks            Feedback[]
-  insurancePolicies    InsurancePolicy[]
+  insurancePolicies         InsurancePolicy[]
+  patientInsurancePolicies  PatientInsurancePolicy[]
   inventoryItems       InventoryItem[]
   invoices             Invoice[]
   leads                Lead[]
@@ -284,8 +285,9 @@ model Patient {
   clinicalNotes     ClinicalNote[]
   communicationLogs CommunicationLog[]
   feedbacks         Feedback[]
-  insurancePolicies InsurancePolicy[]
-  invoices          Invoice[]
+  insurancePolicies        InsurancePolicy[]
+  patientInsurancePolicies PatientInsurancePolicy[]
+  invoices                 Invoice[]
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recalls           Recall[]
   teeth             Tooth[]
@@ -928,6 +930,37 @@ model InsurancePolicy {
   @@index([tenantId, patientId])
 }
 
+model PatientInsurancePolicy {
+  id                     String                  @id @default(cuid())
+  tenantId               String
+  patientId              String
+  rank                   PolicyRank
+  providerId             String?
+  providerNameFreeText   String?
+  networkTier            String?
+  memberId               String
+  groupNumber            String?
+  subscriberName         String?
+  subscriberRelationship SubscriberRelationship?
+  effectiveDate          DateTime?
+  expiryDate             DateTime?
+  cardFrontUrl           String?
+  cardBackUrl            String?
+  verificationStatus     String                  @default("NOT_VERIFIED")
+  verifiedBy             String?
+  verifiedAt             DateTime?
+  verificationExpiresAt  DateTime?
+  isActive               Boolean                 @default(true)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  patient                Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider               TenantInsuranceProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, patientId])
+  @@index([tenantId, patientId, rank, isActive])
+}
+
 model Claim {
   id          String          @id @default(cuid())
   tenantId    String
@@ -1469,7 +1502,8 @@ model TenantInsuranceProvider {
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patientPolicies PatientInsurancePolicy[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1905,6 +1939,18 @@ enum PaymentMethod {
   BANK_TRANSFER
   STRIPE
   INSURANCE
+}
+
+enum PolicyRank {
+  PRIMARY
+  SECONDARY
+}
+
+enum SubscriberRelationship {
+  SELF
+  SPOUSE
+  CHILD
+  OTHER
 }
 
 enum ClaimStatus {

@@ -26,6 +26,8 @@ import { Radio, WifiOff, AlertCircle, CalendarPlus } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
+import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
+import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
 
@@ -74,6 +76,7 @@ export function AppointmentsClient({
   initialAppointmentId,
   emergencyWaiting = 0,
   emergencyImmediate = 0,
+  insuranceStatusMap = {},
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
@@ -84,6 +87,7 @@ export function AppointmentsClient({
   initialAppointmentId?: string;
   emergencyWaiting?: number;
   emergencyImmediate?: number;
+  insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
 }) {
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -449,8 +453,12 @@ export function AppointmentsClient({
                             onClick={() => setSelectedAppointmentId(a.id)}
                             className="w-full rounded-md border bg-muted/30 p-2 text-left text-xs hover:bg-muted/50"
                           >
-                            <div className="font-medium">
+                            <div className="font-medium inline-flex items-center gap-1.5">
                               {a.patient.firstName} {a.patient.lastName}
+                              <InsuranceStatusBadge
+                                status={insuranceStatusMap[a.patient.id]}
+                                compact
+                              />
                             </div>
                             <div className="text-muted-foreground">
                               {format(new Date(a.startTime), "h:mm a")} — {a.title}
@@ -503,8 +511,12 @@ export function AppointmentsClient({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-medium inline-flex items-center gap-1.5">
                         {apt.patient.firstName} {apt.patient.lastName}
+                        <InsuranceStatusBadge
+                          status={insuranceStatusMap[apt.patient.id]}
+                          compact
+                        />
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — {apt.title}
@@ -541,7 +553,13 @@ export function AppointmentsClient({
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <p className="font-medium">{apt.patient.firstName} {apt.patient.lastName}</p>
+                  <p className="font-medium inline-flex items-center gap-1.5">
+                    {apt.patient.firstName} {apt.patient.lastName}
+                    <InsuranceStatusBadge
+                      status={insuranceStatusMap[apt.patient.id]}
+                      compact
+                    />
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — {apt.title}
                   </p>

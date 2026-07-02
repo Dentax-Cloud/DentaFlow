@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { createPatientDynamic } from "@/app/(dashboard)/features/patients/actions";
 import { DynamicPatientForm } from "@/components/patients/dynamic-patient-form";
 import { PersonAvatar } from "@/components/profile/person-avatar";
+import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
+import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { PatientFormField } from "@/lib/countries/patient-form-config";
 import type { Patient } from "@prisma/client";
 import { Eye, Pencil, Plus, Search } from "lucide-react";
@@ -20,9 +22,16 @@ type Props = {
   formFields: PatientFormField[];
   countryCode: string;
   canWrite: boolean;
+  insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
 };
 
-export function PatientsClient({ initialPatients, formFields, countryCode, canWrite }: Props) {
+export function PatientsClient({
+  initialPatients,
+  formFields,
+  countryCode,
+  canWrite,
+  insuranceStatusMap = {},
+}: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -113,8 +122,12 @@ export function PatientsClient({ initialPatients, formFields, countryCode, canWr
                 size="md"
               />
               <div className="min-w-0">
-                <p className="font-medium truncate">
+                <p className="font-medium truncate flex items-center gap-2">
                   {patient.firstName} {patient.lastName}
+                  <InsuranceStatusBadge
+                    status={insuranceStatusMap[patient.id]}
+                    compact
+                  />
                 </p>
                 <p className="text-sm text-muted-foreground truncate">
                   {patient.patientNumber}

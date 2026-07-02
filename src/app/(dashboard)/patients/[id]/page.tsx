@@ -5,6 +5,8 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { getPatientById } from "@/app/(dashboard)/features/patients/actions";
+import { getPatientInsurancePolicies } from "@/app/(dashboard)/features/insurance/insurance-policy-actions";
+import { getTenantInsuranceProviders } from "@/app/(dashboard)/features/admin/customization-actions";
 import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { mapPatientToFormValues } from "@/lib/tenant/sync-country-profile";
@@ -30,7 +32,7 @@ export default async function PatientDetailPage({
     role === UserRole.ADMIN ||
     hasPermission(role, PERMISSIONS.admin.write);
 
-  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields] =
+  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields, insurancePolicies, insuranceProviders] =
     await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
@@ -76,6 +78,8 @@ export default async function PatientDetailPage({
     canWrite
       ? buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE")
       : Promise.resolve([]),
+    getPatientInsurancePolicies(ctx.tenant.id, id),
+    getTenantInsuranceProviders(),
   ]);
 
   if (!patient) notFound();
@@ -150,6 +154,20 @@ export default async function PatientDetailPage({
       formFields={formFields}
       profileFormValues={mapPatientToFormValues(patient)}
       startInEditMode={edit === "profile" && canWrite}
+      insurancePolicies={insurancePolicies}
+      insuranceProviders={[...insuranceProviders.platformProviders, ...insuranceProviders.customProviders].map(
+        (p) => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          shortName: p.shortName,
+          networkTypes: p.networkTypes.map((n) => ({ code: n.code, name: n.name })),
+          source: p.source,
+        }),
+      )}
+      primaryInsuranceStatus={
+        insurancePolicies.find((p) => p.rank === "PRIMARY")?.effectiveVerificationStatus ?? null
+      }
     />
   );
 }
