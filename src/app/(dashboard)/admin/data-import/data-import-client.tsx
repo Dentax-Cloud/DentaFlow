@@ -611,7 +611,7 @@ export default function DataImportClient({
           <Card className="max-h-[80vh] w-full max-w-3xl overflow-hidden">
             <CardHeader>
               <CardTitle className="text-base">
-                Import errors — {viewErrorsBatch.fileName}
+                Import issues — {viewErrorsBatch.fileName}
               </CardTitle>
             </CardHeader>
             <CardContent className="max-h-96 overflow-y-auto">
@@ -621,6 +621,7 @@ export default function DataImportClient({
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="p-2">Row</th>
+                      <th className="p-2">Status</th>
                       <th className="p-2">Field</th>
                       <th className="p-2">Raw value</th>
                       <th className="p-2">Reason</th>
@@ -637,6 +638,13 @@ export default function DataImportClient({
                               className="border-b align-top"
                             >
                               <td className="p-2">{entry.row ?? "—"}</td>
+                              <td className="p-2">
+                                <Badge
+                                  variant={entry.status === "ERROR" ? "destructive" : "secondary"}
+                                >
+                                  {entry.status}
+                                </Badge>
+                              </td>
                               <td className="p-2 font-medium">{fieldError.field}</td>
                               <td className="p-2 text-muted-foreground">
                                 {fieldError.rawValue || "—"}
@@ -652,6 +660,13 @@ export default function DataImportClient({
                         return (
                           <tr key={entryIndex} className="border-b align-top">
                             <td className="p-2">{entry.row ?? "—"}</td>
+                            <td className="p-2">
+                              <Badge
+                                variant={entry.status === "ERROR" ? "destructive" : "secondary"}
+                              >
+                                {entry.status}
+                              </Badge>
+                            </td>
                             <td className="p-2">—</td>
                             <td className="p-2">—</td>
                             <td className="p-2">—</td>

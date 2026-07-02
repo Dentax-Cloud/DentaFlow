@@ -61,6 +61,37 @@ function importDateFieldError(
   return { field, rawValue, reason };
 }
 
+type IdDocumentDef = ReturnType<typeof getCountryProfile>["identityDocuments"][number];
+
+/**
+ * Non-blocking format check for an identity document value. Returns a warning
+ * reason string when the value looks malformed, or null when acceptable.
+ * Passport numbers vary widely by issuing country, so they use a permissive
+ * alphanumeric length check rather than the country-specific regex.
+ */
+function checkIdDocumentFormat(doc: IdDocumentDef, value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (doc.key === "PASSPORT") {
+    if (!/^[A-Z0-9]{5,12}$/i.test(trimmed)) {
+      return `Passport number "${value}" looks unusual (expected 5–12 letters/digits). Will be saved as-is.`;
+    }
+    return null;
+  }
+
+  try {
+    const regex = new RegExp(doc.regexStr, "i");
+    if (!regex.test(trimmed)) {
+      return `${doc.label} format warning: expected ${doc.format}, got "${value}". Will be saved as-is.`;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function findExistingPatient(
   tenantId: string,
   row: ImportRow,
@@ -289,17 +320,14 @@ async function processPatientRow(
     };
   }
 
+  const warningIssues: ImportFieldError[] = [];
+
   for (const doc of profile.identityDocuments) {
     const val = cellValue(row[`idDoc_${doc.key}`]);
-    if (val) {
-      try {
-        const regex = new RegExp(doc.regexStr);
-        if (!regex.test(val)) {
-          warnings.push(`${doc.label} format warning: expected ${doc.format}, got "${val}"`);
-        }
-      } catch {
-        // invalid regex in profile — skip validation
-      }
+    if (!val) continue;
+    const reason = checkIdDocumentFormat(doc, val);
+    if (reason) {
+      warningIssues.push({ field: doc.label, rawValue: val, reason });
     }
   }
 
@@ -307,9 +335,15 @@ async function processPatientRow(
   if (insuranceProv) {
     const validProviders = profile.insuranceProviders.map((p) => p.name);
     if (!validProviders.some((p) => p.toLowerCase() === insuranceProv.toLowerCase())) {
-      warnings.push(`Unknown insurance provider: "${insuranceProv}". Will be saved as-is.`);
+      warningIssues.push({
+        field: "insuranceProvider",
+        rawValue: insuranceProv,
+        reason: `Unknown insurance provider: "${insuranceProv}". Will be saved as-is.`,
+      });
     }
   }
+
+  warnings.push(...warningIssues.map((issue) => issue.reason));
 
   const existingId = await findExistingPatient(tenantId, row, countryCode);
 
@@ -417,10 +451,14 @@ async function processPatientRow(
     }
   }
 
+  // Warnings are non-blocking: the row is created/updated above regardless,
+  // and only its status is downgraded to WARNING so the summary counts it
+  // in the Warnings bucket (never Errors).
   return {
     rowNumber,
-    status: warnings.length > 0 ? "WARNING" : "SUCCESS",
+    status: warningIssues.length > 0 ? "WARNING" : "SUCCESS",
     warnings: warnings.length > 0 ? warnings : undefined,
+    fieldErrors: warningIssues.length > 0 ? warningIssues : undefined,
     patientId,
     action,
   };
