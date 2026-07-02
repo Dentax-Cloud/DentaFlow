@@ -84,21 +84,13 @@ export const SETTING_DEFINITIONS = {
     inputType: "toggle" as const,
     defaultValue: "true",
   },
-  UPLOADTHING_SECRET: {
+  UPLOADTHING_TOKEN: {
     category: "STORAGE",
     encrypted: true,
-    envFallback: "UPLOADTHING_SECRET",
-    description: "UploadThing secret key",
-    placeholder: "sk_live_...",
+    envFallback: "UPLOADTHING_TOKEN",
+    description: "UploadThing v7 API token (single key from dashboard → API Keys)",
+    placeholder: "eyJhcGlLZXk...",
     inputType: "password" as const,
-  },
-  UPLOADTHING_APP_ID: {
-    category: "STORAGE",
-    encrypted: false,
-    envFallback: "UPLOADTHING_APP_ID",
-    description: "UploadThing app ID",
-    placeholder: "abc123",
-    inputType: "text" as const,
   },
   STORAGE_ENABLED: {
     category: "STORAGE",
@@ -414,7 +406,15 @@ export async function clearSetting(key: SettingKey): Promise<void> {
   await db.platformSetting.deleteMany({ where: { key } });
 }
 
+export async function cleanupLegacyUploadthingSettings(): Promise<void> {
+  await db.platformSetting.deleteMany({
+    where: { key: { in: ["UPLOADTHING_SECRET", "UPLOADTHING_APP_ID"] } },
+  });
+}
+
 export async function seedPlatformDefaults(): Promise<void> {
+  await cleanupLegacyUploadthingSettings();
+
   const defaults: Array<{ key: SettingKey; value: string }> = [
     { key: "PLATFORM_NAME", value: "DentaFlow" },
     { key: "ALLOW_REGISTRATIONS", value: "true" },

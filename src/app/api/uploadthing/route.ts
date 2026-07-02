@@ -1,12 +1,31 @@
 export const runtime = "nodejs";
 
+import type { NextRequest } from "next/server";
 import { createRouteHandler } from "uploadthing/next";
 import { ourFileRouter } from "./core";
-import { getUploadthingToken } from "@/lib/uploadthing-env";
+import { getUploadthingConfig } from "@/lib/uploadthing-env";
 
-const token = getUploadthingToken();
+async function routeWithResolvedToken(
+  request: NextRequest,
+  method: "GET" | "POST",
+): Promise<Response> {
+  const config = await getUploadthingConfig();
+  if (!config) {
+    return Response.json({ error: "UploadThing is not configured" }, { status: 503 });
+  }
 
-export const { GET, POST } = createRouteHandler({
-  router: ourFileRouter,
-  config: token ? { token } : undefined,
-});
+  const handler = createRouteHandler({
+    router: ourFileRouter,
+    config: { token: config.token },
+  });
+
+  return method === "GET" ? handler.GET(request) : handler.POST(request);
+}
+
+export async function GET(request: NextRequest) {
+  return routeWithResolvedToken(request, "GET");
+}
+
+export async function POST(request: NextRequest) {
+  return routeWithResolvedToken(request, "POST");
+}

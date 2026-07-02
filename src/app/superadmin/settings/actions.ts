@@ -58,7 +58,7 @@ export async function getSettingsOverview(): Promise<
   }> = [
     { label: "AI", key: "OPENAI_API_KEY", icon: "🤖" },
     { label: "Email", key: "SMTP_HOST", icon: "📧" },
-    { label: "Storage", key: "UPLOADTHING_SECRET", icon: "📁" },
+    { label: "Storage", key: "UPLOADTHING_TOKEN", icon: "📁" },
     { label: "Stripe", key: "STRIPE_SECRET_KEY", icon: "💳" },
     { label: "SMS", key: "TWILIO_AUTH_TOKEN", icon: "📱" },
     { label: "AI On", key: "AI_ENABLED", icon: "⚡", isToggle: true },
@@ -176,6 +176,33 @@ export async function testStripe(): Promise<{ success: boolean; message: string 
     return {
       success: false,
       message: message.includes("Invalid API Key") ? "Invalid Stripe key — check your key" : message,
+    };
+  }
+}
+
+export async function testUploadThing(): Promise<{ success: boolean; message: string }> {
+  await requireSuperAdmin();
+
+  const { getUploadthingConfig } = await import("@/lib/uploadthing-env");
+  const config = await getUploadthingConfig();
+  if (!config) {
+    return { success: false, message: "UploadThing not configured (token missing or storage disabled)" };
+  }
+
+  try {
+    const { getUTApi } = await import("@/lib/uploadthing-server");
+    const result = await (await getUTApi()).listFiles({ limit: 1 });
+    return {
+      success: true,
+      message: `Connected ✓ — API reachable (${result.files.length} file(s) listed)`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "UploadThing connection failed";
+    return {
+      success: false,
+      message: message.toLowerCase().includes("unauthorized")
+        ? "Invalid token — check your UploadThing v7 API key"
+        : message,
     };
   }
 }

@@ -1,36 +1,51 @@
-/**
- * UploadThing v7 — UPLOADTHING_TOKEN required; UPLOADTHING_SECRET is v6-only.
- * UPLOADTHING_APP_ID is optional (app id is embedded in the token).
- */
+import { getSetting } from "@/lib/settings/platform-settings";
+
 let missingTokenWarned = false;
 
-export function getUploadthingToken(): string | undefined {
-  const token = process.env.UPLOADTHING_TOKEN?.trim();
-  return token || undefined;
+/** Resolve UploadThing v7 token from Platform Settings (DB) → env → none. */
+export async function getUploadthingConfig(): Promise<{ token: string } | null> {
+  const [token, enabled] = await Promise.all([
+    getSetting("UPLOADTHING_TOKEN"),
+    getSetting("STORAGE_ENABLED"),
+  ]);
+
+  const trimmed = token?.trim();
+  if (!trimmed || enabled === "false") {
+    return null;
+  }
+
+  return { token: trimmed };
 }
 
-export function isUploadthingConfigured(): boolean {
-  return Boolean(getUploadthingToken());
+export async function getUploadthingToken(): Promise<string | undefined> {
+  const config = await getUploadthingConfig();
+  return config?.token;
+}
+
+export async function isUploadthingConfigured(): Promise<boolean> {
+  return Boolean(await getUploadthingToken());
 }
 
 export function getUploadDisabledMessage(forAdmin: boolean): string {
   return forAdmin
-    ? "UPLOADTHING_TOKEN is not set — configure in environment settings."
+    ? "UploadThing token is not set — configure in Platform Settings → Storage."
     : "Photo upload is not configured. Contact your administrator.";
 }
 
-/** Log once at server startup when the token is missing. */
-export function warnUploadthingMissingOnce(): void {
-  if (missingTokenWarned || isUploadthingConfigured()) return;
+/** Log once at server startup when storage uploads are disabled. */
+export async function warnUploadthingMissingOnce(): Promise<void> {
+  if (missingTokenWarned || (await isUploadthingConfigured())) return;
   missingTokenWarned = true;
-  console.warn("[config] UPLOADTHING_TOKEN not set — photo upload disabled");
+  console.warn(
+    "[config] UploadThing token not set in Platform Settings — photo upload disabled",
+  );
 }
 
-export function requireUploadthingToken(): string {
-  const token = getUploadthingToken();
+export async function requireUploadthingToken(): Promise<string> {
+  const token = await getUploadthingToken();
   if (!token) {
     throw new Error(
-      "Missing UPLOADTHING_TOKEN — add your v7 API token from the UploadThing dashboard",
+      "Missing UploadThing token — add your v7 API token in Platform Settings → Storage",
     );
   }
   return token;

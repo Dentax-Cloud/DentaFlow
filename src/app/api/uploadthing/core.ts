@@ -9,14 +9,14 @@ import { saveInsuranceCardPhotoFromUpload } from "@/lib/insurance/save-card-phot
 
 const f = createUploadthing();
 
-function assertUploadthingConfigured() {
-  if (!isUploadthingConfigured()) {
+async function assertUploadthingConfigured() {
+  if (!(await isUploadthingConfigured())) {
     throw new Error("UploadThing is not configured");
   }
 }
 
 async function requireAuthenticatedSession() {
-  assertUploadthingConfigured();
+  await assertUploadthingConfigured();
   const session = await getServerAuthSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
   return session;
@@ -44,7 +44,7 @@ export const ourFileRouter = {
     image: { maxFileSize: "2MB", maxFileCount: 1 },
   })
     .middleware(async () => {
-      assertUploadthingConfigured();
+      await assertUploadthingConfigured();
       const session = await getServerAuthSession();
       return { userId: session?.user?.id ?? "registration" };
     })

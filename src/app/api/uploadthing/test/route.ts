@@ -1,6 +1,6 @@
 import { getServerAuthSession } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/tenant/config";
-import { getUploadthingToken } from "@/lib/uploadthing-env";
+import { getUploadthingConfig } from "@/lib/uploadthing-env";
 import { getUTApi } from "@/lib/uploadthing-server";
 
 function canRunUploadthingTest(userId: string | null): boolean {
@@ -15,15 +15,16 @@ export async function GET() {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!getUploadthingToken()) {
+  const config = await getUploadthingConfig();
+  if (!config) {
     return Response.json(
-      { error: "UPLOADTHING_TOKEN is not configured" },
+      { error: "UploadThing token is not configured in Platform Settings" },
       { status: 503 },
     );
   }
 
   try {
-    const result = await getUTApi().listFiles({ limit: 1 });
+    const result = await (await getUTApi()).listFiles({ limit: 1 });
     return Response.json({
       ok: true,
       filesListed: result.files.length,

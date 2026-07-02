@@ -106,7 +106,7 @@ export default async function PatientDetailPage({
       tenantCode={ctx.tenant.tenantCode ?? "—"}
       tenantSlug={ctx.tenant.slug}
       clinicPhone={ctx.tenant.phone}
-      uploadsEnabled={isUploadthingConfigured()}
+      uploadsEnabled={await isUploadthingConfigured()}
       showUploadConfigHint={showUploadConfigHint}
       latestPerio={
         latestPerio

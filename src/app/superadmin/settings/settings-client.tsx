@@ -16,6 +16,7 @@ import {
   testEmailSMTP,
   sendTestEmail,
   testStripe,
+  testUploadThing,
 } from "./actions";
 
 type OverviewItem = Awaited<ReturnType<typeof getSettingsOverview>>[number];
@@ -497,12 +498,21 @@ function CategoryPanel({
       });
       setTimeout(() => setAutoTestResult(null), 5000);
     }
+
+    if (category === "STORAGE" && key === "UPLOADTHING_TOKEN") {
+      const res = await testUploadThing();
+      setAutoTestResult({
+        success: res.success,
+        message: res.success ? "Connected to UploadThing" : res.message,
+      });
+      setTimeout(() => setAutoTestResult(null), 5000);
+    }
   }
 
   async function handleClear(key: string) {
     await removeSetting(key);
     await refreshSettings();
-    if (key === "OPENAI_API_KEY") {
+    if (key === "OPENAI_API_KEY" || key === "UPLOADTHING_TOKEN") {
       setAutoTestResult(null);
     }
   }
@@ -566,6 +576,21 @@ function CategoryPanel({
           </CardHeader>
           <CardContent>
             <TestButton label="💳 Test Stripe" onTest={testStripe} />
+          </CardContent>
+        </Card>
+      )}
+
+      {category === "STORAGE" && (
+        <Card className="border-blue-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Test connection</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TestButton
+              label="📁 Test UploadThing"
+              onTest={testUploadThing}
+              externalResult={autoTestResult}
+            />
           </CardContent>
         </Card>
       )}

@@ -53,7 +53,7 @@ export default async function AdminPage() {
       permissions={getRolePermissions(role)}
       recallSettings={recallSettings}
       tenantId={ctx.tenant.id}
-      uploadsEnabled={isUploadthingConfigured()}
+      uploadsEnabled={await isUploadthingConfigured()}
       showUploadConfigHint={showUploadConfigHint}
     />
   );
