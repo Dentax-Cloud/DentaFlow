@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { getCountryProfile } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { normalizeImportDateFields } from "@/lib/import/parse-import-date";
 import type { ImportEntity } from "@/lib/import/template-generator";
 
 const STATIC_HEADER_MAP: Record<string, string> = {
@@ -128,8 +129,11 @@ export async function parseImportFileBuffer(
     defval: null,
   });
 
+  const profile = getCountryProfile(countryCode);
+
   return rawData
     .map((row) => normalizeImportRow(row, headerMap))
+    .map((row) => normalizeImportDateFields(row, profile.dateFormat))
     .filter((row) => !isEmptyRow(row));
 }
 
@@ -160,8 +164,11 @@ export function parseImportFileForPreview(
     defval: null,
   });
 
+  const profile = getCountryProfile(countryCode);
+
   return rawData
     .map((row) => normalizeImportRow(row, headerMap))
+    .map((row) => normalizeImportDateFields(row, profile.dateFormat))
     .filter((row) => !isEmptyRow(row));
 }
 

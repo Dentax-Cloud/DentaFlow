@@ -25,8 +25,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { parseImportFileForPreview } from "@/lib/import/parse-upload-file";
+import {
+  formatImportCellForDisplay,
+  isImportDateField,
+} from "@/lib/import/parse-import-date";
 import type { ImportEntity } from "@/lib/import/template-generator";
-import type { ImportBatchResult, ImportMode } from "@/lib/import/import-processor";
+import {
+  buildImportErrorReportCsv,
+  type ImportBatchResult,
+  type ImportFieldError,
+  type ImportMode,
+} from "@/lib/import/import-processor";
 
 type HistoryRow = {
   id: string;
@@ -78,6 +87,31 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+type StoredErrorReportRow = {
+  row?: number;
+  status: string;
+  message?: string;
+  warnings?: string[];
+  fieldErrors?: ImportFieldError[];
+};
+
+function formatPreviewCell(key: string, value: unknown, dateFormat: string): string {
+  if (isImportDateField(key) || value instanceof Date) {
+    return formatImportCellForDisplay(value, dateFormat);
+  }
+  return String(value ?? "");
+}
+
+function downloadCsvFile(csv: string, fileName: string) {
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function DataImportClient({
@@ -202,20 +236,19 @@ export default function DataImportClient({
 
   function downloadErrorReport() {
     if (!result) return;
-    const lines = result.results
-      .filter((r) => r.status === "ERROR" || r.status === "WARNING")
-      .map(
-        (r) =>
-          `Row ${r.rowNumber},${r.status},"${(r.message ?? "").replace(/"/g, '""')}","${(r.warnings ?? []).join("; ")}"`,
-      );
-    const csv = ["Row,Status,Message,Warnings", ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "import-error-report.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    const csv = buildImportErrorReportCsv(
+      result.results.filter((r) => r.status === "ERROR" || r.status === "WARNING"),
+    );
+    downloadCsvFile(csv, "import-error-report.csv");
+  }
+
+  function downloadHistoryErrorReport(batch: HistoryRow) {
+    const rows = Array.isArray(batch.errorReport)
+      ? (batch.errorReport as StoredErrorReportRow[])
+      : [];
+    if (rows.length === 0) return;
+    const csv = buildImportErrorReportCsv(rows);
+    downloadCsvFile(csv, `import-errors-${batch.fileName.replace(/\.[^.]+$/, "")}.csv`);
   }
 
   const createdCount =
@@ -354,7 +387,7 @@ export default function DataImportClient({
                               .slice(0, 6)
                               .map((key) => (
                                 <td key={key} className="p-2 text-muted-foreground">
-                                  {String(row[key] ?? "")}
+                                  {formatPreviewCell(key, row[key], dateFormat)}
                                 </td>
                               ))}
                           </tr>
@@ -575,16 +608,74 @@ export default function DataImportClient({
 
       {viewErrorsBatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="max-h-[80vh] w-full max-w-lg overflow-hidden">
+          <Card className="max-h-[80vh] w-full max-w-3xl overflow-hidden">
             <CardHeader>
-              <CardTitle className="text-base">Import errors — {viewErrorsBatch.fileName}</CardTitle>
+              <CardTitle className="text-base">
+                Import errors — {viewErrorsBatch.fileName}
+              </CardTitle>
             </CardHeader>
-            <CardContent className="max-h-96 overflow-y-auto text-xs">
-              <pre className="whitespace-pre-wrap">
-                {JSON.stringify(viewErrorsBatch.errorReport, null, 2)}
-              </pre>
+            <CardContent className="max-h-96 overflow-y-auto">
+              {Array.isArray(viewErrorsBatch.errorReport) &&
+              (viewErrorsBatch.errorReport as StoredErrorReportRow[]).length > 0 ? (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="p-2">Row</th>
+                      <th className="p-2">Field</th>
+                      <th className="p-2">Raw value</th>
+                      <th className="p-2">Reason</th>
+                      <th className="p-2">Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(viewErrorsBatch.errorReport as StoredErrorReportRow[]).flatMap(
+                      (entry, entryIndex) => {
+                        if (entry.fieldErrors?.length) {
+                          return entry.fieldErrors.map((fieldError, fieldIndex) => (
+                            <tr
+                              key={`${entryIndex}-${fieldIndex}`}
+                              className="border-b align-top"
+                            >
+                              <td className="p-2">{entry.row ?? "—"}</td>
+                              <td className="p-2 font-medium">{fieldError.field}</td>
+                              <td className="p-2 text-muted-foreground">
+                                {fieldError.rawValue || "—"}
+                              </td>
+                              <td className="p-2">{fieldError.reason}</td>
+                              <td className="p-2 text-muted-foreground">
+                                {entry.message ?? "—"}
+                              </td>
+                            </tr>
+                          ));
+                        }
+
+                        return (
+                          <tr key={entryIndex} className="border-b align-top">
+                            <td className="p-2">{entry.row ?? "—"}</td>
+                            <td className="p-2">—</td>
+                            <td className="p-2">—</td>
+                            <td className="p-2">—</td>
+                            <td className="p-2">{entry.message ?? "—"}</td>
+                          </tr>
+                        );
+                      },
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-muted-foreground">No error details stored.</p>
+              )}
             </CardContent>
-            <div className="p-4 pt-0">
+            <div className="flex gap-2 p-4 pt-0">
+              {Array.isArray(viewErrorsBatch.errorReport) &&
+                (viewErrorsBatch.errorReport as StoredErrorReportRow[]).length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => downloadHistoryErrorReport(viewErrorsBatch)}
+                  >
+                    Download CSV
+                  </Button>
+                )}
               <Button variant="outline" onClick={() => setViewErrorsBatch(null)}>
                 Close
               </Button>

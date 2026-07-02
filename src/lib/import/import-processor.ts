@@ -4,14 +4,25 @@ import { randomUUID } from "crypto";
 import { generatePatientId } from "@/lib/ids/generate-ids";
 import { generatePatientNumber } from "@/lib/utils";
 import type { ImportEntity } from "@/lib/import/template-generator";
+import {
+  formatRawImportValue,
+  parseImportDateToLocalDate,
+} from "@/lib/import/parse-import-date";
 
 export type ImportMode = "CREATE_ONLY" | "UPDATE_ONLY" | "UPSERT";
+
+export type ImportFieldError = {
+  field: string;
+  rawValue: string;
+  reason: string;
+};
 
 export type ImportRowResult = {
   rowNumber: number;
   status: "SUCCESS" | "WARNING" | "ERROR" | "SKIPPED";
   message?: string;
   warnings?: string[];
+  fieldErrors?: ImportFieldError[];
   patientId?: string;
   action?: "CREATED" | "UPDATED" | "SKIPPED";
 };
@@ -36,32 +47,18 @@ type ImportRow = Record<string, unknown>;
 
 function cellValue(value: unknown): string {
   if (value == null) return "";
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return formatRawImportValue(value);
   return String(value).trim();
 }
 
-export function parseDate(dateStr: unknown, dateFormat: string): Date | null {
-  const s = cellValue(dateStr);
-  if (!s) return null;
-
-  try {
-    if (dateFormat === "MM/DD/YYYY") {
-      const [m, d, y] = s.split("/");
-      if (!m || !d || !y) return null;
-      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
-    }
-
-    const parts = s.split(/[/\-.]/);
-    if (parts.length === 3) {
-      const [d, m, y] = parts;
-      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
-    }
-
-    const parsed = new Date(s);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
+function importDateFieldError(
+  field: string,
+  raw: unknown,
+  dateFormat: string,
+): ImportFieldError {
+  const rawValue = formatRawImportValue(raw);
+  const reason = `could not parse '${rawValue}' as a date (expected ${dateFormat})`;
+  return { field, rawValue, reason };
 }
 
 async function findExistingPatient(
@@ -96,7 +93,7 @@ async function findExistingPatient(
   }
 
   const phone = cellValue(row.phone);
-  const dob = parseDate(row.dateOfBirth, profile.dateFormat);
+  const dob = parseImportDateToLocalDate(row.dateOfBirth, profile.dateFormat);
   if (phone && dob) {
     const patient = await db.patient.findFirst({
       where: {
@@ -231,23 +228,64 @@ async function processPatientRow(
   const warnings: string[] = [];
   const profile = getCountryProfile(countryCode);
 
-  const mandatoryErrors: string[] = [];
-  if (!cellValue(row.firstName)) mandatoryErrors.push("First Name is required");
-  if (!cellValue(row.lastName)) mandatoryErrors.push("Last/Family Name is required");
-  if (!cellValue(row.dateOfBirth)) mandatoryErrors.push("Date of Birth is required");
-  if (!cellValue(row.gender)) mandatoryErrors.push("Gender is required");
-  if (!cellValue(row.phone)) mandatoryErrors.push("Phone is required");
-
-  if (mandatoryErrors.length > 0) {
-    return { rowNumber, status: "ERROR", message: mandatoryErrors.join("; ") };
+  const mandatoryFieldErrors: ImportFieldError[] = [];
+  if (!cellValue(row.firstName)) {
+    mandatoryFieldErrors.push({
+      field: "firstName",
+      rawValue: formatRawImportValue(row.firstName),
+      reason: "First Name is required",
+    });
+  }
+  if (!cellValue(row.lastName)) {
+    mandatoryFieldErrors.push({
+      field: "lastName",
+      rawValue: formatRawImportValue(row.lastName),
+      reason: "Last/Family Name is required",
+    });
+  }
+  if (!cellValue(row.dateOfBirth)) {
+    mandatoryFieldErrors.push({
+      field: "dateOfBirth",
+      rawValue: formatRawImportValue(row.dateOfBirth),
+      reason: "Date of Birth is required",
+    });
+  }
+  if (!cellValue(row.gender)) {
+    mandatoryFieldErrors.push({
+      field: "gender",
+      rawValue: formatRawImportValue(row.gender),
+      reason: "Gender is required",
+    });
+  }
+  if (!cellValue(row.phone)) {
+    mandatoryFieldErrors.push({
+      field: "phone",
+      rawValue: formatRawImportValue(row.phone),
+      reason: "Phone is required",
+    });
   }
 
-  const dob = parseDate(row.dateOfBirth, profile.dateFormat);
-  if (!dob || Number.isNaN(dob.getTime())) {
+  if (mandatoryFieldErrors.length > 0) {
     return {
       rowNumber,
       status: "ERROR",
-      message: `Invalid date: "${cellValue(row.dateOfBirth)}". Use format ${profile.dateFormat}`,
+      message: mandatoryFieldErrors.map((e) => `${e.field}: ${e.reason}`).join("; "),
+      fieldErrors: mandatoryFieldErrors,
+    };
+  }
+
+  const dob = parseImportDateToLocalDate(row.dateOfBirth, profile.dateFormat);
+  if (!dob) {
+    const fieldError = importDateFieldError(
+      "dateOfBirth",
+      row.dateOfBirth,
+      profile.dateFormat,
+    );
+    return {
+      rowNumber,
+      status: "ERROR",
+      message: `${fieldError.field}: ${fieldError.reason}`,
+      fieldErrors: [fieldError],
     };
   }
 
@@ -295,8 +333,21 @@ async function processPatientRow(
   const primaryId = await resolvePrimaryIdDocument(row, profile);
   const secondaryId = await resolveSecondaryIdDocument(row, profile);
   const insuranceExpiry = row.insuranceExpiry
-    ? parseDate(row.insuranceExpiry, profile.dateFormat)
+    ? parseImportDateToLocalDate(row.insuranceExpiry, profile.dateFormat)
     : null;
+  if (row.insuranceExpiry && !insuranceExpiry) {
+    const fieldError = importDateFieldError(
+      "insuranceExpiry",
+      row.insuranceExpiry,
+      profile.dateFormat,
+    );
+    return {
+      rowNumber,
+      status: "ERROR",
+      message: `${fieldError.field}: ${fieldError.reason}`,
+      fieldErrors: [fieldError],
+    };
+  }
 
   const allergiesRaw = cellValue(row.allergies);
   const patientData = {
@@ -472,6 +523,7 @@ export async function processImport(input: {
           status: r.status,
           message: r.message,
           warnings: r.warnings,
+          fieldErrors: r.fieldErrors,
         })),
     },
   });
@@ -485,4 +537,40 @@ export async function processImport(input: {
     skipped,
     results,
   };
+}
+
+type ErrorReportRow = {
+  row?: number;
+  rowNumber?: number;
+  status: string;
+  message?: string;
+  warnings?: string[];
+  fieldErrors?: ImportFieldError[];
+};
+
+function csvEscape(value: string): string {
+  return value.replace(/"/g, '""');
+}
+
+export function buildImportErrorReportCsv(rows: ErrorReportRow[]): string {
+  const lines = ["Row,Status,Field,Raw Value,Reason,Message,Warnings"];
+
+  for (const row of rows) {
+    const rowNum = row.row ?? row.rowNumber ?? "";
+    const message = csvEscape(row.message ?? "");
+    const warnings = csvEscape((row.warnings ?? []).join("; "));
+
+    if (row.fieldErrors?.length) {
+      for (const fieldError of row.fieldErrors) {
+        lines.push(
+          `${rowNum},${row.status},"${csvEscape(fieldError.field)}","${csvEscape(fieldError.rawValue)}","${csvEscape(fieldError.reason)}","${message}","${warnings}"`,
+        );
+      }
+      continue;
+    }
+
+    lines.push(`${rowNum},${row.status},"","","","${message}","${warnings}"`);
+  }
+
+  return lines.join("\n");
 }
