@@ -7,6 +7,7 @@ import { serializeDecimal, serializeEntity, serializeMany } from "@/lib/utils/se
 import { AdminClient } from "./admin-client";
 import { parseRecallSettings } from "@/lib/recall/helpers";
 import { UserRole } from "@prisma/client";
+import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 
 export default async function AdminPage() {
   const ctx = await requireRouteAccess("admin", "read");
@@ -49,6 +50,7 @@ export default async function AdminPage() {
       permissions={getRolePermissions(role)}
       recallSettings={recallSettings}
       tenantId={ctx.tenant.id}
+      uploadsEnabled={isUploadthingConfigured()}
     />
   );
 }

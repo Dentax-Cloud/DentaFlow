@@ -67,6 +67,8 @@ export function AdminClient({
 
   tenantId,
 
+  uploadsEnabled,
+
 }: {
 
   users: StaffMember[];
@@ -90,6 +92,8 @@ export function AdminClient({
   recallSettings: RecallSettings;
 
   tenantId: string;
+
+  uploadsEnabled: boolean;
 
 }) {
 
@@ -186,6 +190,8 @@ export function AdminClient({
         currentUserId={currentUserId}
 
         canManage={canManageTeam}
+
+        uploadsEnabled={uploadsEnabled}
 
       />
 

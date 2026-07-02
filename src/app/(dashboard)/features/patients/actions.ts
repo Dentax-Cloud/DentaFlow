@@ -123,6 +123,93 @@ export const createPatientDynamic = createAction({
   },
 });
 
+const updatePatientDynamicSchema = z.object({
+  id: z.string().min(1),
+  values: z.record(z.string()),
+});
+
+export const updatePatientDynamic = createAction({
+  schema: updatePatientDynamicSchema,
+  permission: () => requirePermission(PERMISSIONS.patients.write),
+  handler: async (input, ctx) => {
+    const existing = await db.patient.findFirst({
+      where: tenantWhere(ctx.tenant.id, { id: input.id, deletedAt: null }),
+    });
+    if (!existing) throw new Error("Patient not found");
+
+    const countryCode = ctx.tenant.countryCode ?? "AE";
+    const mapped = mapDynamicFormToPatientData(input.values, countryCode);
+    if (!mapped.firstName?.trim() || !mapped.lastName?.trim()) {
+      throw new Error("First and last name are required");
+    }
+
+    const patient = await db.patient.update({
+      where: { id: input.id },
+      data: {
+        firstName: mapped.firstName as string,
+        lastName: mapped.lastName as string,
+        fatherName: mapped.fatherName as string | undefined,
+        grandfatherName: mapped.grandfatherName as string | undefined,
+        email: mapped.email as string | undefined,
+        phone: mapped.phone as string | undefined,
+        dateOfBirth: mapped.dateOfBirth as Date | undefined,
+        gender: mapped.gender as string | undefined,
+        nationality: mapped.nationality as string | undefined,
+        maritalStatus: mapped.maritalStatus as string | undefined,
+        occupation: mapped.occupation as string | undefined,
+        employer: mapped.employer as string | undefined,
+        bloodGroup: mapped.bloodGroup as string | undefined,
+        idDocumentType: mapped.idDocumentType as string | undefined,
+        idDocumentNumber: mapped.idDocumentNumber as string | undefined,
+        idDocumentExpiry: mapped.idDocumentExpiry as Date | undefined,
+        insuranceProvider: mapped.insuranceProvider as string | undefined,
+        insuranceNetwork: mapped.insuranceNetwork as string | undefined,
+        insurancePolicyNo: mapped.insurancePolicyNo as string | undefined,
+        insuranceMemberId: mapped.insuranceMemberId as string | undefined,
+        insuranceExpiry: mapped.insuranceExpiry as Date | undefined,
+        emergencyContactName: mapped.emergencyContactName as string | undefined,
+        emergencyContactPhone: mapped.emergencyContactPhone as string | undefined,
+      },
+    });
+
+    const customValues = extractCustomFieldValues(input.values);
+    if (customValues.length > 0) {
+      const fields = await db.tenantCustomField.findMany({
+        where: {
+          tenantId: ctx.tenant.id,
+          entity: "PATIENT",
+          fieldKey: { in: customValues.map((c) => c.fieldKey) },
+        },
+      });
+      for (const cv of customValues) {
+        const field = fields.find((f) => f.fieldKey === cv.fieldKey);
+        if (!field) continue;
+        await db.patientCustomFieldValue.upsert({
+          where: { patientId_fieldId: { patientId: patient.id, fieldId: field.id } },
+          create: {
+            tenantId: ctx.tenant.id,
+            patientId: patient.id,
+            fieldId: field.id,
+            value: cv.value,
+          },
+          update: { value: cv.value },
+        });
+      }
+    }
+
+    await createAuditLog({
+      tenantId: ctx.tenant.id,
+      userId: ctx.staffMember?.id ?? ctx.user?.id,
+      action: AuditAction.UPDATE,
+      entity: "Patient",
+      entityId: patient.id,
+      metadata: { patientName: `${patient.firstName} ${patient.lastName}` },
+    });
+
+    return patient;
+  },
+});
+
 export const createPatient = createAction({
   schema: createPatientSchema,
   permission: () => requirePermission(PERMISSIONS.patients.write),

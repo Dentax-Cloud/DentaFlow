@@ -126,6 +126,58 @@ export const ourFileRouter = {
       size: file.size,
       type: file.type ?? null,
     })),
+
+  profilePhoto: f({
+    image: { maxFileSize: "4MB", maxFileCount: 1 },
+  })
+    .input(
+      z.object({
+        entityType: z.enum(["patient", "staff"]),
+        entityId: z.string().min(1),
+      }),
+    )
+    .middleware(async ({ input }) => {
+      const metadata = await requireTenantUpload();
+
+      if (input.entityType === "patient") {
+        const patient = await db.patient.findFirst({
+          where: tenantWhere(metadata.tenantId, { id: input.entityId, deletedAt: null }),
+        });
+        if (!patient) throw new Error("Patient not found");
+      } else {
+        const staff = await db.staffMember.findFirst({
+          where: {
+            id: input.entityId,
+            tenantId: metadata.tenantId,
+            deletedAt: null,
+          },
+        });
+        if (!staff) throw new Error("Staff member not found");
+      }
+
+      return {
+        ...metadata,
+        entityType: input.entityType,
+        entityId: input.entityId,
+      };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      const url = file.ufsUrl ?? file.url;
+
+      if (metadata.entityType === "patient") {
+        await db.patient.update({
+          where: { id: metadata.entityId },
+          data: { photoUrl: url },
+        });
+      } else {
+        await db.staffMember.update({
+          where: { id: metadata.entityId },
+          data: { avatarUrl: url },
+        });
+      }
+
+      return { url, entityType: metadata.entityType, entityId: metadata.entityId };
+    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;

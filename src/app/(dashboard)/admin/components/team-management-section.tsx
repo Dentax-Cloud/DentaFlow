@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { StaffMember } from "@prisma/client";
 import { UserRole } from "@prisma/client";
 import { toast } from "sonner";
-import { Calendar, Users } from "lucide-react";
+import { Calendar, Eye, Pencil, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PersonAvatar } from "@/components/profile/person-avatar";
+import {
+  StaffMemberEditDialog,
+  StaffMemberViewDialog,
+} from "@/components/admin/staff-member-dialogs";
 import { getRoleLabel } from "@/lib/rbac/permissions";
 import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/team-roles";
 import {
@@ -51,6 +57,7 @@ type TeamManagementSectionProps = {
   pendingInvitations: PendingInvitation[];
   currentUserId: string;
   canManage: boolean;
+  uploadsEnabled: boolean;
 };
 
 function roleBadgeVariant(role: UserRole): "default" | "secondary" | "outline" {
@@ -86,9 +93,13 @@ export function TeamManagementSection({
   pendingInvitations,
   currentUserId,
   canManage,
+  uploadsEnabled,
 }: TeamManagementSectionProps) {
+  const router = useRouter();
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [viewTarget, setViewTarget] = useState<StaffMember | null>(null);
+  const [editTarget, setEditTarget] = useState<StaffMember | null>(null);
 
   async function handleRoleChange(userId: string, role: InvitableRole) {
     setBusyUserId(userId);
@@ -155,7 +166,7 @@ export function TeamManagementSection({
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                {canManage && <TableHead className="text-right">Actions</TableHead>}
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -168,12 +179,13 @@ export function TeamManagementSection({
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
-                          <AvatarFallback className="text-xs">
-                            {initials(user.firstName, user.lastName, user.email)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <PersonAvatar
+                          photoUrl={user.avatarUrl}
+                          firstName={user.firstName}
+                          lastName={user.lastName}
+                          email={user.email}
+                          size="sm"
+                        />
                         <span className="font-medium">
                           {user.firstName || user.lastName
                             ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
@@ -209,38 +221,54 @@ export function TeamManagementSection({
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.isActive ? "secondary" : "outline"}>
-                        {user.isActive ? "Active" : "Inactive"}
+                        {!user.authUserId && user.isActive
+                          ? "Invited"
+                          : user.isActive
+                            ? "Active"
+                            : "Suspended"}
                       </Badge>
                     </TableCell>
-                    {canManage && (
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {isClinicalStaffRole(user.role) && (
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={`/admin/staff/${user.id}/schedule`}>
-                                <Calendar className="mr-1 h-3.5 w-3.5" />
-                                Schedule
-                              </Link>
-                            </Button>
-                          )}
-                          {canEditRow ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              disabled={busyUserId === user.id}
-                              onClick={() => setRemoveTarget(user)}
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            !isClinicalStaffRole(user.role) && (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="View staff member"
+                          onClick={() => setViewTarget(user)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {canEditRow && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit staff member"
+                            onClick={() => setEditTarget(user)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canManage && isClinicalStaffRole(user.role) && (
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/admin/staff/${user.id}/schedule`}>
+                              <Calendar className="mr-1 h-3.5 w-3.5" />
+                              Schedule
+                            </Link>
+                          </Button>
+                        )}
+                        {canManage && canEditRow ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            disabled={busyUserId === user.id}
+                            onClick={() => setRemoveTarget(user)}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -263,15 +291,39 @@ export function TeamManagementSection({
                   <TableCell>
                     <Badge variant="outline">Pending</Badge>
                   </TableCell>
-                  {canManage && (
-                    <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
-                  )}
+                  <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {viewTarget && (
+        <StaffMemberViewDialog
+          user={viewTarget}
+          open={!!viewTarget}
+          onOpenChange={(open) => !open && setViewTarget(null)}
+          canEdit={canEditMember(viewTarget)}
+          onEdit={() => {
+            setEditTarget(viewTarget);
+            setViewTarget(null);
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <StaffMemberEditDialog
+          user={editTarget}
+          open={!!editTarget}
+          onOpenChange={(open) => !open && setEditTarget(null)}
+          uploadsEnabled={uploadsEnabled}
+          onSaved={() => {
+            setEditTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       <Dialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <DialogContent>

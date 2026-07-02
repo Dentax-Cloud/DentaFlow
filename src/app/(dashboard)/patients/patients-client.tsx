@@ -10,17 +10,19 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { createPatientDynamic } from "@/app/(dashboard)/features/patients/actions";
 import { DynamicPatientForm } from "@/components/patients/dynamic-patient-form";
+import { PersonAvatar } from "@/components/profile/person-avatar";
 import type { PatientFormField } from "@/lib/countries/patient-form-config";
 import type { Patient } from "@prisma/client";
-import { Plus, Search, Users } from "lucide-react";
+import { Eye, Pencil, Plus, Search } from "lucide-react";
 
 type Props = {
   initialPatients: Patient[];
   formFields: PatientFormField[];
   countryCode: string;
+  canWrite: boolean;
 };
 
-export function PatientsClient({ initialPatients, formFields, countryCode }: Props) {
+export function PatientsClient({ initialPatients, formFields, countryCode, canWrite }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -58,13 +60,15 @@ export function PatientsClient({ initialPatients, formFields, countryCode }: Pro
           <h1 className="text-3xl font-bold">Patients</h1>
           <p className="text-muted-foreground">{initialPatients.length} registered</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4" />
-          Add patient
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setShowForm(!showForm)}>
+            <Plus className="h-4 w-4" />
+            Add patient
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && canWrite && (
         <Card>
           <CardHeader>
             <CardTitle>New patient</CardTitle>
@@ -97,27 +101,47 @@ export function PatientsClient({ initialPatients, formFields, countryCode }: Pro
 
       <div className="grid gap-3">
         {filtered.map((patient) => (
-          <Link
+          <div
             key={patient.id}
-            href={`/patients/${patient.id}`}
             className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium">
+            <div className="flex min-w-0 items-center gap-3">
+              <PersonAvatar
+                photoUrl={patient.photoUrl}
+                firstName={patient.firstName}
+                lastName={patient.lastName}
+                size="md"
+              />
+              <div className="min-w-0">
+                <p className="font-medium truncate">
                   {patient.firstName} {patient.lastName}
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground truncate">
                   {patient.patientNumber}
                   {patient.patientId ? ` · ${patient.patientId}` : ""}
                 </p>
               </div>
             </div>
-            {patient.phone && <Badge variant="outline">{patient.phone}</Badge>}
-          </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              {patient.phone && (
+                <Badge variant="outline" className="hidden sm:inline-flex">
+                  {patient.phone}
+                </Badge>
+              )}
+              <Button variant="ghost" size="icon" asChild aria-label="View patient">
+                <Link href={`/patients/${patient.id}`}>
+                  <Eye className="h-4 w-4" />
+                </Link>
+              </Button>
+              {canWrite && (
+                <Button variant="ghost" size="icon" asChild aria-label="Edit patient">
+                  <Link href={`/patients/${patient.id}?edit=profile`}>
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
         ))}
         {filtered.length === 0 && (
           <p className="py-8 text-center text-muted-foreground">No patients found</p>

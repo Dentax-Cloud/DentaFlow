@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation";
+import { UserRole } from "@prisma/client";
 
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { getPatientById } from "@/app/(dashboard)/features/patients/actions";
+import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { mapPatientToFormValues } from "@/lib/tenant/sync-country-profile";
 import { PatientDetailClient } from "./PatientDetailClient";
 import { mapPatientTo360Profile } from "./map-patient-360";
 
@@ -11,13 +15,19 @@ export const runtime = "nodejs";
 
 export default async function PatientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { id } = await params;
+  const { edit } = await searchParams;
   const ctx = await requireRouteAccess("patients", "read");
+  const role = ctx.staffMember?.role ?? UserRole.OWNER;
+  const canWrite = hasPermission(role, PERMISSIONS.patients.write);
 
-  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows] = await Promise.all([
+  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields] =
+    await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
       where: { tenantId: ctx.tenant.id, patientId: id },
@@ -59,6 +69,9 @@ export default async function PatientDetailPage({
         createdAt: true,
       },
     }),
+    canWrite
+      ? buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE")
+      : Promise.resolve([]),
   ]);
 
   if (!patient) notFound();
@@ -127,6 +140,11 @@ export default async function PatientDetailPage({
         status: e.status,
         createdAt: e.createdAt.toISOString(),
       }))}
+      canWrite={canWrite}
+      countryCode={ctx.tenant.countryCode ?? "AE"}
+      formFields={formFields}
+      profileFormValues={mapPatientToFormValues(patient)}
+      startInEditMode={edit === "profile" && canWrite}
     />
   );
 }

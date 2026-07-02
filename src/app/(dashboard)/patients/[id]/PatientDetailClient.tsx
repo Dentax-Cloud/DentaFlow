@@ -27,7 +27,11 @@ import {
   Printer,
   Tag,
   Building2,
+  Pencil,
 } from "lucide-react";
+import { PersonAvatar } from "@/components/profile/person-avatar";
+import { PatientProfileEditor } from "@/components/patients/patient-profile-editor";
+import type { PatientFormField } from "@/lib/countries/patient-form-config";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -181,6 +185,11 @@ export interface PatientDetailClientProps {
     status: string;
     createdAt: string;
   }[];
+  canWrite?: boolean;
+  countryCode?: string;
+  formFields?: PatientFormField[];
+  profileFormValues?: Record<string, string>;
+  startInEditMode?: boolean;
 }
 
 type TabId =
@@ -275,10 +284,16 @@ export function PatientDetailClient({
   clinicalImages,
   patientPhotos,
   emergencyHistory = [],
+  canWrite = false,
+  countryCode = "AE",
+  formFields = [],
+  profileFormValues = {},
+  startInEditMode = false,
 }: PatientDetailClientProps) {
   const [idCardOpen, setIdCardOpen] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [editingProfile, setEditingProfile] = useState(startInEditMode);
 
   const fullName = `${patient.firstName} ${patient.lastName}`;
   const age = computeAge(patient.dateOfBirth);
@@ -348,11 +363,13 @@ export function PatientDetailClient({
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <Avatar className="h-16 w-16 border-2 border-background shadow-md">
-              <AvatarFallback className="bg-primary/15 text-lg font-semibold text-primary">
-                {initials(patient.firstName, patient.lastName)}
-              </AvatarFallback>
-            </Avatar>
+            <PersonAvatar
+              photoUrl={patient.photoUrl}
+              firstName={patient.firstName}
+              lastName={patient.lastName}
+              size="lg"
+              className="border-2 border-background shadow-md"
+            />
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{fullName}</h1>
@@ -434,6 +451,19 @@ export function PatientDetailClient({
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
+            {canWrite && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setActiveTab("overview");
+                  setEditingProfile(true);
+                }}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit profile
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setIdCardOpen(true)}>
               <Printer className="mr-2 h-4 w-4" />
               ID card
@@ -556,6 +586,21 @@ export function PatientDetailClient({
         <div className="space-y-6 min-w-0">
           {activeTab === "overview" && (
             <>
+              {editingProfile && canWrite && formFields.length > 0 ? (
+                <PatientProfileEditor
+                  patientId={patient.id}
+                  formFields={formFields}
+                  countryCode={countryCode}
+                  initialValues={profileFormValues}
+                  photoUrl={patient.photoUrl}
+                  firstName={patient.firstName}
+                  lastName={patient.lastName}
+                  email={patient.email}
+                  uploadsEnabled={uploadsEnabled}
+                  onCancel={() => setEditingProfile(false)}
+                  onSaved={() => setEditingProfile(false)}
+                />
+              ) : null}
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader>

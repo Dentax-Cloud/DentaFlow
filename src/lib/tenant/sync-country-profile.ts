@@ -90,3 +90,74 @@ export function extractCustomFieldValues(
       value,
     }));
 }
+
+type PatientFormSource = {
+  firstName: string;
+  lastName: string;
+  fatherName?: string | null;
+  grandfatherName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  dateOfBirth?: Date | null;
+  gender?: string | null;
+  nationality?: string | null;
+  maritalStatus?: string | null;
+  occupation?: string | null;
+  employer?: string | null;
+  bloodGroup?: string | null;
+  idDocumentType?: string | null;
+  idDocumentNumber?: string | null;
+  idDocumentExpiry?: Date | null;
+  insuranceProvider?: string | null;
+  insuranceNetwork?: string | null;
+  insurancePolicyNo?: string | null;
+  insuranceMemberId?: string | null;
+  insuranceExpiry?: Date | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  customFieldValues?: Array<{ field: { fieldKey: string }; value: string | null }>;
+};
+
+function formatDateInput(value?: Date | null): string {
+  if (!value) return "";
+  return value.toISOString().slice(0, 10);
+}
+
+/** Map a patient record to dynamic form values for edit mode. */
+export function mapPatientToFormValues(patient: PatientFormSource): Record<string, string> {
+  const values: Record<string, string> = {
+    firstName: patient.firstName ?? "",
+    lastName: patient.lastName ?? "",
+    fatherName: patient.fatherName ?? "",
+    grandfatherName: patient.grandfatherName ?? "",
+    email: patient.email ?? "",
+    phone: patient.phone ?? "",
+    dateOfBirth: formatDateInput(patient.dateOfBirth),
+    gender: patient.gender ?? "",
+    nationality: patient.nationality ?? "",
+    maritalStatus: patient.maritalStatus ?? "",
+    occupation: patient.occupation ?? "",
+    employer: patient.employer ?? "",
+    bloodGroup: patient.bloodGroup ?? "",
+    insuranceProvider: patient.insuranceProvider ?? "",
+    insuranceNetwork: patient.insuranceNetwork ?? "",
+    insurancePolicyNo: patient.insurancePolicyNo ?? "",
+    insuranceMemberId: patient.insuranceMemberId ?? "",
+    insuranceExpiry: formatDateInput(patient.insuranceExpiry),
+    emergencyContactName: patient.emergencyContactName ?? "",
+    emergencyContactPhone: patient.emergencyContactPhone ?? "",
+    idDocumentExpiry: formatDateInput(patient.idDocumentExpiry),
+  };
+
+  if (patient.idDocumentType && patient.idDocumentNumber) {
+    values[`idDoc_${patient.idDocumentType}`] = patient.idDocumentNumber;
+  }
+
+  for (const cv of patient.customFieldValues ?? []) {
+    if (cv.value) {
+      values[`custom_${cv.field.fieldKey}`] = cv.value;
+    }
+  }
+
+  return values;
+}

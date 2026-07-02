@@ -25,6 +25,14 @@ export const removeTeamMemberSchema = z.object({
   userId: z.string().min(1),
 });
 
+export const updateStaffMemberProfileSchema = z.object({
+  userId: z.string().min(1),
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  role: invitableRoleSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+
 export const updateClinicSettingsSchema = z.object({
   currency: z
     .string()

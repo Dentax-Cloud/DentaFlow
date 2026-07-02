@@ -18,6 +18,7 @@ import {
   removeTeamMemberSchema,
   updateClinicSettingsSchema,
   updateTeamMemberRoleSchema,
+  updateStaffMemberProfileSchema,
 } from "./schemas";
 
 export const inviteTeamMember = createAction({
@@ -100,6 +101,69 @@ export const updateTeamMemberRole = createAction({
       entity: "User",
       entityId: member.id,
       metadata: { previousRole: member.role, newRole: input.role },
+    });
+
+    revalidatePath("/admin");
+    return updated;
+  },
+});
+
+export const updateStaffMemberProfile = createAction({
+  schema: updateStaffMemberProfileSchema,
+  permission: () => requirePermission(PERMISSIONS.admin.users),
+  handler: async (input, ctx) => {
+    const actor = getStaffActor(ctx);
+    const member = await db.staffMember.findFirst({
+      where: tenantWhere(ctx.tenant.id, { id: input.userId, deletedAt: null }),
+    });
+    if (!member) throw new Error("Team member not found");
+
+    if (member.id === actor.id && input.isActive === false) {
+      throw new Error("You cannot suspend your own account");
+    }
+
+    if (member.role === UserRole.OWNER) {
+      const ownerCount = await db.staffMember.count({
+        where: {
+          tenantId: ctx.tenant.id,
+          role: UserRole.OWNER,
+          deletedAt: null,
+          isActive: true,
+        },
+      });
+      if (ownerCount <= 1 && input.role) {
+        throw new Error("Cannot change the role of the only owner account");
+      }
+    }
+
+    if (member.role === UserRole.ADMIN || member.role === UserRole.OWNER) {
+      if (input.role && input.role !== member.role) {
+        throw new Error("Cannot change the role of an admin account");
+      }
+    }
+
+    const updated = await db.staffMember.update({
+      where: { id: member.id },
+      data: {
+        ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+        ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(input.role !== undefined ? { role: input.role } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await createAuditLog({
+      tenantId: ctx.tenant.id,
+      userId: actor.id,
+      action: AuditAction.UPDATE,
+      entity: "User",
+      entityId: member.id,
+      metadata: {
+        firstName: input.firstName,
+        lastName: input.lastName,
+        role: input.role,
+        isActive: input.isActive,
+      },
     });
 
     revalidatePath("/admin");
