@@ -544,6 +544,14 @@ export async function generateImportTemplate(
         example: "01/01/2025",
         section: "CORE",
       },
+      {
+        key: "branchName",
+        header: "Branch",
+        mandatory: false,
+        type: "text",
+        example: "Main Office",
+        section: "CORE",
+      },
     ];
   } else if (entity === "PROCEDURE") {
     columns = [

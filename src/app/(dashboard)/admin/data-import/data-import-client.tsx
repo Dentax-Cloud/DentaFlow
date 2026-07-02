@@ -35,7 +35,7 @@ import {
   type ImportBatchResult,
   type ImportFieldError,
   type ImportMode,
-} from "@/lib/import/import-processor";
+} from "@/lib/import/import-types";
 
 type HistoryRow = {
   id: string;

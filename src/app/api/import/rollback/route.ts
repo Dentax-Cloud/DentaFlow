@@ -4,6 +4,7 @@ import { getServerAuthSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { clearPendingTeamInvite } from "@/lib/tenant/team-invites";
 
 export async function POST(request: Request) {
   const session = await getServerAuthSession();
@@ -64,6 +65,28 @@ export async function POST(request: Request) {
       data: { deletedAt: new Date() },
     });
     deletedCount = result.count;
+  } else if (rollbackData.entity === "STAFF") {
+    const staffMembers = await db.staffMember.findMany({
+      where: {
+        id: { in: rollbackData.createdIds },
+        tenantId: ctx.tenantId,
+        deletedAt: null,
+      },
+      select: { id: true, email: true },
+    });
+
+    const result = await db.staffMember.updateMany({
+      where: {
+        id: { in: staffMembers.map((s) => s.id) },
+        tenantId: ctx.tenantId,
+      },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+    deletedCount = result.count;
+
+    await Promise.all(
+      staffMembers.map((s) => clearPendingTeamInvite(ctx.tenantId, s.email)),
+    );
   }
 
   await db.importBatch.update({

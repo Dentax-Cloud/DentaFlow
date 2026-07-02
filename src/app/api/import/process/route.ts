@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       ctx.tenantId,
       countryCode,
       currency,
+      entity,
     );
   } catch (err) {
     return NextResponse.json(

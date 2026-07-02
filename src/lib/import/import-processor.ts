@@ -8,34 +8,20 @@ import {
   formatRawImportValue,
   parseImportDateToLocalDate,
 } from "@/lib/import/parse-import-date";
+import type {
+  ImportBatchResult,
+  ImportFieldError,
+  ImportMode,
+  ImportRowResult,
+} from "@/lib/import/import-types";
 
-export type ImportMode = "CREATE_ONLY" | "UPDATE_ONLY" | "UPSERT";
-
-export type ImportFieldError = {
-  field: string;
-  rawValue: string;
-  reason: string;
-};
-
-export type ImportRowResult = {
-  rowNumber: number;
-  status: "SUCCESS" | "WARNING" | "ERROR" | "SKIPPED";
-  message?: string;
-  warnings?: string[];
-  fieldErrors?: ImportFieldError[];
-  patientId?: string;
-  action?: "CREATED" | "UPDATED" | "SKIPPED";
-};
-
-export type ImportBatchResult = {
-  batchId: string;
-  total: number;
-  success: number;
-  warnings: number;
-  errors: number;
-  skipped: number;
-  results: ImportRowResult[];
-};
+export type {
+  ImportBatchResult,
+  ImportFieldError,
+  ImportMode,
+  ImportRowResult,
+} from "@/lib/import/import-types";
+export { buildImportErrorReportCsv } from "@/lib/import/import-types";
 
 type CustomFieldDef = {
   id: string;
@@ -481,11 +467,24 @@ export async function processImport(input: {
   const customFieldDefs = await db.tenantCustomField.findMany({
     where: {
       tenantId: input.tenantId,
-      entity: input.entity === "PATIENT" ? "PATIENT" : input.entity,
+      entity: input.entity,
       isActive: true,
     },
     select: { id: true, fieldKey: true, fieldType: true },
   });
+
+  let inviterName = "Clinic Admin";
+  if (input.importedById) {
+    const importer = await db.staffMember.findFirst({
+      where: { id: input.importedById, tenantId: input.tenantId, deletedAt: null },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    if (importer) {
+      inviterName =
+        [importer.firstName, importer.lastName].filter(Boolean).join(" ").trim() ||
+        importer.email;
+    }
+  }
 
   const rollbackIds: string[] = [];
   const results: ImportRowResult[] = [];
@@ -520,6 +519,17 @@ export async function processImport(input: {
           customFieldDefs,
           rollbackIds,
         );
+      } else if (input.entity === "STAFF") {
+        const { processStaffRow } = await import("@/lib/import/staff-import");
+        result = await processStaffRow({
+          tenantId: input.tenantId,
+          row,
+          rowNumber: i + 4,
+          mode: input.mode,
+          countryCode,
+          inviterName,
+          rollbackIds,
+        });
       } else {
         result = {
           rowNumber: i + 4,
@@ -575,40 +585,4 @@ export async function processImport(input: {
     skipped,
     results,
   };
-}
-
-type ErrorReportRow = {
-  row?: number;
-  rowNumber?: number;
-  status: string;
-  message?: string;
-  warnings?: string[];
-  fieldErrors?: ImportFieldError[];
-};
-
-function csvEscape(value: string): string {
-  return value.replace(/"/g, '""');
-}
-
-export function buildImportErrorReportCsv(rows: ErrorReportRow[]): string {
-  const lines = ["Row,Status,Field,Raw Value,Reason,Message,Warnings"];
-
-  for (const row of rows) {
-    const rowNum = row.row ?? row.rowNumber ?? "";
-    const message = csvEscape(row.message ?? "");
-    const warnings = csvEscape((row.warnings ?? []).join("; "));
-
-    if (row.fieldErrors?.length) {
-      for (const fieldError of row.fieldErrors) {
-        lines.push(
-          `${rowNum},${row.status},"${csvEscape(fieldError.field)}","${csvEscape(fieldError.rawValue)}","${csvEscape(fieldError.reason)}","${message}","${warnings}"`,
-        );
-      }
-      continue;
-    }
-
-    lines.push(`${rowNum},${row.status},"","","","${message}","${warnings}"`);
-  }
-
-  return lines.join("\n");
 }

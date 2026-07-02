@@ -37,6 +37,9 @@ const STATIC_HEADER_MAP: Record<string, string> = {
   "License Number": "licenseNumber",
   Specialization: "specialization",
   Role: "role",
+  Branch: "branchName",
+  "Branch Name": "branchName",
+  Password: "password",
   "Procedure Code": "code",
   "Procedure Name": "name",
   Description: "description",
@@ -102,9 +105,10 @@ export async function parseImportFileBuffer(
   tenantId: string,
   countryCode: string,
   currency: string,
+  entity: ImportEntity = "PATIENT",
 ): Promise<Record<string, unknown>[]> {
   const customFields = await db.tenantCustomField.findMany({
-    where: { tenantId, entity: "PATIENT", isActive: true },
+    where: { tenantId, entity, isActive: true },
     select: { fieldKey: true, fieldLabel: true },
   });
 
