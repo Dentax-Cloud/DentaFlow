@@ -50,7 +50,6 @@ model Tenant {
   communicationLogs    CommunicationLog[]
   doctors              Doctor[]
   feedbacks            Feedback[]
-  insurancePolicies         InsurancePolicy[]
   patientInsurancePolicies  PatientInsurancePolicy[]
   inventoryItems       InventoryItem[]
   invoices             Invoice[]
@@ -285,7 +284,6 @@ model Patient {
   clinicalNotes     ClinicalNote[]
   communicationLogs CommunicationLog[]
   feedbacks         Feedback[]
-  insurancePolicies        InsurancePolicy[]
   patientInsurancePolicies PatientInsurancePolicy[]
   invoices                 Invoice[]
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -909,27 +907,6 @@ model Payment {
   @@index([tenantId, invoiceId])
 }
 
-model InsurancePolicy {
-  id              String    @id @default(cuid())
-  tenantId        String
-  patientId       String
-  provider        String
-  policyNumber    String
-  groupNumber     String?
-  coveragePercent Float?
-  annualMax       Decimal?  @db.Decimal(12, 2)
-  validFrom       DateTime?
-  validTo         DateTime?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  claims          Claim[]
-  patient         Patient   @relation(fields: [patientId], references: [id])
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, patientId])
-}
-
 model PatientInsurancePolicy {
   id                     String                  @id @default(cuid())
   tenantId               String
@@ -973,7 +950,6 @@ model Claim {
   notes       String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-  policy      InsurancePolicy @relation(fields: [policyId], references: [id])
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
