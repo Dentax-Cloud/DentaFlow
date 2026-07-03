@@ -4,6 +4,7 @@ import type { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { isTrialExpired } from "@/lib/tenant/trial";
 import { canUseFeature, type PlanFeatures } from "./plans";
+import type { TenantContext } from "@/lib/tenant/context";
 
 const PLAN_LIMITS: Record<
   SubscriptionPlan,
@@ -54,9 +55,31 @@ export async function requireActiveSubscription() {
 
 export async function requireFeature(feature: keyof PlanFeatures) {
   const ctx = await requireActiveSubscription();
+  assertPlanFeature(ctx, feature);
+  return ctx;
+}
+
+export function assertPlanFeature(
+  ctx: Pick<TenantContext, "isSuperAdmin" | "tenant">,
+  feature: keyof PlanFeatures,
+) {
   if (!ctx.isSuperAdmin && !canUseFeature(ctx.tenant.subscriptionPlan, feature)) {
     throw new Error("FEATURE_NOT_AVAILABLE");
   }
+}
+
+export async function requireCrmFeature() {
+  const ctx = await requireFeature("crm");
+  return ctx;
+}
+
+export async function requirePatientPortalFeature() {
+  const ctx = await requireFeature("patientPortal");
+  return ctx;
+}
+
+export async function requireMultiBranchFeature() {
+  const ctx = await requireFeature("multiBranch");
   return ctx;
 }
 

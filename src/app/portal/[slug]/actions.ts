@@ -9,9 +9,23 @@ import {
 } from "@/lib/portal/portal-auth";
 import { sendMail } from "@/lib/mail";
 import { checkRateLimit } from "@/lib/portal/rate-limit";
+import {
+  PATIENT_PORTAL_PLAN_MESSAGE,
+  tenantHasPatientPortalEntitlement,
+} from "@/lib/portal/portal-plan";
 
 function portalBaseUrl(): string {
   return process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3100";
+}
+
+async function getActivePortalTenant(slug: string) {
+  const tenant = await db.tenant.findFirst({
+    where: { slug, portalEnabled: true },
+    select: { id: true, name: true, slug: true, email: true, subscriptionPlan: true },
+  });
+  if (!tenant) return null;
+  if (!tenantHasPatientPortalEntitlement(tenant.subscriptionPlan)) return null;
+  return tenant;
 }
 
 export async function loginToPortal(input: {
@@ -24,13 +38,13 @@ export async function loginToPortal(input: {
     return { success: false, error: "Too many login attempts. Please try again later." };
   }
 
-  const tenant = await db.tenant.findFirst({
-    where: { slug: input.slug, portalEnabled: true },
-    select: { id: true, name: true, slug: true },
-  });
+  const tenant = await getActivePortalTenant(input.slug);
 
   if (!tenant) {
-    return { success: false, error: "Portal not available" };
+    return {
+      success: false,
+      error: PATIENT_PORTAL_PLAN_MESSAGE,
+    };
   }
 
   const result = await authenticatePortalUser({
@@ -70,10 +84,7 @@ export async function lookupPatientByPortalId(input: {
   const rate = checkRateLimit(`portal-lookup:${input.slug}:${input.patientId}`, 20);
   if (!rate.allowed) return { found: false };
 
-  const tenant = await db.tenant.findFirst({
-    where: { slug: input.slug, portalEnabled: true },
-    select: { id: true },
-  });
+  const tenant = await getActivePortalTenant(input.slug);
   if (!tenant) return { found: false };
 
   const patient = await db.patient.findFirst({
@@ -110,12 +121,11 @@ export async function registerForPortal(input: {
     return { success: false, error: "Too many registration attempts. Please try again later." };
   }
 
-  const tenant = await db.tenant.findFirst({
-    where: { slug: input.slug, portalEnabled: true },
-    select: { id: true, name: true, slug: true, email: true },
-  });
+  const tenant = await getActivePortalTenant(input.slug);
 
-  if (!tenant) return { success: false, error: "Portal not available" };
+  if (!tenant) {
+    return { success: false, error: PATIENT_PORTAL_PLAN_MESSAGE };
+  }
 
   const email = input.email.toLowerCase().trim();
 

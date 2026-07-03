@@ -1,10 +1,22 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { canUseFeature } from "@/lib/features/plans";
+import { FeatureUpgradePrompt } from "@/components/subscription/feature-upgrade-prompt";
 import { db } from "@/lib/db";
 import { serializeEntity } from "@/lib/utils/serialize";
 import { RecallsClient } from "./recalls-client";
 
 export default async function RecallsPage() {
   const ctx = await requireRouteAccess("crm", "read");
+
+  if (!ctx.isSuperAdmin && !canUseFeature(ctx.tenant.subscriptionPlan, "crm")) {
+    return (
+      <FeatureUpgradePrompt
+        title="Recalls"
+        description="Upgrade to Professional or Enterprise to manage patient recall campaigns."
+      />
+    );
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const in30 = new Date(today);

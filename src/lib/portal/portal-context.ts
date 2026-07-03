@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getPortalSession } from "./portal-auth";
 import { redirect } from "next/navigation";
+import { tenantHasPatientPortalEntitlement } from "./portal-plan";
 
 export type PortalContext = {
   accountId: string;
@@ -86,12 +87,17 @@ export async function requirePortalContext(slug: string): Promise<PortalContext>
         bookingMaxDays: true,
         bookingBufferMins: true,
         portalWelcomeMsg: true,
+        subscriptionPlan: true,
       },
     }),
   ]);
 
   if (!patient || !tenant) {
     redirect(`/portal/${slug}/login`);
+  }
+
+  if (!tenantHasPatientPortalEntitlement(tenant.subscriptionPlan)) {
+    redirect(`/portal/${slug}/disabled?reason=plan`);
   }
 
   if (!tenant.portalEnabled) {
@@ -125,6 +131,7 @@ export async function getPortalTenant(slug: string) {
       tenantCode: true,
       countryCode: true,
       portalLogoUrl: true,
+      subscriptionPlan: true,
     },
   });
 }

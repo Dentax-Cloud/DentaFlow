@@ -1,10 +1,22 @@
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { canUseFeature } from "@/lib/features/plans";
+import { FeatureUpgradePrompt } from "@/components/subscription/feature-upgrade-prompt";
 import { db } from "@/lib/db";
 import { serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { CrmClient } from "./crm-client";
 
 export default async function CrmPage() {
   const ctx = await requireRouteAccess("crm", "read");
+
+  if (!ctx.isSuperAdmin && !canUseFeature(ctx.tenant.subscriptionPlan, "crm")) {
+    return (
+      <FeatureUpgradePrompt
+        title="CRM & marketing"
+        description="Upgrade to Professional or Enterprise to access campaigns, recalls, and patient outreach."
+      />
+    );
+  }
+
   const [leads, campaigns, recalls] = await Promise.all([
     db.lead.findMany({
       where: { tenantId: ctx.tenant.id, deletedAt: null },

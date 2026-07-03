@@ -5,10 +5,16 @@ import { z } from "zod";
 import { CampaignChannel, CampaignStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createAction } from "@/lib/actions/safe-action";
+import { assertPlanFeature } from "@/lib/features/gate";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { sendMail } from "@/lib/mail";
+
+async function requireCrmPlan(ctx: Awaited<ReturnType<typeof import("@/lib/tenant/context").requireTenantContext>>) {
+  await requirePermission(PERMISSIONS.crm.write);
+  assertPlanFeature(ctx, "crm");
+}
 
 export type CampaignAudience =
   | "ALL_PATIENTS"
@@ -79,7 +85,7 @@ const createCampaignSchema = z.object({
 
 export const createCampaign = createAction({
   schema: createCampaignSchema,
-  permission: () => requirePermission(PERMISSIONS.crm.write),
+  permission: (ctx) => requireCrmPlan(ctx),
   handler: async (input, ctx) => {
     const campaign = await db.campaign.create({
       data: {
@@ -100,7 +106,7 @@ export const createCampaign = createAction({
 
 export const sendCampaign = createAction({
   schema: z.object({ campaignId: z.string() }),
-  permission: () => requirePermission(PERMISSIONS.crm.write),
+  permission: (ctx) => requireCrmPlan(ctx),
   handler: async (input, ctx) => {
     const campaign = await db.campaign.findFirst({
       where: tenantWhere(ctx.tenant.id, { id: input.campaignId }),
@@ -152,7 +158,7 @@ const recallActionSchema = z.object({ recallId: z.string() });
 
 export const markRecallComplete = createAction({
   schema: recallActionSchema,
-  permission: () => requirePermission(PERMISSIONS.crm.write),
+  permission: (ctx) => requireCrmPlan(ctx),
   handler: async (input, ctx) => {
     const recall = await db.recall.update({
       where: { id: input.recallId, tenantId: ctx.tenant.id },
@@ -166,7 +172,7 @@ export const markRecallComplete = createAction({
 
 export const sendRecallReminder = createAction({
   schema: recallActionSchema,
-  permission: () => requirePermission(PERMISSIONS.crm.write),
+  permission: (ctx) => requireCrmPlan(ctx),
   handler: async (input, ctx) => {
     const recall = await db.recall.findFirst({
       where: tenantWhere(ctx.tenant.id, { id: input.recallId }),

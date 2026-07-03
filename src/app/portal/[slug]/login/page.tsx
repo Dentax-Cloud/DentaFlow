@@ -1,7 +1,8 @@
 export const runtime = "nodejs";
 
 import { getPortalTenant } from "@/lib/portal/portal-context";
-import { notFound } from "next/navigation";
+import { tenantHasPatientPortalEntitlement } from "@/lib/portal/portal-plan";
+import { notFound, redirect } from "next/navigation";
 import PortalLoginClient from "./login-client";
 
 export default async function PortalLoginPage({
@@ -12,6 +13,9 @@ export default async function PortalLoginPage({
   const { slug } = await params;
   const tenant = await getPortalTenant(slug);
   if (!tenant || !tenant.portalEnabled) notFound();
+  if (!tenantHasPatientPortalEntitlement(tenant.subscriptionPlan)) {
+    redirect(`/portal/${slug}/disabled?reason=plan`);
+  }
 
   return (
     <div className="mx-auto max-w-sm py-8">

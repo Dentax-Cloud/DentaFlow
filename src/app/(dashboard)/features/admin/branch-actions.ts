@@ -7,6 +7,7 @@ import { createAction } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { checkBranchLimit } from "@/lib/features/gate";
+import { canUseFeature } from "@/lib/features/plans";
 import { tenantWhere } from "@/lib/tenant/scoped";
 
 const branchSchema = z.object({
@@ -19,6 +20,16 @@ export const createBranch = createAction({
   schema: branchSchema,
   permission: () => requirePermission(PERMISSIONS.admin.write),
   handler: async (input, ctx) => {
+    const branchCount = await db.branch.count({
+      where: { tenantId: ctx.tenant.id, deletedAt: null },
+    });
+    if (
+      branchCount >= 1 &&
+      !ctx.isSuperAdmin &&
+      !canUseFeature(ctx.tenant.subscriptionPlan, "multiBranch")
+    ) {
+      throw new Error("FEATURE_NOT_AVAILABLE");
+    }
     await checkBranchLimit(ctx.tenant.id);
     const branch = await db.branch.create({
       data: {

@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { getPortalTenant } from "@/lib/portal/portal-context";
+import { tenantHasPatientPortalEntitlement, PATIENT_PORTAL_PLAN_MESSAGE } from "@/lib/portal/portal-plan";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -23,6 +24,17 @@ export default async function PortalLandingPage({
           The patient portal for {tenant.name} is not yet active. Please contact the clinic
           directly.
         </p>
+        {tenant.phone && <p className="mt-4 text-blue-600">📞 {tenant.phone}</p>}
+      </div>
+    );
+  }
+
+  if (!tenantHasPatientPortalEntitlement(tenant.subscriptionPlan)) {
+    return (
+      <div className="py-16 text-center">
+        <p className="mb-4 text-4xl">🔒</p>
+        <h1 className="text-xl font-bold">Portal not available</h1>
+        <p className="mt-2 text-muted-foreground">{PATIENT_PORTAL_PLAN_MESSAGE}</p>
         {tenant.phone && <p className="mt-4 text-blue-600">📞 {tenant.phone}</p>}
       </div>
     );
