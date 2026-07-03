@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/lib/auth/client";
@@ -54,38 +54,24 @@ export function Sidebar({
   tenantLogoUrl?: string | null;
 }) {
   const pathname = usePathname();
-  const navGroups = getNavGroupsForRole(userRole);
+  const navGroups = useMemo(() => getNavGroupsForRole(userRole), [userRole]);
 
-  const initialExpanded = useMemo(() => {
-    const state: Record<string, boolean> = {};
-    for (const group of navGroups) {
-      if (group.label) {
-        state[groupKey(group)] = isNavGroupActive(pathname, group);
-      }
-    }
-    return state;
-  }, [navGroups, pathname]);
+  // Only the user's explicit collapse/expand choices are stored here.
+  // The active-route group is expanded via derived state below, so no
+  // effect + setState pair is needed (that caused an infinite loop).
+  const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
 
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(initialExpanded);
-
-  useEffect(() => {
-    setExpandedGroups((prev) => {
-      const next = { ...prev };
-      for (const group of navGroups) {
-        if (!group.label) continue;
-        const key = groupKey(group);
-        if (isNavGroupActive(pathname, group)) {
-          next[key] = true;
-        }
-      }
-      return next;
-    });
-  }, [pathname, navGroups]);
+  function isGroupExpanded(group: NavGroup) {
+    const key = groupKey(group);
+    if (key in manualOverrides) return manualOverrides[key];
+    return isNavGroupActive(pathname, group);
+  }
 
   function toggleGroup(group: NavGroup) {
     if (!group.label) return;
     const key = groupKey(group);
-    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+    const currentlyExpanded = isGroupExpanded(group);
+    setManualOverrides((prev) => ({ ...prev, [key]: !currentlyExpanded }));
   }
 
   return (
@@ -140,7 +126,7 @@ export function Sidebar({
           }
 
           const key = groupKey(group);
-          const expanded = expandedGroups[key] ?? false;
+          const expanded = isGroupExpanded(group);
           const groupActive = isNavGroupActive(pathname, group);
 
           return (
