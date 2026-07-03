@@ -84,7 +84,7 @@ export function TreatmentEstimatePanel({
     startTransition(async () => {
       try {
         const result = await generateEstimatePdf(estimate.id);
-        window.open(result.pdfUrl, "_blank");
+        window.open(result.downloadUrl, "_blank");
         toast.success("Estimate PDF ready");
         router.refresh();
       } catch {

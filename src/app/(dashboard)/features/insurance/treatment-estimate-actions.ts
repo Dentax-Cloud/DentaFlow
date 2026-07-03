@@ -1,7 +1,5 @@
 "use server";
 
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PreAuthStatus } from "@prisma/client";
@@ -9,6 +7,10 @@ import { db } from "@/lib/db";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { isPreAuthDefaultRequired } from "@/lib/countries";
 import { buildEstimatePdfBytes } from "@/lib/insurance/generate-estimate-pdf";
+import {
+  estimatePdfDownloadPath,
+  writeEstimatePdf,
+} from "@/lib/insurance/estimate-pdf-storage";
 import type { ProcedureCodeSnapshot } from "@/lib/insurance/estimate-types";
 import {
   serializePreAuthorization,
@@ -295,22 +297,11 @@ export async function generateEstimatePdf(estimateId: string) {
     generatedAt: estimate.generatedAt,
   });
 
-  const dir = path.join(
-    process.cwd(),
-    "public",
-    "generated",
-    "estimates",
-    ctx.tenantId,
-  );
-  await mkdir(dir, { recursive: true });
-  const fileName = `${estimateId}.pdf`;
-  const filePath = path.join(dir, fileName);
-  await writeFile(filePath, pdfBytes);
-
-  const pdfUrl = `/generated/estimates/${ctx.tenantId}/${fileName}`;
+  const storageKey = await writeEstimatePdf(ctx.tenantId, estimateId, pdfBytes);
+  const downloadUrl = estimatePdfDownloadPath(estimateId);
   const updated = await db.treatmentEstimate.update({
     where: { id: estimateId },
-    data: { pdfUrl },
+    data: { pdfUrl: storageKey },
   });
 
   if (estimate.treatmentPlanId) {
@@ -318,7 +309,7 @@ export async function generateEstimatePdf(estimateId: string) {
   }
 
   return {
-    pdfUrl,
+    downloadUrl,
     estimate: serializeTreatmentEstimate(updated),
   };
 }
