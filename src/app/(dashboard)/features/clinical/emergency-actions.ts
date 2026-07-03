@@ -12,6 +12,7 @@ import {
   getComplaintLabel,
   type Vitals,
 } from "@/lib/clinical/emergency-types";
+import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 import { generateText } from "ai";
 import { isAIConfigured, resolveOpenAIModel, SYSTEM_SAFETY } from "@/lib/ai/client";
 
@@ -218,6 +219,19 @@ export async function updateEmergencyStatus(intakeId: string, status: string) {
           data: { status: apptStatus },
         })
         .catch(() => null);
+
+      if (apptStatus === "COMPLETED" && intake.appointmentId) {
+        const allowInvoice =
+          Boolean(ctx.staffMember) &&
+          hasPermission(ctx.staffMember!.role, PERMISSIONS.billing.write);
+        await autoCloseChairsideSessionsForAppointment({
+          tenantId: ctx.tenantId,
+          appointmentId: intake.appointmentId,
+          appointmentStatus: "COMPLETED",
+          staffMemberId: ctx.staffMember?.id,
+          allowInvoice,
+        }).catch(() => null);
+      }
     }
   }
 

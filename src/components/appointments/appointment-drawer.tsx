@@ -7,6 +7,7 @@ import { AppointmentStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments/actions";
+import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 
 type AppointmentDetail = {
   id: string;
@@ -121,6 +122,7 @@ export function AppointmentDrawer({
   const [isPending, startTransition] = useTransition();
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const { confirmBeforeStatusChange, dialog: chairsideDialog } = useChairsideAppointmentConfirm();
 
   useEffect(() => {
     if (!appointmentId) {
@@ -148,7 +150,7 @@ export function AppointmentDrawer({
     setAppointment(data.appointment ?? null);
   }
 
-  function handleStatusChange(newStatus: AppointmentStatus) {
+  function executeStatusChange(newStatus: AppointmentStatus) {
     if (!appointment) return;
     startTransition(async () => {
       const result = await updateAppointmentStatus({
@@ -162,14 +164,24 @@ export function AppointmentDrawer({
     });
   }
 
+  function handleStatusChange(newStatus: AppointmentStatus) {
+    if (!appointment) return;
+    void confirmBeforeStatusChange(appointment.id, newStatus, () =>
+      executeStatusChange(newStatus),
+    );
+  }
+
   function handleCancel() {
     if (!appointment) return;
-    if (!confirm("Cancel this appointment? This cannot be undone.")) return;
-    handleStatusChange("CANCELED");
+    void confirmBeforeStatusChange(appointment.id, "CANCELED", () => {
+      if (!confirm("Cancel this appointment? This cannot be undone.")) return;
+      executeStatusChange("CANCELED");
+    });
   }
 
   return (
     <>
+      {chairsideDialog}
       <button
         type="button"
         aria-label="Close drawer"

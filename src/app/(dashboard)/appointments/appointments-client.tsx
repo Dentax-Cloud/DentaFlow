@@ -26,6 +26,7 @@ import { Radio, WifiOff, AlertCircle, CalendarPlus } from "lucide-react";
 import Link from "next/link";
 import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
+import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember } from "@prisma/client";
@@ -99,6 +100,7 @@ export function AppointmentsClient({
     initialAppointmentId ?? null,
   );
   const realtimeEnabled = isRealtimeAvailable();
+  const { confirmBeforeStatusChange, dialog: chairsideDialog } = useChairsideAppointmentConfirm();
 
   useEffect(() => {
     if (initialAppointmentId) {
@@ -186,6 +188,12 @@ export function AppointmentsClient({
             onClick={() => {
               if (action.label === "Create invoice") {
                 window.location.href = `/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`;
+                return;
+              }
+              if (action.label === "Complete") {
+                void confirmBeforeStatusChange(apt.id, action.status, () =>
+                  setStatus(apt.id, action.status),
+                );
                 return;
               }
               void setStatus(apt.id, action.status);
@@ -280,6 +288,7 @@ export function AppointmentsClient({
 
   return (
     <div className="space-y-6">
+      {chairsideDialog}
       {!realtimeEnabled && (
         <div
           className="flex items-start gap-3 rounded-lg border border-dashed border-amber-200/80 bg-amber-50/50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100"

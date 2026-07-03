@@ -3,7 +3,11 @@
 import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
-import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import {
+  autoCloseChairsideSessionsForAppointment,
+  isTerminalAppointmentStatus,
+} from "@/lib/clinical/chairside-lifecycle";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { broadcastAppointmentUpdate } from "@/lib/pusher";
 import { predictNoShowRisk } from "@/lib/ai";
@@ -140,6 +144,19 @@ export const updateAppointmentStatus = createAction({
 
     if (input.status === "COMPLETED" || input.status === "NO_SHOW") {
       await refreshPatientRiskScores(ctx.tenant.id, appointment.patientId);
+    }
+
+    if (isTerminalAppointmentStatus(input.status)) {
+      const allowInvoice =
+        Boolean(ctx.staffMember) &&
+        hasPermission(ctx.staffMember!.role, PERMISSIONS.billing.write);
+      await autoCloseChairsideSessionsForAppointment({
+        tenantId: ctx.tenant.id,
+        appointmentId: appointment.id,
+        appointmentStatus: input.status,
+        staffMemberId: ctx.staffMember?.id,
+        allowInvoice,
+      }).catch(() => null);
     }
 
     await broadcastAppointmentUpdate(ctx.tenant.id, appointment);

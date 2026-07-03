@@ -13,11 +13,13 @@ import {
 import { db } from "@/lib/db";
 import { sendAppointmentReminder, sendTrialExpiryWarning, sendMail } from "@/lib/mail";
 import { parseRecallSettings } from "@/lib/recall/helpers";
+import { expireStaleChairsideSessions } from "@/lib/clinical/chairside-lifecycle";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const RECALL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DAILY_BILLING_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CHAIRSIDE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 const TRIAL_WARNING_DAYS = [7, 3, 1] as const;
@@ -128,6 +130,7 @@ async function run() {
   setInterval(runRecallReminderJob, RECALL_CHECK_INTERVAL_MS);
   setInterval(runExpiredTrialEnforcementJob, DAILY_BILLING_INTERVAL_MS);
   setInterval(runPastDueDunningJob, DAILY_BILLING_INTERVAL_MS);
+  setInterval(runChairsideStaleSessionJob, CHAIRSIDE_CLEANUP_INTERVAL_MS);
 
   console.log("[worker] Jobs scheduled. Running…");
 }
@@ -139,6 +142,7 @@ async function runAllJobs() {
     runRecallReminderJob(),
     runExpiredTrialEnforcementJob(),
     runPastDueDunningJob(),
+    runChairsideStaleSessionJob(),
   ]);
 }
 
@@ -391,6 +395,17 @@ Upgrade here: ${APP_BASE_URL}/billing/subscription`,
     }
   } catch (err) {
     console.error("[worker] expired trial enforcement failed:", err);
+  }
+}
+
+async function runChairsideStaleSessionJob() {
+  try {
+    const expired = await expireStaleChairsideSessions();
+    if (expired > 0) {
+      console.log(`[worker] Expired ${expired} stale chairside session(s)`);
+    }
+  } catch (err) {
+    console.error("[worker] chairside stale session job failed:", err);
   }
 }
 

@@ -5,6 +5,12 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac/guard";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { ToothConditionType } from "@prisma/client";
+import {
+  CHAIRSIDE_CLOSED_REASON,
+  CHAIRSIDE_SESSION_STATUS,
+  finalizeChairsideSessionRecord,
+} from "@/lib/clinical/chairside-lifecycle";
 
 const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
   "You don't have permission to start a chairside session. Contact your administrator if you believe this is incorrect.";
@@ -16,10 +22,6 @@ async function requireChairsideWrite() {
   }
   return ctx;
 }
-import { tenantWhere } from "@/lib/tenant/scoped";
-import { generateInvoiceNumber } from "@/lib/utils";
-import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
-import { ToothConditionType } from "@prisma/client";
 
 async function upsertTooth(tenantId: string, patientId: string, toothNumber: number) {
   const number = String(toothNumber);
@@ -59,7 +61,7 @@ export async function startChairsideSession(input: {
       where: {
         tenantId: ctx.tenantId,
         appointmentId: input.appointmentId,
-        status: "ACTIVE",
+        status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
       },
       include: { entries: { orderBy: { createdAt: "asc" } } },
     });
@@ -72,7 +74,7 @@ export async function startChairsideSession(input: {
       patientId: input.patientId,
       appointmentId: input.appointmentId ?? null,
       staffId: ctx.staffMember?.id ?? null,
-      status: "ACTIVE",
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
     },
     include: { entries: { orderBy: { createdAt: "asc" } } },
   });
@@ -94,7 +96,11 @@ export async function addChairsideEntry(input: {
   await requirePermission(PERMISSIONS.clinical.write);
 
   const session = await db.chairsideSession.findFirst({
-    where: { id: input.sessionId, tenantId: ctx.tenantId, status: "ACTIVE" },
+    where: {
+      id: input.sessionId,
+      tenantId: ctx.tenantId,
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+    },
   });
   if (!session) throw new Error("Session not found or not active");
 
@@ -182,108 +188,58 @@ export async function getChairsideSession(sessionId: string) {
   });
 }
 
+export async function getChairsideBypassWarning(appointmentId: string) {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
+
+  const session = await db.chairsideSession.findFirst({
+    where: {
+      tenantId: ctx.tenantId,
+      appointmentId,
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+    },
+    include: { _count: { select: { entries: true } } },
+  });
+
+  if (!session || session._count.entries === 0) {
+    return { required: false as const, entryCount: 0 };
+  }
+
+  return { required: true as const, entryCount: session._count.entries };
+}
+
 export async function finalizeChairsideSession(sessionId: string) {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.clinical.write);
 
   const session = await db.chairsideSession.findFirst({
-    where: { id: sessionId, tenantId: ctx.tenantId, status: "ACTIVE" },
-    include: {
-      entries: { where: { includeInInvoice: true } },
-      patient: true,
+    where: {
+      id: sessionId,
+      tenantId: ctx.tenantId,
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
     },
+    include: { entries: { where: { includeInInvoice: true } } },
   });
   if (!session) throw new Error("Session not found");
 
-  let invoiceId: string | null = null;
-
   if (session.entries.length > 0) {
     await requirePermission(PERMISSIONS.billing.write);
-
-    const items = session.entries.map((e) => {
-      const unitPrice = Number(e.unitPrice ?? 0);
-      return {
-        tenantId: ctx.tenantId,
-        description: e.procedureName ?? e.conditionType ?? "Treatment",
-        quantity: e.quantity,
-        unitPrice,
-        total: unitPrice * e.quantity,
-        procedureCode: e.procedureCode ?? null,
-      };
-    });
-
-    const subtotal = items.reduce((sum, i) => sum + i.total, 0);
-    const taxInfo = await getTenantInvoiceTax(ctx.tenantId);
-    const tax = subtotal * taxInfo.taxRateDecimal;
-    const total = subtotal + tax;
-
-    const count = await db.invoice.count({ where: { tenantId: ctx.tenantId } });
-    const invoice = await db.invoice.create({
-      data: {
-        tenantId: ctx.tenantId,
-        patientId: session.patientId,
-        invoiceNumber: generateInvoiceNumber(count + 1),
-        status: "DRAFT",
-        subtotal,
-        tax,
-        total,
-        currency: taxInfo.currency,
-        taxName: taxInfo.taxName,
-        taxRateApplied: taxInfo.taxRatePercent,
-        taxNumber: taxInfo.taxNumber,
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        notes: session.appointmentId
-          ? `Chairside session · Appointment ${session.appointmentId}`
-          : "Chairside session",
-        items: { create: items },
-      },
-    });
-    invoiceId = invoice.id;
   }
 
-  if (session.appointmentId) {
-    await db.appointment
-      .updateMany({
-        where: tenantWhere(ctx.tenantId, { id: session.appointmentId }),
-        data: { status: "COMPLETED" },
-      })
-      .catch(() => null);
-  }
-
-  await db.chairsideSession.update({
-    where: { id: sessionId },
-    data: {
-      status: "FINALIZED",
-      finalizedAt: new Date(),
-      invoiceId,
-    },
+  const result = await finalizeChairsideSessionRecord({
+    sessionId,
+    tenantId: ctx.tenantId,
+    staffMemberId: ctx.staffMember?.id,
+    closedReason: CHAIRSIDE_CLOSED_REASON.MANUAL_FINALIZE,
+    allowInvoice: true,
   });
-
-  await db.auditLog
-    .create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.staffMember?.id,
-        performedById: ctx.staffMember?.id,
-        action: "CREATE",
-        entity: "ChairsideSession",
-        entityId: sessionId,
-        metadata: {
-          patientId: session.patientId,
-          entriesCount: session.entries.length,
-          invoiceId,
-          finalized: true,
-        },
-      },
-    })
-    .catch(() => null);
 
   revalidatePath("/clinical/chairside");
   revalidatePath("/appointments");
   revalidatePath("/billing");
   revalidatePath("/clinical");
 
-  return { invoiceId };
+  return result;
 }
 
 export async function getPatientChairsideSessions(patientId: string) {
@@ -307,7 +263,7 @@ export async function getActiveChairsideSessionsForUser() {
   return db.chairsideSession.findMany({
     where: {
       tenantId: ctx.tenantId,
-      status: "ACTIVE",
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
       ...(ctx.staffMember?.id ? { staffId: ctx.staffMember.id } : {}),
     },
     include: {

@@ -16,6 +16,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getStaffActor } from "@/lib/tenant/context";
 
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
 
@@ -557,6 +558,14 @@ export const generateInvoiceFromProcedures = createAction({
       where: tenantWhere(ctx.tenant.id, { id: input.appointmentId }),
       data: { status: "INVOICED" },
     });
+
+    await autoCloseChairsideSessionsForAppointment({
+      tenantId: ctx.tenant.id,
+      appointmentId: input.appointmentId,
+      appointmentStatus: "INVOICED",
+      staffMemberId: ctx.staffMember?.id,
+      allowInvoice: true,
+    }).catch(() => null);
 
     for (const catalogItem of catalogItems) {
       if (!catalogItem.inventoryConsumption) continue;
