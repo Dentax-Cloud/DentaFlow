@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS } from "./shared";
+import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS, DEFAULT_INSURANCE_MODEL } from "./shared";
 
 export const USA: CountryProfile = {
   code: "US",
@@ -97,6 +97,7 @@ export const USA: CountryProfile = {
 
   insuranceMandatory: false,
   preAuthRequired: true,
+  insuranceModel: DEFAULT_INSURANCE_MODEL,
   claimFormat: "ADA Dental Claim (837D)",
   insuranceProviders: [
     tieredProvider(

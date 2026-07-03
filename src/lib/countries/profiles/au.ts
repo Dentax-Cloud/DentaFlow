@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS } from "./shared";
+import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS, DEFAULT_INSURANCE_MODEL } from "./shared";
 
 export const AUSTRALIA: CountryProfile = {
   code: "AU",
@@ -95,6 +95,7 @@ export const AUSTRALIA: CountryProfile = {
 
   insuranceMandatory: false,
   preAuthRequired: false,
+  insuranceModel: DEFAULT_INSURANCE_MODEL,
   claimFormat: "Medicare / Private Health",
   insuranceProviders: [
     {

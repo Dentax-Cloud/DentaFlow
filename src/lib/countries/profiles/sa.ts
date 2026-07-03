@@ -1,6 +1,7 @@
 import type { CountryProfile } from "../types";
 import {
   GCC_NAME_FIELDS,
+  GCC_INSURANCE_MODEL,
   LUNAR_HOLIDAYS,
   selfPayProvider,
   tieredProvider,
@@ -106,6 +107,7 @@ export const SAUDI: CountryProfile = {
 
   insuranceMandatory: true,
   preAuthRequired: true,
+  insuranceModel: GCC_INSURANCE_MODEL,
   claimFormat: "NPHIES",
   insuranceProviders: [
     tieredProvider(

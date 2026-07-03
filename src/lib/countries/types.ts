@@ -116,6 +116,9 @@ export type CountryProfile = {
 
   insuranceMandatory: boolean;
   preAuthRequired: boolean;
+  insuranceModel: {
+    preAuthDefault: boolean;
+  };
   claimFormat?: string;
   insuranceProviders: PlatformInsuranceProvider[];
 

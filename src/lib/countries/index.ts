@@ -108,6 +108,10 @@ export function isFieldMandatory(fieldKey: string, countryCode: string): boolean
   return getMandatoryFields(countryCode).includes(fieldKey);
 }
 
+export function isPreAuthDefaultRequired(countryCode: string): boolean {
+  return getCountryProfile(countryCode).insuranceModel.preAuthDefault;
+}
+
 export type {
   CountryProfile,
   IdentityDocument,

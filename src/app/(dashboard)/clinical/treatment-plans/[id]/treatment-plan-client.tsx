@@ -28,6 +28,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TreatmentEstimatePanel } from "@/components/insurance/treatment-estimate-panel";
+import { PreAuthStatusBadge } from "@/components/insurance/pre-auth-status-badge";
+import type {
+  SerializedPreAuthorization,
+  SerializedTreatmentEstimate,
+} from "@/lib/insurance/estimate-types";
+import { isPreAuthApproved } from "@/lib/insurance/estimate-types";
 
 export type TreatmentPlanItemRow = {
   id: string;
@@ -43,6 +50,7 @@ export type TreatmentPlanItemRow = {
 
 export type TreatmentPlanView = {
   id: string;
+  patientId: string;
   title: string;
   status: string;
   version: number;
@@ -68,6 +76,18 @@ export type PlanVersionRow = {
   title: string;
 };
 
+export type TreatmentPlanEstimateData = {
+  estimate: SerializedTreatmentEstimate | null;
+  preAuth: SerializedPreAuthorization | null;
+  policies: Array<{
+    id: string;
+    rank: string;
+    memberId: string;
+    providerName: string;
+  }>;
+  preAuthDefaultRequired: boolean;
+};
+
 function groupByVisit(items: TreatmentPlanItemRow[]) {
   return items.reduce(
     (acc, item) => {
@@ -91,10 +111,12 @@ export function TreatmentPlanClient({
   plan,
   procedures,
   versions,
+  estimateData,
 }: {
   plan: TreatmentPlanView;
   procedures: ProcedureRow[];
   versions: PlanVersionRow[];
+  estimateData: TreatmentPlanEstimateData;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -116,6 +138,17 @@ export function TreatmentPlanClient({
     .map(Number)
     .sort((a, b) => a - b);
 
+  const hasInsurance =
+    estimateData.policies.length > 0 || estimateData.estimate?.policyId != null;
+  const preAuthSatisfied = estimateData.preAuth
+    ? isPreAuthApproved(estimateData.preAuth.status)
+    : false;
+  const blockStart =
+    estimateData.preAuthDefaultRequired &&
+    hasInsurance &&
+    estimateData.estimate != null &&
+    !preAuthSatisfied;
+
   function handleStatusChange(action: string) {
     startTransition(async () => {
       try {
@@ -133,6 +166,12 @@ export function TreatmentPlanClient({
             toast.success("Plan marked complete");
             break;
           case "start":
+            if (blockStart) {
+              toast.error(
+                "Pre-authorization approval is required before starting treatment",
+              );
+              return;
+            }
             await startTreatmentPlan(plan.id);
             toast.success("Treatment started");
             break;
@@ -209,6 +248,9 @@ export function TreatmentPlanClient({
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge className={config.color}>{config.label}</Badge>
+          {estimateData.preAuth && (
+            <PreAuthStatusBadge status={estimateData.preAuth.status} compact />
+          )}
           {config.nextActions
             .filter((a) => a !== "delete")
             .map((action) => (
@@ -219,7 +261,12 @@ export function TreatmentPlanClient({
                   action === "decline" ? "destructive" : action === "accept" ? "default" : "outline"
                 }
                 onClick={() => handleStatusChange(action)}
-                disabled={isPending}
+                disabled={isPending || (action === "start" && blockStart)}
+                title={
+                  action === "start" && blockStart
+                    ? "Pre-authorization approval required"
+                    : undefined
+                }
               >
                 {action === "propose" && "Send for approval"}
                 {action === "accept" && "Accept plan"}
@@ -265,6 +312,15 @@ export function TreatmentPlanClient({
           <p className="text-2xl font-bold">{totals.visits}</p>
         </Card>
       </div>
+
+      <TreatmentEstimatePanel
+        patientId={plan.patientId}
+        treatmentPlanId={plan.id}
+        estimate={estimateData.estimate}
+        preAuth={estimateData.preAuth}
+        policies={estimateData.policies}
+        preAuthDefaultRequired={estimateData.preAuthDefaultRequired}
+      />
 
       <Tabs defaultValue="visits">
         <TabsList>

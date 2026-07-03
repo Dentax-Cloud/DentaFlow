@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { getPatientById } from "@/app/(dashboard)/features/patients/actions";
 import { getPatientInsurancePolicies } from "@/app/(dashboard)/features/insurance/insurance-policy-actions";
+import { getPatientTreatmentPlanPreAuths } from "@/app/(dashboard)/features/insurance/treatment-estimate-actions";
 import { getTenantInsuranceProviders } from "@/app/(dashboard)/features/admin/customization-actions";
 import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
@@ -32,7 +33,7 @@ export default async function PatientDetailPage({
     role === UserRole.ADMIN ||
     hasPermission(role, PERMISSIONS.admin.write);
 
-  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields, insurancePolicies, insuranceProviders] =
+  const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields, insurancePolicies, insuranceProviders, treatmentPlanPreAuths] =
     await Promise.all([
     getPatientById(ctx.tenant.id, id),
     db.perioChart.findFirst({
@@ -80,6 +81,7 @@ export default async function PatientDetailPage({
       : Promise.resolve([]),
     getPatientInsurancePolicies(ctx.tenant.id, id),
     getTenantInsuranceProviders(),
+    getPatientTreatmentPlanPreAuths(id),
   ]);
 
   if (!patient) notFound();
@@ -168,6 +170,7 @@ export default async function PatientDetailPage({
       primaryInsuranceStatus={
         insurancePolicies.find((p) => p.rank === "PRIMARY")?.effectiveVerificationStatus ?? null
       }
+      treatmentPlanPreAuths={treatmentPlanPreAuths}
     />
   );
 }

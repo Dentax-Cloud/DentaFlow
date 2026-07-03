@@ -122,3 +122,6 @@ export function standardNetworks(
     defaultCoPayPercent,
   }));
 }
+
+export const GCC_INSURANCE_MODEL = { preAuthDefault: true } as const;
+export const DEFAULT_INSURANCE_MODEL = { preAuthDefault: false } as const;

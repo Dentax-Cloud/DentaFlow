@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS } from "./shared";
+import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS, DEFAULT_INSURANCE_MODEL } from "./shared";
 
 export const SINGAPORE: CountryProfile = {
   code: "SG",
@@ -86,6 +86,7 @@ export const SINGAPORE: CountryProfile = {
 
   insuranceMandatory: false,
   preAuthRequired: true,
+  insuranceModel: DEFAULT_INSURANCE_MODEL,
   claimFormat: "Medisave / Shield",
   insuranceProviders: [
     tieredProvider(

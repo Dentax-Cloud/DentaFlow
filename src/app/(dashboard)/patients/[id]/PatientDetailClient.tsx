@@ -53,6 +53,8 @@ import { Separator } from "@/components/ui/separator";
 import { PatientAttachmentUploader } from "@/components/upload/patient-attachment-uploader";
 import { PatientInsuranceTab } from "@/components/insurance/patient-insurance-tab";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
+import { PreAuthStatusBadge } from "@/components/insurance/pre-auth-status-badge";
+import type { SerializedPreAuthorization } from "@/lib/insurance/estimate-types";
 import type { SerializedInsurancePolicy } from "@/lib/insurance/policy-types";
 
 /** Core demographics from the server (matches product spec). */
@@ -205,6 +207,7 @@ export interface PatientDetailClientProps {
     source: "platform" | "tenant";
   }>;
   primaryInsuranceStatus?: SerializedInsurancePolicy["effectiveVerificationStatus"] | null;
+  treatmentPlanPreAuths?: Record<string, SerializedPreAuthorization>;
 }
 
 type TabId =
@@ -310,6 +313,7 @@ export function PatientDetailClient({
   insurancePolicies = [],
   insuranceProviders = [],
   primaryInsuranceStatus = null,
+  treatmentPlanPreAuths = {},
 }: PatientDetailClientProps) {
   const [idCardOpen, setIdCardOpen] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
@@ -1151,6 +1155,7 @@ export function PatientDetailClient({
                       tp.itemCount > 0
                         ? Math.round((tp.completedCount / tp.itemCount) * 100)
                         : 0;
+                    const preAuth = treatmentPlanPreAuths[tp.id];
                     return (
                       <div
                         key={tp.id}
@@ -1172,7 +1177,12 @@ export function PatientDetailClient({
                             )}
                           </div>
                           <div className="text-right">
-                            <Badge variant="outline">{tp.status}</Badge>
+                            <div className="flex flex-wrap items-center justify-end gap-1">
+                              <Badge variant="outline">{tp.status}</Badge>
+                              {preAuth && (
+                                <PreAuthStatusBadge status={preAuth.status} compact />
+                              )}
+                            </div>
                             <p className="mt-1 text-xs font-medium tabular-nums">
                               {formatCurrency(tp.totalCost)}
                             </p>

@@ -66,6 +66,8 @@ model Tenant {
   teeth                Tooth[]
   toothConditions      ToothCondition[]
   treatmentPlans       TreatmentPlan[]
+  treatmentEstimates   TreatmentEstimate[]
+  preAuthorizations    PreAuthorization[]
   clinicalNoteVersions ClinicalNoteVersion[]
   perioCharts          PerioChart[]
   chairsideSessions    ChairsideSession[]
@@ -291,6 +293,7 @@ model Patient {
   teeth             Tooth[]
   toothConditions   ToothCondition[]
   treatmentPlans    TreatmentPlan[]
+  treatmentEstimates TreatmentEstimate[]
   perioCharts       PerioChart[]
   chairsideSessions ChairsideSession[]
   clinicalImages    ClinicalImage[]
@@ -639,6 +642,7 @@ model TreatmentPlan {
   deletedAt         DateTime?
   items             TreatmentItem[]
   shares            TreatmentPlanShare[]
+  estimates         TreatmentEstimate[]
   patient           Patient             @relation(fields: [patientId], references: [id])
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   parentPlan        TreatmentPlan?      @relation("PlanRevisions", fields: [parentPlanId], references: [id])
@@ -933,9 +937,61 @@ model PatientInsurancePolicy {
   patient                Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   provider               TenantInsuranceProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  treatmentEstimates     TreatmentEstimate[]
+  preAuthorizations      PreAuthorization[]
 
   @@index([tenantId, patientId])
   @@index([tenantId, patientId, rank, isActive])
+}
+
+model TreatmentEstimate {
+  id                       String   @id @default(cuid())
+  tenantId                 String
+  patientId                String
+  treatmentPlanId          String?
+  policyId                 String?
+  procedureCodes           Json
+  totalAmount              Decimal  @db.Decimal(12, 2)
+  estimatedInsurerAmount   Decimal  @db.Decimal(12, 2)
+  estimatedPatientAmount   Decimal  @db.Decimal(12, 2)
+  generatedAt              DateTime @default(now())
+  generatedBy              String
+  pdfUrl                   String?
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  treatmentPlan TreatmentPlan?          @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  policy        PatientInsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  preAuthorizations PreAuthorization[]
+
+  @@index([tenantId, patientId])
+  @@index([tenantId, treatmentPlanId])
+}
+
+model PreAuthorization {
+  id                     String        @id @default(cuid())
+  tenantId               String
+  estimateId             String?
+  policyId               String
+  status                 PreAuthStatus @default(DRAFT)
+  referenceNumber        String?
+  submittedAt            DateTime?
+  decisionAt             DateTime?
+  approvedInsurerAmount  Decimal?      @db.Decimal(12, 2)
+  approvedPatientAmount  Decimal?      @db.Decimal(12, 2)
+  denialReason           String?
+  expiresAt              DateTime?
+  notes                  String?
+  createdBy              String
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estimate TreatmentEstimate?     @relation(fields: [estimateId], references: [id], onDelete: SetNull)
+  policy   PatientInsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, policyId])
+  @@index([tenantId, estimateId])
 }
 
 model Claim {
@@ -1927,6 +1983,15 @@ enum SubscriberRelationship {
   SPOUSE
   CHILD
   OTHER
+}
+
+enum PreAuthStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PARTIALLY_APPROVED
+  DENIED
+  EXPIRED
 }
 
 enum ClaimStatus {

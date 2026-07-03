@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS } from "./shared";
+import { selfPayProvider, tieredProvider, WESTERN_NAME_FIELDS, DEFAULT_INSURANCE_MODEL } from "./shared";
 
 export const UK: CountryProfile = {
   code: "GB",
@@ -95,6 +95,7 @@ export const UK: CountryProfile = {
 
   insuranceMandatory: false,
   preAuthRequired: false,
+  insuranceModel: DEFAULT_INSURANCE_MODEL,
   claimFormat: "NHS FP17 / Private",
   insuranceProviders: [
     {

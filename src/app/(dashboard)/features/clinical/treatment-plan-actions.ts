@@ -10,6 +10,7 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
 import { getVisitNumber, normalizeItemStatus } from "@/lib/clinical/treatment-plan-types";
+import { assertCanStartTreatment } from "@/lib/insurance/pre-auth-gate";
 
 async function recalculatePlanTotal(planId: string) {
   const items = await db.treatmentItem.findMany({ where: { treatmentPlanId: planId } });
@@ -91,6 +92,16 @@ export async function completeTreatmentPlan(planId: string) {
 export async function startTreatmentPlan(planId: string) {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.clinical.write);
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: ctx.tenantId },
+    select: { countryCode: true },
+  });
+  await assertCanStartTreatment(
+    ctx.tenantId,
+    planId,
+    tenant?.countryCode ?? "AE",
+  );
 
   const plan = await db.treatmentPlan.update({
     where: { id: planId, tenantId: ctx.tenantId },

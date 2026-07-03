@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { INDIAN_NAME_FIELDS, selfPayProvider, tieredProvider } from "./shared";
+import { INDIAN_NAME_FIELDS, selfPayProvider, tieredProvider, DEFAULT_INSURANCE_MODEL } from "./shared";
 
 export const INDIA: CountryProfile = {
   code: "IN",
@@ -106,6 +106,7 @@ export const INDIA: CountryProfile = {
 
   insuranceMandatory: false,
   preAuthRequired: true,
+  insuranceModel: DEFAULT_INSURANCE_MODEL,
   claimFormat: "TPA / Cashless",
   insuranceProviders: [
     tieredProvider(

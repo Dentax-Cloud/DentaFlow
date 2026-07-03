@@ -7,6 +7,7 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { mapPlanItemForClient } from "@/lib/clinical/treatment-plan-types";
 import { TreatmentPlanClient } from "./treatment-plan-client";
+import { getTreatmentPlanEstimateData } from "@/app/(dashboard)/features/insurance/treatment-estimate-actions";
 
 export default async function TreatmentPlanDetailPage({
   params,
@@ -47,10 +48,13 @@ export default async function TreatmentPlanDetailPage({
     (v, i, arr) => arr.findIndex((x) => x.id === v.id) === i,
   );
 
+  const estimateData = await getTreatmentPlanEstimateData(plan.id);
+
   return (
     <TreatmentPlanClient
       plan={{
         id: plan.id,
+        patientId: plan.patient.id,
         title: plan.title,
         status: plan.status,
         version: plan.version,
@@ -76,6 +80,7 @@ export default async function TreatmentPlanDetailPage({
         createdAt: v.createdAt.toISOString(),
         title: v.title,
       }))}
+      estimateData={estimateData}
     />
   );
 }

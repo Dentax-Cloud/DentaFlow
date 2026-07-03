@@ -1,5 +1,5 @@
 import type { CountryProfile } from "../types";
-import { GCC_NAME_FIELDS } from "./shared";
+import { GCC_NAME_FIELDS, GCC_INSURANCE_MODEL } from "./shared";
 
 export const UAE: CountryProfile = {
   code: "AE",
@@ -89,6 +89,7 @@ export const UAE: CountryProfile = {
 
   insuranceMandatory: true,
   preAuthRequired: true,
+  insuranceModel: GCC_INSURANCE_MODEL,
   claimFormat: "eClaim UAE",
   insuranceProviders: [
     {
