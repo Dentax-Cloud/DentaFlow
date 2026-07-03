@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
-import { startChairsideSession } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import {
+  getChairsideSession,
+  startChairsideSession,
+} from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { ChairsidePermissionDenied } from "@/components/clinical/chairside-permission-denied";
 import ChairsidePageClient from "./chairside-client";
 
 export default async function ChairsidePage({
@@ -16,10 +21,15 @@ export default async function ChairsidePage({
     sessionId?: string;
   }>;
 }) {
-  const { patientId, appointmentId } = await searchParams;
+  const { patientId, appointmentId, sessionId } = await searchParams;
   const ctx = await requireRouteAccess("clinical", "read");
 
   if (!patientId) redirect("/clinical");
+
+  const role = ctx.staffMember?.role;
+  if (!role || !hasPermission(role, PERMISSIONS.clinical.write)) {
+    return <ChairsidePermissionDenied />;
+  }
 
   const patient = await db.patient.findFirst({
     where: { id: patientId, tenantId: ctx.tenant.id, deletedAt: null },
@@ -27,10 +37,25 @@ export default async function ChairsidePage({
   });
   if (!patient) redirect("/clinical");
 
-  const chairsideSession = await startChairsideSession({
-    patientId,
-    appointmentId,
-  });
+  let chairsideSession = null;
+
+  if (sessionId) {
+    const existing = await getChairsideSession(sessionId);
+    if (
+      existing &&
+      existing.status === "ACTIVE" &&
+      existing.patientId === patientId
+    ) {
+      chairsideSession = existing;
+    }
+  }
+
+  if (!chairsideSession) {
+    chairsideSession = await startChairsideSession({
+      patientId,
+      appointmentId,
+    });
+  }
 
   const procedures = await db.procedureCatalog.findMany({
     where: { tenantId: ctx.tenant.id, isActive: true },

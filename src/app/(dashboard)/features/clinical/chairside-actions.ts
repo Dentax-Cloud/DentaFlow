@@ -4,7 +4,18 @@ import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac/guard";
-import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+
+const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
+  "You don't have permission to start a chairside session. Contact your administrator if you believe this is incorrect.";
+
+async function requireChairsideWrite() {
+  const ctx = await requireTenantContext();
+  if (!ctx.staffMember || !hasPermission(ctx.staffMember.role, PERMISSIONS.clinical.write)) {
+    throw new Error(CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE);
+  }
+  return ctx;
+}
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
@@ -36,8 +47,7 @@ export async function startChairsideSession(input: {
   patientId: string;
   appointmentId?: string;
 }) {
-  const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  const ctx = await requireChairsideWrite();
 
   const patient = await db.patient.findFirst({
     where: { id: input.patientId, tenantId: ctx.tenantId, deletedAt: null },
@@ -287,5 +297,22 @@ export async function getPatientChairsideSessions(patientId: string) {
     },
     orderBy: { startedAt: "desc" },
     take: 10,
+  });
+}
+
+export async function getActiveChairsideSessionsForUser() {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.clinical.read);
+
+  return db.chairsideSession.findMany({
+    where: {
+      tenantId: ctx.tenantId,
+      status: "ACTIVE",
+      ...(ctx.staffMember?.id ? { staffId: ctx.staffMember.id } : {}),
+    },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { startedAt: "desc" },
   });
 }

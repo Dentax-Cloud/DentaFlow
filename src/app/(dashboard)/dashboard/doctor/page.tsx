@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { isClinicalRole } from "@/lib/rbac/permissions";
 import { redirect } from "next/navigation";
 import { serializeDecimal } from "@/lib/utils/serialize";
+import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
 import DoctorDashboardClient from "./doctor-dashboard-client";
 
 export default async function DoctorDashboardPage() {
@@ -100,8 +102,23 @@ export default async function DoctorDashboardPage() {
 
   const totalThisWeek = weeklyStats.reduce((sum, s) => sum + s._count.id, 0);
 
+  const activeSessions = await getActiveChairsideSessionsForUser().catch(() => []);
+  const resumeSessions = activeSessions.map((session) => ({
+    id: session.id,
+    patientId: session.patientId,
+    appointmentId: session.appointmentId,
+    startedAt: session.startedAt.toISOString(),
+    patientName:
+      `${session.patient.firstName ?? ""} ${session.patient.lastName ?? ""}`.trim() ||
+      "Patient",
+  }));
+
   return (
-    <DoctorDashboardClient
+    <div className="space-y-4">
+      {resumeSessions.length > 0 && (
+        <ResumeChairsideBanner sessions={resumeSessions} compact />
+      )}
+      <DoctorDashboardClient
       doctorName={`${staffMember.firstName ?? ""} ${staffMember.lastName ?? ""}`.trim()}
       role={staffMember.role}
       appointments={appointments.map((a) => ({
@@ -119,5 +136,6 @@ export default async function DoctorDashboardPage() {
       totalThisWeek={totalThisWeek}
       today={today.toISOString()}
     />
+    </div>
   );
 }

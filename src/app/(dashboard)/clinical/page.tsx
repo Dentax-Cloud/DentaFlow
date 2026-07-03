@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
 import { listTemplates } from "@/app/(dashboard)/features/clinical/template-actions";
+import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
 import { ClinicalPageClient } from "./clinical-client";
 
 export default async function ClinicalPage({
@@ -53,8 +55,21 @@ export default async function ClinicalPage({
       }))
     : [];
 
+  const activeSessions = await getActiveChairsideSessionsForUser().catch(() => []);
+  const resumeSessions = activeSessions.map((session) => ({
+    id: session.id,
+    patientId: session.patientId,
+    appointmentId: session.appointmentId,
+    startedAt: session.startedAt.toISOString(),
+    patientName:
+      `${session.patient.firstName ?? ""} ${session.patient.lastName ?? ""}`.trim() ||
+      "Patient",
+  }));
+
   return (
-    <ClinicalPageClient
+    <div className="space-y-4">
+      {resumeSessions.length > 0 && <ResumeChairsideBanner sessions={resumeSessions} />}
+      <ClinicalPageClient
       patients={patients}
       selectedPatientId={patientId}
       appointmentId={appointmentId}
@@ -64,5 +79,6 @@ export default async function ClinicalPage({
       clinicName={ctx.tenant.name}
       templates={templates}
     />
+    </div>
   );
 }

@@ -65,10 +65,13 @@ describe("RBAC routes and navigation", () => {
   it("filters sidebar items by role", () => {
     const doctorNav = getNavItemsForRole(UserRole.DOCTOR);
     expect(doctorNav.some((item) => item.href === "/clinical")).toBe(true);
+    expect(doctorNav.some((item) => item.href === "/clinical/treatment-plans")).toBe(true);
+    expect(doctorNav.some((item) => item.href === "/clinical/chairside")).toBe(false);
     expect(doctorNav.some((item) => item.href === "/admin")).toBe(false);
 
     const financeNav = getNavItemsForRole(UserRole.FINANCE);
     expect(financeNav.some((item) => item.href === "/billing")).toBe(true);
+    expect(financeNav.some((item) => item.href === "/clinical/chairside")).toBe(false);
     expect(financeNav.some((item) => item.href === "/admin")).toBe(false);
   });
 });

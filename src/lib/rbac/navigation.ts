@@ -5,12 +5,13 @@ import {
   Calendar,
   Stethoscope,
   Activity,
-  Armchair,
+  Wrench,
   ScanLine,
   Camera,
   AlertCircle,
   ScanBarcode,
   ClipboardList,
+  ClipboardCheck,
   ShoppingCart,
   Timer,
   Fingerprint,
@@ -39,29 +40,66 @@ export type NavItem = {
   matchPrefix?: boolean;
 };
 
+export type NavGroup = {
+  label: string | null;
+  items: NavItem[];
+  defaultExpanded?: boolean;
+};
+
+const dashboardItem: NavItem = {
+  href: "/dashboard",
+  label: "Dashboard",
+  icon: LayoutDashboard,
+  resource: "reports",
+  action: "read",
+  matchPrefix: false,
+};
+
+const patientsItem: NavItem = {
+  href: "/patients",
+  label: "Patients",
+  icon: Users,
+  resource: "patients",
+  action: "read",
+};
+
+const receptionItem: NavItem = {
+  href: "/reception",
+  label: "Reception",
+  icon: ScanBarcode,
+  resource: "appointments",
+  action: "read",
+};
+
+const crmItem: NavItem = {
+  href: "/crm",
+  label: "CRM",
+  icon: Megaphone,
+  resource: "crm",
+  action: "read",
+};
+
+const reportsItem: NavItem = {
+  href: "/reports",
+  label: "Reports",
+  icon: BarChart3,
+  resource: "reports",
+  action: "read",
+};
+
+const aiItem: NavItem = {
+  href: "/ai",
+  label: "AI Assistant",
+  icon: Sparkles,
+  resource: "ai",
+  action: "use",
+};
+
+/** Flat list of all navigable items (Chairside excluded — contextual entry only). */
 export const MAIN_NAV_ITEMS: NavItem[] = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    resource: "reports",
-    action: "read",
-    matchPrefix: false,
-  },
-  {
-    href: "/patients",
-    label: "Patients",
-    icon: Users,
-    resource: "patients",
-    action: "read",
-  },
-  {
-    href: "/reception",
-    label: "Reception",
-    icon: ScanBarcode,
-    resource: "appointments",
-    action: "read",
-  },
+  dashboardItem,
+  patientsItem,
+  receptionItem,
   {
     href: "/appointments",
     label: "Appointments",
@@ -91,16 +129,16 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
-    href: "/clinical/perio",
-    label: "Periodontal",
-    icon: Activity,
+    href: "/clinical/treatment-plans",
+    label: "Treatment Plans",
+    icon: ClipboardCheck,
     resource: "clinical",
     action: "read",
   },
   {
-    href: "/clinical/chairside",
-    label: "Chairside",
-    icon: Armchair,
+    href: "/clinical/perio",
+    label: "Periodontal",
+    icon: Activity,
     resource: "clinical",
     action: "read",
   },
@@ -128,7 +166,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   {
     href: "/clinical/chair-setup",
     label: "Chair setup",
-    icon: Armchair,
+    icon: Wrench,
     resource: "clinical",
     action: "write",
   },
@@ -188,27 +226,9 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     resource: "inventory",
     action: "write",
   },
-  {
-    href: "/crm",
-    label: "CRM",
-    icon: Megaphone,
-    resource: "crm",
-    action: "read",
-  },
-  {
-    href: "/reports",
-    label: "Reports",
-    icon: BarChart3,
-    resource: "reports",
-    action: "read",
-  },
-  {
-    href: "/ai",
-    label: "AI Assistant",
-    icon: Sparkles,
-    resource: "ai",
-    action: "use",
-  },
+  crmItem,
+  reportsItem,
+  aiItem,
   {
     href: "/admin/clinic-profile",
     label: "Clinic profile",
@@ -260,13 +280,53 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   },
 ];
 
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: null,
+    items: [dashboardItem, patientsItem, receptionItem, crmItem, reportsItem, aiItem],
+  },
+  {
+    label: "Appointments",
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/appointments")),
+  },
+  {
+    label: "Clinical",
+    items: MAIN_NAV_ITEMS.filter((item) =>
+      item.href.startsWith("/clinical"),
+    ),
+  },
+  {
+    label: "Billing",
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/billing")),
+  },
+  {
+    label: "Inventory",
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/inventory")),
+  },
+  {
+    label: "Admin",
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/admin")),
+  },
+];
+
+function filterItemsForRole(role: UserRole, items: NavItem[]): NavItem[] {
+  return items.filter((item) => can(role, item.action ?? "read", item.resource));
+}
+
+export function getNavGroupsForRole(role: UserRole): NavGroup[] {
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: filterItemsForRole(role, group.items),
+  })).filter((group) => group.items.length > 0);
+}
+
+/** Flat list of permitted nav items (backward-compatible helper). */
 export function getNavItemsForRole(role: UserRole): NavItem[] {
-  return MAIN_NAV_ITEMS.filter((item) => can(role, item.action ?? "read", item.resource));
+  return getNavGroupsForRole(role).flatMap((group) => group.items);
 }
 
 export function getPrimaryNavForRole(role: UserRole): NavItem[] {
-  const dashboardRole = role;
-  const items = getNavItemsForRole(dashboardRole);
+  const items = getNavItemsForRole(role);
 
   const priority: Partial<Record<Resource, number>> = {
     clinical: 1,
@@ -284,4 +344,13 @@ export function getPrimaryNavForRole(role: UserRole): NavItem[] {
     if (aScore !== bScore) return aScore - bScore;
     return a.label.localeCompare(b.label);
   });
+}
+
+export function isNavItemActive(pathname: string, item: NavItem): boolean {
+  const matchPrefix = item.matchPrefix ?? item.href !== "/dashboard";
+  return pathname === item.href || (matchPrefix && pathname.startsWith(item.href));
+}
+
+export function isNavGroupActive(pathname: string, group: NavGroup): boolean {
+  return group.items.some((item) => isNavItemActive(pathname, item));
 }

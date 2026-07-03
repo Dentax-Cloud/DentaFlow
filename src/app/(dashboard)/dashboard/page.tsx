@@ -15,6 +15,9 @@ import {
   markOnboardingComplete,
 } from "@/lib/tenant/onboarding";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
+import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 
 export default async function DashboardPage() {
   const session = await getServerAuthSession();
@@ -41,8 +44,28 @@ export default async function DashboardPage() {
     await markOnboardingComplete(ctx.tenant.id);
   }
 
+  const canSeeChairsideSessions =
+    ctx.staffMember?.role &&
+    hasPermission(ctx.staffMember.role, PERMISSIONS.clinical.read);
+  const activeSessions =
+    canSeeChairsideSessions
+      ? await getActiveChairsideSessionsForUser().catch(() => [])
+      : [];
+  const resumeSessions = activeSessions.map((session) => ({
+    id: session.id,
+    patientId: session.patientId,
+    appointmentId: session.appointmentId,
+    startedAt: session.startedAt.toISOString(),
+    patientName:
+      `${session.patient.firstName ?? ""} ${session.patient.lastName ?? ""}`.trim() ||
+      "Patient",
+  }));
+
   return (
     <div className="space-y-6">
+      {resumeSessions.length > 0 && (
+        <ResumeChairsideBanner sessions={resumeSessions} compact />
+      )}
       {checklist.showChecklist && (
         <OnboardingChecklist items={checklist.items} compact />
       )}

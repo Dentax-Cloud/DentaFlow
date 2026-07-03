@@ -7,7 +7,6 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import {
   Activity,
   AlertTriangle,
-  Armchair,
   ArrowLeft,
   Calendar,
   CalendarClock,
@@ -514,7 +513,7 @@ export function PatientDetailClient({
             </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href={`/clinical/chairside?patientId=${patient.id}`}>
-                <Armchair className="mr-2 h-4 w-4" />
+                <Activity className="mr-2 h-4 w-4" />
                 Chairside
               </Link>
             </Button>
