@@ -10,17 +10,12 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { sendMail } from "@/lib/mail";
+import type { CampaignAudience } from "./crm-types";
 
 async function requireCrmPlan(ctx: Awaited<ReturnType<typeof import("@/lib/tenant/context").requireTenantContext>>) {
   await requirePermission(PERMISSIONS.crm.write);
   assertPlanFeature(ctx, "crm");
 }
-
-export type CampaignAudience =
-  | "ALL_PATIENTS"
-  | "ACTIVE_PATIENTS"
-  | "OVERDUE_RECALL"
-  | "INACTIVE";
 
 export async function getTargetPatients(
   tenantId: string,

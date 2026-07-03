@@ -20,6 +20,7 @@ import {
   updateTeamMemberRoleSchema,
   updateStaffMemberProfileSchema,
 } from "./schemas";
+import type { PendingInvitation } from "./admin-types";
 
 export const inviteTeamMember = createAction({
   schema: inviteTeamMemberSchema,
@@ -250,13 +251,6 @@ export const updateClinicSettings = createAction({
     return settings;
   },
 });
-
-export type PendingInvitation = {
-  id: string;
-  email: string;
-  role: UserRole;
-  createdAt: Date;
-};
 
 export async function getPendingInvitations(tenantId: string): Promise<PendingInvitation[]> {
   const tenant = await db.tenant.findUnique({ where: { id: tenantId } });

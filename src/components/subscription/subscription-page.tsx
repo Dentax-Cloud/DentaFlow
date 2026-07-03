@@ -18,8 +18,8 @@ import { getTrialDaysRemaining } from "@/lib/tenant/trial";
 import {
   createSubscriptionCheckoutAction,
   openBillingPortalAction,
-  type StripeInvoiceItem,
 } from "@/app/(dashboard)/features/subscription/actions";
+import type { StripeInvoiceItem } from "@/app/(dashboard)/features/subscription/subscription-types";
 
 type UsageMetric = { used: number; max: number; pct: number };
 

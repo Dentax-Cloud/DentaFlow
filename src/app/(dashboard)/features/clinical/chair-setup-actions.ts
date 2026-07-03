@@ -7,10 +7,8 @@ import { randomUUID } from "crypto";
 import { StockTransactionType } from "@prisma/client";
 import { createNotification } from "@/lib/notifications/notification-service";
 import { generateStockRef } from "@/lib/ids/generate-ids";
-import type { SetupItem, TrayTemplateItem, TrayItemCategory } from "@/lib/chair-setup/types";
+import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import { defaultColorForType, inferTrayCategory } from "@/lib/chair-setup/helpers";
-
-export type { SetupItem, TrayTemplateItem, TrayItemCategory };
 
 function todayIso() {
   return new Date().toISOString().split("T")[0];

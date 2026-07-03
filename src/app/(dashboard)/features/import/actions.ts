@@ -15,13 +15,7 @@ import {
   importPatientsSchema,
   importProceduresSchema,
 } from "./schemas";
-
-export type ImportResult = {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: { row: number; message: string }[];
-};
+import type { ImportResult } from "./import-types";
 
 function emptyResult(): ImportResult {
   return { created: 0, updated: 0, skipped: 0, errors: [] };

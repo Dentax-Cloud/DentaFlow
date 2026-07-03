@@ -15,6 +15,7 @@ import { getUsageSummary } from "@/lib/features/gate";
 import { getTenantMetrics } from "@/lib/tenant/metrics";
 import { getStaffActor } from "@/lib/tenant/context";
 import { getTenantUsage } from "@/lib/features/usage";
+import type { StripeInvoiceItem } from "./subscription-types";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -69,17 +70,6 @@ export const openBillingPortalAction = createAction({
     return { url: session.url };
   },
 });
-
-export type StripeInvoiceItem = {
-  id: string;
-  number: string | null;
-  amount: number;
-  currency: string;
-  status: string | null;
-  created: number;
-  hostedInvoiceUrl: string | null;
-  pdfUrl: string | null;
-};
 
 export async function getStripeBillingHistory(
   stripeCustomerId: string | null,

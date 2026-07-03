@@ -29,7 +29,7 @@ import { ClinicSettingsForm } from "./components/clinic-settings-form";
 import { RecallSettingsSection } from "./components/recall-settings-section";
 import { AuditLogSection } from "./components/audit-log-section";
 import { BranchesSection } from "./components/branches-section";
-import type { PendingInvitation } from "@/app/(dashboard)/features/admin/actions";
+import type { PendingInvitation } from "@/app/(dashboard)/features/admin/admin-types";
 import type { RecallSettings } from "@/lib/recall/helpers";
 
 

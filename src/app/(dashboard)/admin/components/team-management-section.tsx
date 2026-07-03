@@ -44,8 +44,8 @@ import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/team-roles";
 import {
   removeTeamMember,
   updateTeamMemberRole,
-  type PendingInvitation,
 } from "@/app/(dashboard)/features/admin/actions";
+import type { PendingInvitation } from "@/app/(dashboard)/features/admin/admin-types";
 import type { z } from "zod";
 import { updateTeamMemberRoleSchema } from "@/app/(dashboard)/features/admin/schemas";
 

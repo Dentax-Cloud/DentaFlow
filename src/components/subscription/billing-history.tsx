@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { StripeInvoiceItem } from "@/app/(dashboard)/features/subscription/actions";
+import type { StripeInvoiceItem } from "@/app/(dashboard)/features/subscription/subscription-types";
 
 type Props = { invoices: StripeInvoiceItem[] };
 

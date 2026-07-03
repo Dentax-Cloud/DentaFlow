@@ -14,8 +14,8 @@ import {
   importInventoryItems,
   importPatients,
   importProcedures,
-  type ImportResult,
 } from "@/app/(dashboard)/features/import/actions";
+import type { ImportResult } from "@/app/(dashboard)/features/import/import-types";
 import {
   inventoryImportRowSchema,
   patientImportRowSchema,

@@ -22,8 +22,8 @@ import {
   countCampaignAudience,
   createCampaign,
   sendCampaign,
-  type CampaignAudience,
 } from "@/app/(dashboard)/features/crm/actions";
+import type { CampaignAudience } from "@/app/(dashboard)/features/crm/crm-types";
 
 type RecallWithPatient = Recall & { patient: Patient };
 
