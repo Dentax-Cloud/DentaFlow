@@ -43,6 +43,7 @@ import {
   staffEmailForSlug,
 } from "./helpers";
 import { importGpmrForTenant, priceAllProceduresForTenant } from "./gpmr-import";
+import { seedStandardTrayTemplates } from "@/lib/chair-setup/seed-tray-templates";
 
 export type SeedSummary = {
   tenants: number;
@@ -253,6 +254,7 @@ async function seedTenant(clinic: TestClinicDef, index: number): Promise<TenantS
   });
 
   await db.procedureCatalog.deleteMany({ where: { tenantId, gpmrId: null } });
+  await db.chairTrayTemplate.deleteMany({ where: { tenantId } });
   await db.inventoryItem.deleteMany({ where: { tenantId } });
 
   let branchId = provisioned.branch.id;
@@ -494,6 +496,14 @@ async function seedTenant(clinic: TestClinicDef, index: number): Promise<TenantS
         minStockAlert: 5,
       },
     });
+  }
+
+  const traySeed = await seedStandardTrayTemplates(tenantId);
+  if (traySeed.templatesCreated > 0) {
+    console.log(
+      `  ${clinic.slug}: ${traySeed.templatesCreated} tray templates, ` +
+        `${traySeed.inventoryCreated} standard inventory SKUs added`,
+    );
   }
 
   let appointmentCount = 0;

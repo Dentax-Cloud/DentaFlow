@@ -84,6 +84,20 @@ export function TraySetupModal({
 
   const totalCost = costByCategory.reduce((s, c) => s + c.cost, 0);
 
+  function renderTemplatePreview(items: TrayTemplateItem[]) {
+    const grouped = groupByCategory(
+      items.map((item) => ({ ...item, category: item.category ?? "CONSUMABLE" })),
+    );
+    const previewLines: string[] = [];
+    for (const cat of TRAY_CATEGORIES) {
+      const catItems = grouped[cat];
+      if (!catItems.length) continue;
+      const names = catItems.map((i) => `${i.itemName}${i.qty > 1 ? ` ×${i.qty}` : ""}`);
+      previewLines.push(`${CATEGORY_CONFIG[cat].icon} ${names.slice(0, 4).join(", ")}${names.length > 4 ? ` +${names.length - 4} more` : ""}`);
+    }
+    return previewLines;
+  }
+
   function applyTemplate(id: string) {
     setTemplateId(id);
     const template = templates.find((t) => t.id === id);
@@ -148,17 +162,42 @@ export function TraySetupModal({
               Step 1: Select a template or start with a manual setup.
             </p>
             <div className="grid gap-2">
-              {templates.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => applyTemplate(t.id)}
-                  className="rounded-lg border p-3 text-left hover:bg-gray-50"
-                >
-                  <p className="font-medium">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.items.length} items</p>
-                </button>
-              ))}
+              {templates.length === 0 && (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  No saved templates yet. Use manual setup or ask an admin to configure
+                  templates under the Templates tab.
+                </p>
+              )}
+              {templates.map((t) => {
+                const preview = renderTemplatePreview(t.items);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => applyTemplate(t.id)}
+                    className="rounded-lg border p-3 text-left transition-colors hover:border-sky-300 hover:bg-sky-50/50"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium">{t.name}</p>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {t.items.length} items
+                      </span>
+                    </div>
+                    {preview.length > 0 && (
+                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                        {preview.slice(0, 3).map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                        {preview.length > 3 && (
+                          <li className="text-muted-foreground/80">
+                            +{preview.length - 3} more categories
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <Button variant="outline" className="w-full" onClick={() => setStep(2)}>
               Manual setup

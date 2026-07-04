@@ -1,15 +1,21 @@
 import { db } from "@/lib/db";
 import type { Tenant } from "@prisma/client";
 import { PLATFORM_DEFAULT_TEMPLATES } from "@/lib/clinical/default-templates";
+import {
+  seedStandardTrayInventory,
+  seedStandardTrayTemplates,
+} from "@/lib/chair-setup/seed-tray-templates";
 
 /** Seed industry-standard defaults for a newly provisioned clinic. */
 export async function seedTenantDefaults(tenant: Tenant, currency = "AED") {
   await Promise.all([
     seedProcedureCatalog(tenant.id),
-    seedInventoryItems(tenant.id),
     seedClinicSettings(tenant.id, currency),
     seedClinicalTemplates(tenant.id),
   ]);
+
+  await seedStandardTrayInventory(tenant.id);
+  await seedStandardTrayTemplates(tenant.id);
 }
 
 async function seedProcedureCatalog(tenantId: string) {
@@ -114,59 +120,6 @@ async function seedProcedureCatalog(tenantId: string) {
         price: 1200,
         costPrice: 400,
         isActive: true,
-      },
-    ],
-    skipDuplicates: true,
-  });
-}
-
-async function seedInventoryItems(tenantId: string) {
-  await db.inventoryItem.createMany({
-    data: [
-      {
-        tenantId,
-        sku: "INV-GLOVES",
-        name: "Disposable Gloves (Box)",
-        unit: "BOX",
-        quantity: 10,
-        reorderLevel: 3,
-        cost: 25,
-      },
-      {
-        tenantId,
-        sku: "INV-MASKS",
-        name: "Dental Masks (Box)",
-        unit: "BOX",
-        quantity: 10,
-        reorderLevel: 3,
-        cost: 35,
-      },
-      {
-        tenantId,
-        sku: "INV-COMPOSITE",
-        name: "Composite Resin (Syringe)",
-        unit: "PCS",
-        quantity: 20,
-        reorderLevel: 5,
-        cost: 45,
-      },
-      {
-        tenantId,
-        sku: "INV-ANESTHETIC",
-        name: "Local Anesthetic (Carpule)",
-        unit: "PCS",
-        quantity: 50,
-        reorderLevel: 10,
-        cost: 8,
-      },
-      {
-        tenantId,
-        sku: "INV-FLOSS",
-        name: "Dental Floss (Pack)",
-        unit: "PACK",
-        quantity: 30,
-        reorderLevel: 10,
-        cost: 5,
       },
     ],
     skipDuplicates: true,
