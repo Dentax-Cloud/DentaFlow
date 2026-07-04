@@ -29,7 +29,7 @@ import { AppointmentDrawer } from "@/components/appointments/appointment-drawer"
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
-import type { Appointment, Chair, Patient, Doctor, StaffMember } from "@prisma/client";
+import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
 
 type AppointmentWithRelations = Appointment & {
@@ -78,6 +78,7 @@ export function AppointmentsClient({
   emergencyWaiting = 0,
   emergencyImmediate = 0,
   insuranceStatusMap = {},
+  staffRole,
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
@@ -89,6 +90,7 @@ export function AppointmentsClient({
   emergencyWaiting?: number;
   emergencyImmediate?: number;
   insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
+  staffRole?: UserRole;
 }) {
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -597,6 +599,7 @@ export function AppointmentsClient({
       <AppointmentDrawer
         appointmentId={selectedAppointmentId}
         onClose={() => setSelectedAppointmentId(null)}
+        staffRole={staffRole}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { UserRole } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { Calendar, ChevronRight } from "lucide-react";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
@@ -55,7 +56,7 @@ export default function DoctorDashboardClient({
   today,
 }: {
   doctorName: string;
-  role: string;
+  role: UserRole;
   appointments: Appointment[];
   unreadCount: number;
   totalThisWeek: number;
@@ -271,6 +272,7 @@ export default function DoctorDashboardClient({
       <AppointmentDrawer
         appointmentId={selectedId}
         onClose={() => setSelectedId(null)}
+        staffRole={role}
       />
     </div>
   );

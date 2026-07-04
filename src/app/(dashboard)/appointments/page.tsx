@@ -60,6 +60,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       emergencyWaiting={emergencyStats.filter((e) => e.status === "WAITING").length}
       emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}
       insuranceStatusMap={insuranceStatusMap}
+      staffRole={ctx.staffMember?.role}
     />
   );
 }

@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac/guard";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { ToothConditionType } from "@prisma/client";
+import { broadcastAppointmentUpdate } from "@/lib/pusher";
+import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import {
   CHAIRSIDE_CLOSED_REASON,
   CHAIRSIDE_SESSION_STATUS,
@@ -45,6 +47,28 @@ function parseConditionType(value: string): ToothConditionType | null {
   return null;
 }
 
+/** Transition ARRIVED → IN_CHAIR when a clinician begins charting (no appointments.write required). */
+async function ensureAppointmentInChair(tenantId: string, appointmentId: string): Promise<boolean> {
+  const appointment = await db.appointment.findFirst({
+    where: { id: appointmentId, tenantId, deletedAt: null },
+    include: { patient: true, chair: true },
+  });
+  if (!appointment || appointment.status !== "ARRIVED") return false;
+
+  const updated = await db.appointment.update({
+    where: { id: appointmentId },
+    data: { status: "IN_CHAIR" },
+    include: { patient: true, chair: true },
+  });
+
+  const patientName = `${updated.patient.firstName} ${updated.patient.lastName}`;
+  await notifyAppointmentStatus(appointmentId, tenantId, "IN_CHAIR", patientName).catch(
+    () => null,
+  );
+  await broadcastAppointmentUpdate(tenantId, updated).catch(() => null);
+  return true;
+}
+
 export async function startChairsideSession(input: {
   patientId: string;
   appointmentId?: string;
@@ -57,6 +81,8 @@ export async function startChairsideSession(input: {
   if (!patient) throw new Error("Patient not found");
 
   if (input.appointmentId) {
+    await ensureAppointmentInChair(ctx.tenantId, input.appointmentId);
+
     const existing = await db.chairsideSession.findFirst({
       where: {
         tenantId: ctx.tenantId,
@@ -68,7 +94,7 @@ export async function startChairsideSession(input: {
     if (existing) return existing;
   }
 
-  return db.chairsideSession.create({
+  const session = await db.chairsideSession.create({
     data: {
       tenantId: ctx.tenantId,
       patientId: input.patientId,
@@ -78,6 +104,28 @@ export async function startChairsideSession(input: {
     },
     include: { entries: { orderBy: { createdAt: "asc" } } },
   });
+
+  if (input.appointmentId) {
+    revalidatePath("/appointments");
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/doctor");
+  }
+
+  return session;
+}
+
+/** Atomically mark in-chair (if needed) and start/resume a chairside session. */
+export async function beginChairsideVisit(input: {
+  patientId: string;
+  appointmentId: string;
+}) {
+  const session = await startChairsideSession(input);
+  revalidatePath("/clinical/chairside");
+  return {
+    sessionId: session.id,
+    patientId: input.patientId,
+    appointmentId: input.appointmentId,
+  };
 }
 
 export async function addChairsideEntry(input: {

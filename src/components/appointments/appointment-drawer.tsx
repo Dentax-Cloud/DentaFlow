@@ -3,10 +3,12 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Phone, User, Calendar, Clock, AlertTriangle, ChevronRight } from "lucide-react";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, type UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments/actions";
+import { beginChairsideVisit } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 
 type AppointmentDetail = {
@@ -69,7 +71,7 @@ const STATUS_CONFIG: Record<
     label: "Arrived",
     color: "bg-yellow-100 text-yellow-700",
     next: "IN_CHAIR",
-    nextLabel: "Start treatment",
+    nextLabel: "Mark as In Chair",
     icon: "🔔",
   },
   IN_CHAIR: {
@@ -114,9 +116,11 @@ const TIMELINE_STATUSES = ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_CHAIR", "COM
 export function AppointmentDrawer({
   appointmentId,
   onClose,
+  staffRole,
 }: {
   appointmentId: string | null;
   onClose: () => void;
+  staffRole?: UserRole;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -150,6 +154,33 @@ export function AppointmentDrawer({
     setAppointment(data.appointment ?? null);
   }
 
+  const canStartChairside = staffRole
+    ? hasPermission(staffRole, PERMISSIONS.clinical.write)
+    : false;
+  const canMarkInChair = staffRole
+    ? hasPermission(staffRole, PERMISSIONS.appointments.write)
+    : false;
+
+  async function handleBeginChairside() {
+    if (!appointment) return;
+    startTransition(async () => {
+      try {
+        const result = await beginChairsideVisit({
+          patientId: appointment.patient.id,
+          appointmentId: appointment.id,
+        });
+        await refreshAppointment(appointment.id);
+        router.push(
+          `/clinical/chairside?patientId=${result.patientId}&appointmentId=${result.appointmentId}&sessionId=${result.sessionId}`,
+        );
+        onClose();
+        router.refresh();
+      } catch {
+        // Permission or network errors surface from the server action
+      }
+    });
+  }
+
   function executeStatusChange(newStatus: AppointmentStatus) {
     if (!appointment) return;
     startTransition(async () => {
@@ -178,6 +209,21 @@ export function AppointmentDrawer({
       executeStatusChange("CANCELED");
     });
   }
+
+  const showMarkInChair =
+    canMarkInChair &&
+    !canStartChairside &&
+    appointment?.status === "ARRIVED";
+
+  const showChairside =
+    canStartChairside &&
+    appointment != null &&
+    ["ARRIVED", "IN_CHAIR"].includes(appointment.status);
+
+  const showStatusAdvance =
+    statusCfg?.next &&
+    statusCfg.nextLabel &&
+    (statusCfg.next !== "IN_CHAIR" || showMarkInChair);
 
   return (
     <>
@@ -367,29 +413,30 @@ export function AppointmentDrawer({
             </div>
 
             <div className="space-y-3 px-5 py-4">
-              {statusCfg?.next && statusCfg.nextLabel && (
+              {showStatusAdvance && (
                 <Button
-                  onClick={() => handleStatusChange(statusCfg.next!)}
+                  onClick={() => handleStatusChange(statusCfg!.next!)}
                   disabled={isPending}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  variant={statusCfg!.next === "IN_CHAIR" ? "outline" : "default"}
+                  className={
+                    statusCfg!.next === "IN_CHAIR"
+                      ? "w-full"
+                      : "w-full bg-blue-600 hover:bg-blue-700"
+                  }
                   size="lg"
                 >
-                  {isPending ? "Updating..." : statusCfg.nextLabel}
+                  {isPending ? "Updating..." : statusCfg!.nextLabel}
                 </Button>
               )}
 
-              {["ARRIVED", "IN_CHAIR"].includes(appointment.status) && (
+              {showChairside && (
                 <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    router.push(
-                      `/clinical/chairside?patientId=${appointment.patient.id}&appointmentId=${appointment.id}`,
-                    );
-                    onClose();
-                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="lg"
+                  disabled={isPending}
+                  onClick={handleBeginChairside}
                 >
-                  Open Chairside Session
+                  {isPending ? "Starting..." : "Open Chairside Session"}
                 </Button>
               )}
 
