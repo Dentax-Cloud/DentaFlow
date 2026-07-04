@@ -39,6 +39,9 @@ export type ChairsideEntryRow = {
 type Props = {
   sessionId: string;
   patientName: string;
+  patientAllergies?: string[];
+  patientBloodGroup?: string | null;
+  patientMedicalHistory?: string | null;
   appointmentId?: string;
   initialEntries: ChairsideEntryRow[];
   procedures: ProcedureOption[];
@@ -48,6 +51,9 @@ type Props = {
 export function ChairsidePanel({
   sessionId,
   patientName,
+  patientAllergies = [],
+  patientBloodGroup,
+  patientMedicalHistory,
   appointmentId,
   initialEntries,
   procedures,
@@ -153,6 +159,29 @@ export function ChairsidePanel({
   }
 
   function handleFinalize() {
+    if (entries.length === 0) {
+      const reason = window.prompt(
+        "No chart entries recorded. Enter reason no treatment was performed (required):",
+      );
+      if (!reason?.trim()) {
+        toast.error("A reason is required when no treatment was documented.");
+        return;
+      }
+      startTransition(async () => {
+        try {
+          const result = await finalizeChairsideSession(sessionId, {
+            noTreatmentReason: reason.trim(),
+          });
+          setInvoiceId(result.invoiceId);
+          setIsFinalized(true);
+          onFinalized?.(result.invoiceId);
+        } catch {
+          toast.error("Could not finalize session");
+        }
+      });
+      return;
+    }
+
     if (!confirm(`Finalize session and create invoice for ${patientName}?`)) return;
     startTransition(async () => {
       try {
@@ -203,6 +232,25 @@ export function ChairsidePanel({
               {isPending ? "Saving..." : "Auto-saved"}
             </Badge>
           </div>
+          {(patientAllergies.length > 0 || patientBloodGroup || patientMedicalHistory) && (
+            <div className="mt-3 space-y-2">
+              {patientAllergies.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                  <span className="font-semibold">Allergies: </span>
+                  {patientAllergies.join(", ")}
+                </div>
+              )}
+              {patientBloodGroup && (
+                <Badge variant="destructive">Blood group: {patientBloodGroup}</Badge>
+              )}
+              {patientMedicalHistory && (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Medical history: </span>
+                  {patientMedicalHistory}
+                </p>
+              )}
+            </div>
+          )}
         </Card>
 
         <Card className="p-4">

@@ -11,6 +11,7 @@ export type InsuranceCalculation = {
   providerName: string;
   networkName: string;
   policyId: string | null;
+  preAuthReference: string | null;
 };
 
 type InsuranceContext = {
@@ -132,6 +133,27 @@ export async function calculateInsuranceSplit(input: {
     }
   }
 
+  const preAuthOverride = context.policyId
+    ? await resolveApprovedPreAuthAmounts(context.policyId, input.totalAmount)
+    : null;
+
+  if (preAuthOverride) {
+    return {
+      totalAmount: input.totalAmount,
+      insurerAmount: preAuthOverride.insurerAmount,
+      patientAmount: preAuthOverride.patientAmount,
+      coPayPercent:
+        input.totalAmount > 0
+          ? (preAuthOverride.patientAmount / input.totalAmount) * 100
+          : 0,
+      preAuthRequired: isPreAuthDefaultRequired(countryCode),
+      providerName: context.providerName,
+      networkName: context.networkName,
+      policyId: context.policyId,
+      preAuthReference: preAuthOverride.referenceNumber,
+    };
+  }
+
   if (usedFeeSchedule) {
     return {
       totalAmount: input.totalAmount,
@@ -143,6 +165,7 @@ export async function calculateInsuranceSplit(input: {
       providerName: context.providerName,
       networkName: context.networkName,
       policyId: context.policyId,
+      preAuthReference: null,
     };
   }
 
@@ -171,6 +194,49 @@ export async function calculateInsuranceSplit(input: {
     providerName: context.providerName,
     networkName: context.networkName,
     policyId: context.policyId,
+    preAuthReference: null,
+  };
+}
+
+async function resolveApprovedPreAuthAmounts(
+  policyId: string,
+  invoiceTotal: number,
+): Promise<{
+  insurerAmount: number;
+  patientAmount: number;
+  referenceNumber: string | null;
+} | null> {
+  const preAuth = await db.preAuthorization.findFirst({
+    where: {
+      policyId,
+      status: { in: ["APPROVED", "PARTIALLY_APPROVED"] },
+      OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+      approvedInsurerAmount: { not: null },
+      approvedPatientAmount: { not: null },
+    },
+    orderBy: { decisionAt: "desc" },
+  });
+
+  if (!preAuth) return null;
+
+  const insurer = Number(preAuth.approvedInsurerAmount ?? 0);
+  const patient = Number(preAuth.approvedPatientAmount ?? 0);
+  const approvedTotal = insurer + patient;
+  if (approvedTotal <= 0) return null;
+
+  if (Math.abs(approvedTotal - invoiceTotal) < 0.02) {
+    return {
+      insurerAmount: insurer,
+      patientAmount: patient,
+      referenceNumber: preAuth.referenceNumber,
+    };
+  }
+
+  const ratio = invoiceTotal / approvedTotal;
+  return {
+    insurerAmount: Math.round(insurer * ratio * 100) / 100,
+    patientAmount: Math.round(patient * ratio * 100) / 100,
+    referenceNumber: preAuth.referenceNumber,
   };
 }
 

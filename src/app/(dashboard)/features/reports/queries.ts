@@ -71,16 +71,33 @@ export async function getDoctorProductivityReport(
       createdAt: { gte: start, lte: end },
       status: { in: ["PAID", "PARTIAL", "SENT"] },
     },
-    select: { total: true },
+    select: { id: true, total: true, patientId: true, createdAt: true },
   });
 
-  const totalRevenue = invoices.reduce((s, i) => s + Number(i.total), 0);
+  const revenueByDoctor = new Map<string, number>();
+  const usedInvoiceIds = new Set<string>();
+
+  for (const appt of appointments) {
+    const doctorId = appt.doctorId!;
+    const apptDay = appt.startTime.toDateString();
+    const match = invoices.find(
+      (inv) =>
+        inv.patientId === appt.patientId &&
+        !usedInvoiceIds.has(inv.id) &&
+        inv.createdAt.toDateString() === apptDay,
+    );
+    if (match) {
+      usedInvoiceIds.add(match.id);
+      revenueByDoctor.set(
+        doctorId,
+        (revenueByDoctor.get(doctorId) ?? 0) + Number(match.total),
+      );
+    }
+  }
+
   const doctors = Array.from(byDoctor.values());
-  if (doctors.length > 0) {
-    const perDoctor = totalRevenue / doctors.length;
-    doctors.forEach((d) => {
-      d.revenue = Math.round(perDoctor);
-    });
+  for (const d of doctors) {
+    d.revenue = Math.round(revenueByDoctor.get(d.doctorId) ?? 0);
   }
 
   return doctors.sort((a, b) => b.appointmentsCompleted - a.appointmentsCompleted);

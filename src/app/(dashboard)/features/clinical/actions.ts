@@ -17,6 +17,7 @@ import { getStaffActor } from "@/lib/tenant/context";
 
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
+import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
 
@@ -199,6 +200,29 @@ export const updateToothCondition = createAction({
     });
     if (!existing) throw new Error("Condition not found");
 
+    if (existing.lockedAt) {
+      const nextVersion =
+        (await db.toothConditionVersion.count({ where: { conditionId: existing.id } })) + 1;
+      await db.toothConditionVersion.create({
+        data: {
+          conditionId: existing.id,
+          tenantId: ctx.tenant.id,
+          version: nextVersion,
+          type: input.type ?? existing.type,
+          surfaces: input.surfaces ?? existing.surfaces,
+          severity: existing.severity,
+          mobility: existing.mobility,
+          pocketDepth: existing.pocketDepth,
+          notes: input.notes ?? existing.notes,
+          amendedById: ctx.staffMember?.id,
+          amendedByName: ctx.staffMember
+            ? `${ctx.staffMember.firstName ?? ""} ${ctx.staffMember.lastName ?? ""}`.trim()
+            : undefined,
+          amendReason: "Post-finalize amendment",
+        },
+      });
+    }
+
     const condition = await db.toothCondition.update({
       where: { id: existing.id },
       data: {
@@ -230,6 +254,9 @@ export const deleteToothCondition = createAction({
       include: { tooth: true },
     });
     if (!condition) throw new Error("Condition not found");
+    if (condition.lockedAt) {
+      throw new Error("Cannot delete a locked chart condition. Add an amendment instead.");
+    }
 
     await db.toothCondition.delete({ where: { id: condition.id } });
     revalidatePath("/clinical");
@@ -516,14 +543,10 @@ export const generateInvoiceFromProcedures = createAction({
 
     if (catalogItems.length === 0) throw new Error("No valid procedures selected");
 
-    const count = await db.invoice.count({ where: { tenantId: ctx.tenant.id } });
-    const { generateInvoiceNumber } = await import("@/lib/utils");
-
-    const items = catalogItems.map((item) => {
+    const lineItems = catalogItems.map((item) => {
       const qty = input.procedures.find((p) => p.procedureId === item.id)?.quantity ?? 1;
       const unitPrice = Number(item.price);
       return {
-        tenantId: ctx.tenant.id,
         description: item.name,
         quantity: qty,
         unitPrice,
@@ -532,26 +555,12 @@ export const generateInvoiceFromProcedures = createAction({
       };
     });
 
-    const subtotal = items.reduce((s, i) => s + i.total, 0);
-    const settings = await db.settings.findUnique({ where: { tenantId: ctx.tenant.id } });
-    const taxRate = settings?.taxRate ?? 0;
-    const tax = subtotal * (taxRate / 100);
-    const total = subtotal + tax;
-
-    const invoice = await db.invoice.create({
-      data: {
-        tenantId: ctx.tenant.id,
-        patientId: input.patientId,
-        invoiceNumber: generateInvoiceNumber(count + 1),
-        status: "DRAFT",
-        subtotal,
-        tax,
-        total,
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        notes: `Appointment ${input.appointmentId}`,
-        items: { create: items },
-      },
-      include: { items: true },
+    const invoice = await createInvoiceFromItems({
+      tenantId: ctx.tenant.id,
+      patientId: input.patientId,
+      items: lineItems,
+      notes: `Appointment ${input.appointmentId}`,
+      status: "DRAFT",
     });
 
     await db.appointment.updateMany({

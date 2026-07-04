@@ -13,6 +13,8 @@ import {
   CHAIRSIDE_SESSION_STATUS,
   finalizeChairsideSessionRecord,
 } from "@/lib/clinical/chairside-lifecycle";
+import { assertConsentForVisit } from "@/lib/clinical/consent-gate";
+import { amendLockedChairsideEntry } from "@/lib/clinical/lock-chart-records";
 
 const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
   "You don't have permission to start a chairside session. Contact your administrator if you believe this is incorrect.";
@@ -79,6 +81,8 @@ export async function startChairsideSession(input: {
     where: { id: input.patientId, tenantId: ctx.tenantId, deletedAt: null },
   });
   if (!patient) throw new Error("Patient not found");
+
+  await assertConsentForVisit(ctx.tenantId, input.patientId);
 
   if (input.appointmentId) {
     await ensureAppointmentInChair(ctx.tenantId, input.appointmentId);
@@ -202,8 +206,12 @@ export async function removeChairsideEntry(entryId: string) {
 
   const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
+    include: { session: { select: { status: true } } },
   });
   if (!entry) throw new Error("Entry not found");
+  if (entry.lockedAt || entry.session.status !== CHAIRSIDE_SESSION_STATUS.ACTIVE) {
+    throw new Error("Cannot remove a locked chart entry. Add an amendment instead.");
+  }
 
   await db.chairsideEntry.delete({ where: { id: entryId } });
   revalidatePath("/clinical/chairside");
@@ -212,14 +220,33 @@ export async function removeChairsideEntry(entryId: string) {
 export async function updateChairsideEntry(
   entryId: string,
   data: { notes?: string; quantity?: number; includeInInvoice?: boolean },
+  options?: { amendReason?: string },
 ) {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.clinical.write);
 
-  await db.chairsideEntry.updateMany({
+  const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
-    data,
   });
+  if (!entry) throw new Error("Entry not found");
+
+  if (entry.lockedAt) {
+    await amendLockedChairsideEntry({
+      tenantId: ctx.tenantId,
+      entryId,
+      data,
+      amendedById: ctx.staffMember?.id,
+      amendedByName: ctx.staffMember
+        ? `${ctx.staffMember.firstName ?? ""} ${ctx.staffMember.lastName ?? ""}`.trim()
+        : null,
+      amendReason: options?.amendReason?.trim() || "Post-finalize amendment",
+    });
+  } else {
+    await db.chairsideEntry.updateMany({
+      where: { id: entryId, tenantId: ctx.tenantId },
+      data,
+    });
+  }
   revalidatePath("/clinical/chairside");
 }
 
@@ -256,7 +283,10 @@ export async function getChairsideBypassWarning(appointmentId: string) {
   return { required: true as const, entryCount: session._count.entries };
 }
 
-export async function finalizeChairsideSession(sessionId: string) {
+export async function finalizeChairsideSession(
+  sessionId: string,
+  options?: { noTreatmentReason?: string },
+) {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.clinical.write);
 
@@ -280,6 +310,7 @@ export async function finalizeChairsideSession(sessionId: string) {
     staffMemberId: ctx.staffMember?.id,
     closedReason: CHAIRSIDE_CLOSED_REASON.MANUAL_FINALIZE,
     allowInvoice: true,
+    noTreatmentReason: options?.noTreatmentReason,
   });
 
   revalidatePath("/clinical/chairside");

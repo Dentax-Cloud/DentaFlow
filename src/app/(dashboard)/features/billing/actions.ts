@@ -10,8 +10,9 @@ import { generateInvoiceNumber } from "@/lib/utils";
 import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { getStripeClient } from "@/lib/stripe";
-import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
+import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
+import { notifyInvoicePaid, sendInvoiceReceiptEmail } from "@/lib/notifications/invoice-notifications";
 import { getStaffActor } from "@/lib/tenant/context";
 
 const createInvoiceSchema = z.object({
@@ -42,6 +43,7 @@ export const createInvoice = createAction({
     const procedureCodes = input.items
       .map((i) => i.procedureCode)
       .filter((c): c is string => Boolean(c));
+
     const insuranceSplit = await calculateInsuranceSplit({
       tenantId: ctx.tenant.id,
       patientId: input.patientId,
@@ -53,7 +55,7 @@ export const createInvoice = createAction({
       data: {
         tenantId: ctx.tenant.id,
         patientId: input.patientId,
-        invoiceNumber: generateInvoiceNumber(count + 1),
+        invoiceNumber: (await import("@/lib/utils")).generateInvoiceNumber(count + 1),
         invoiceRef: await generateInvoiceRef(ctx.tenant.id),
         status: input.sendNow ? InvoiceStatus.SENT : InvoiceStatus.DRAFT,
         subtotal,
@@ -68,6 +70,7 @@ export const createInvoice = createAction({
         coPayPercent: insuranceSplit?.coPayPercent ?? null,
         providerCode: insuranceSplit?.providerName ?? null,
         networkType: insuranceSplit?.networkName ?? null,
+        preAuthCode: insuranceSplit?.preAuthReference ?? null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         notes: input.notes,
         items: {
@@ -127,17 +130,33 @@ export const recordPayment = createAction({
       },
     });
 
+    const newStatus =
+      paid >= total
+        ? InvoiceStatus.PAID
+        : paid > 0
+          ? InvoiceStatus.PARTIAL
+          : invoice.status;
+
     await db.invoice.update({
       where: { id: input.invoiceId },
-      data: {
-        status:
-          paid >= total
-            ? InvoiceStatus.PAID
-            : paid > 0
-              ? InvoiceStatus.PARTIAL
-              : invoice.status,
-      },
+      data: { status: newStatus },
     });
+
+    if (newStatus === InvoiceStatus.PAID) {
+      await notifyInvoicePaid({
+        tenantId: ctx.tenant.id,
+        invoiceId: invoice.id,
+        patientId: invoice.patientId,
+        amount: total,
+      }).catch(() => null);
+    }
+
+    if (input.method === PaymentMethod.CASH || input.method === PaymentMethod.CARD) {
+      await sendInvoiceReceiptEmail({
+        tenantId: ctx.tenant.id,
+        invoiceId: invoice.id,
+      }).catch(() => null);
+    }
 
     await createAuditLog({
       tenantId: ctx.tenant.id,

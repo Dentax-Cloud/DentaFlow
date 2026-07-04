@@ -72,6 +72,8 @@ model Tenant {
   perioCharts          PerioChart[]
   chairsideSessions    ChairsideSession[]
   chairsideEntries     ChairsideEntry[]
+  chairsideEntryVersions ChairsideEntryVersion[]
+  toothConditionVersions ToothConditionVersion[]
   treatmentPlanShares  TreatmentPlanShare[]
   clinicalImages       ClinicalImage[]
   photoSeries          PhotoSeries[]
@@ -458,7 +460,7 @@ model Tooth {
 }
 
 model ToothCondition {
-  id            String             @id @default(cuid())
+  id            String                  @id @default(cuid())
   tenantId      String
   patientId     String
   toothId       String
@@ -469,17 +471,41 @@ model ToothCondition {
   pocketDepth   Float?
   notes         String?
   appointmentId String?
-  recordedAt    DateTime           @default(now())
+  recordedAt    DateTime                @default(now())
   recordedBy    String?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  patient       Patient            @relation(fields: [patientId], references: [id])
-  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tooth         Tooth              @relation(fields: [toothId], references: [id])
+  lockedAt      DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  patient       Patient                 @relation(fields: [patientId], references: [id])
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tooth         Tooth                   @relation(fields: [toothId], references: [id])
+  versions      ToothConditionVersion[]
 
   @@index([tenantId, patientId])
   @@index([tenantId, toothId])
   @@index([tenantId, appointmentId])
+}
+
+model ToothConditionVersion {
+  id            String             @id @default(cuid())
+  conditionId   String
+  tenantId      String
+  version       Int
+  type          ToothConditionType
+  surfaces      String[]
+  severity      Int?
+  mobility      Int?
+  pocketDepth   Float?
+  notes         String?
+  amendedById   String?
+  amendedByName String?
+  amendReason   String?
+  createdAt     DateTime           @default(now())
+  condition     ToothCondition     @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([conditionId])
+  @@index([tenantId])
 }
 
 model ClinicalNote {
@@ -575,22 +601,23 @@ model PerioChart {
 }
 
 model ChairsideSession {
-  id            String           @id @default(cuid())
-  tenantId      String
-  patientId     String
-  appointmentId String?
-  staffId       String?
-  startedAt     DateTime         @default(now())
-  finalizedAt   DateTime?
-  status        String           @default("ACTIVE")
-  closedReason  String?
-  notes         String?
-  invoiceId     String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  entries       ChairsideEntry[]
+  id                String           @id @default(cuid())
+  tenantId          String
+  patientId         String
+  appointmentId     String?
+  staffId           String?
+  startedAt         DateTime         @default(now())
+  finalizedAt       DateTime?
+  status            String           @default("ACTIVE")
+  closedReason      String?
+  notes             String?
+  noTreatmentReason String?
+  invoiceId         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  entries           ChairsideEntry[]
 
   @@index([tenantId])
   @@index([tenantId, patientId])
@@ -598,7 +625,7 @@ model ChairsideSession {
 }
 
 model ChairsideEntry {
-  id               String           @id @default(cuid())
+  id               String                  @id @default(cuid())
   sessionId        String
   tenantId         String
   toothNumber      Int?
@@ -607,14 +634,41 @@ model ChairsideEntry {
   procedureName    String?
   conditionType    String?
   notes            String?
-  unitPrice        Decimal?         @db.Decimal(10, 2)
-  quantity         Int              @default(1)
-  includeInInvoice Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-  session          ChairsideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unitPrice        Decimal?                @db.Decimal(10, 2)
+  quantity         Int                     @default(1)
+  includeInInvoice Boolean                 @default(true)
+  lockedAt         DateTime?
+  createdAt        DateTime                @default(now())
+  session          ChairsideSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions         ChairsideEntryVersion[]
 
   @@index([sessionId])
+  @@index([tenantId])
+}
+
+model ChairsideEntryVersion {
+  id               String         @id @default(cuid())
+  entryId          String
+  tenantId         String
+  version          Int
+  toothNumber      Int?
+  surface          String?
+  procedureCode    String?
+  procedureName    String?
+  conditionType    String?
+  notes            String?
+  unitPrice        Decimal?       @db.Decimal(10, 2)
+  quantity         Int
+  includeInInvoice Boolean
+  amendedById      String?
+  amendedByName    String?
+  amendReason      String?
+  createdAt        DateTime       @default(now())
+  entry            ChairsideEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
   @@index([tenantId])
 }
 

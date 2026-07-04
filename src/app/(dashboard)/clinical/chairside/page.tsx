@@ -33,9 +33,23 @@ export default async function ChairsidePage({
 
   const patient = await db.patient.findFirst({
     where: { id: patientId, tenantId: ctx.tenant.id, deletedAt: null },
-    select: { id: true, firstName: true, lastName: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      allergies: true,
+      bloodGroup: true,
+      medicalHistory: true,
+    },
   });
   if (!patient) redirect("/clinical");
+
+  const medicalHistoryText =
+    patient.medicalHistory && typeof patient.medicalHistory === "object"
+      ? JSON.stringify(patient.medicalHistory)
+      : typeof patient.medicalHistory === "string"
+        ? patient.medicalHistory
+        : null;
 
   let chairsideSession = null;
 
@@ -85,7 +99,10 @@ export default async function ChairsidePage({
             };
           }),
         }}
-        patient={patient}
+        patient={{
+          ...patient,
+          medicalHistory: medicalHistoryText,
+        }}
         procedures={procedures.map((p) => {
           const serialized = serializeDecimal(p);
           return {

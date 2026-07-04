@@ -1,8 +1,9 @@
 import type { AppointmentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
-import { tenantWhere } from "@/lib/tenant/scoped";
-import { generateInvoiceNumber } from "@/lib/utils";
+import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
+import { completeVisit } from "@/lib/clinical/complete-visit";
+import { lockChartRecordsForSession } from "@/lib/clinical/lock-chart-records";
+import { deductProcedureConsumables } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 
 /** ChairsideSession.status values (plain string in schema). */
 export const CHAIRSIDE_SESSION_STATUS = {
@@ -93,6 +94,34 @@ async function abandonChairsideSession(params: {
     .catch(() => null);
 }
 
+async function deductConsumablesForSession(params: {
+  tenantId: string;
+  sessionId: string;
+  appointmentId: string;
+  patientId: string;
+}) {
+  const appointment = await db.appointment.findFirst({
+    where: { id: params.appointmentId, tenantId: params.tenantId },
+    select: { chairId: true },
+  });
+  if (!appointment?.chairId) return;
+
+  const entries = await db.chairsideEntry.findMany({
+    where: { sessionId: params.sessionId, tenantId: params.tenantId },
+    select: { procedureCode: true },
+  });
+
+  const codes = [...new Set(entries.map((e) => e.procedureCode).filter(Boolean))] as string[];
+  for (const procedureCode of codes) {
+    await deductProcedureConsumables({
+      procedureCode,
+      chairId: appointment.chairId,
+      appointmentId: params.appointmentId,
+      patientId: params.patientId,
+    }).catch(() => null);
+  }
+}
+
 export async function finalizeChairsideSessionRecord(params: {
   sessionId: string;
   tenantId: string;
@@ -100,6 +129,7 @@ export async function finalizeChairsideSessionRecord(params: {
   closedReason: ChairsideClosedReason;
   skipAppointmentUpdate?: boolean;
   allowInvoice?: boolean;
+  noTreatmentReason?: string | null;
 }): Promise<{ invoiceId: string | null }> {
   const session = await db.chairsideSession.findFirst({
     where: {
@@ -108,19 +138,27 @@ export async function finalizeChairsideSessionRecord(params: {
       status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
     },
     include: {
-      entries: { where: { includeInInvoice: true } },
+      entries: true,
       patient: true,
     },
   });
   if (!session) return { invoiceId: null };
 
+  const billableEntries = session.entries.filter((e) => e.includeInInvoice);
+  const totalEntries = session.entries.length;
+
+  if (totalEntries === 0 && !params.noTreatmentReason?.trim()) {
+    throw new Error(
+      "Add at least one chart entry or provide a reason no treatment was performed.",
+    );
+  }
+
   let invoiceId: string | null = null;
 
-  if (session.entries.length > 0 && params.allowInvoice !== false) {
-    const items = session.entries.map((e) => {
+  if (billableEntries.length > 0 && params.allowInvoice !== false) {
+    const items = billableEntries.map((e) => {
       const unitPrice = Number(e.unitPrice ?? 0);
       return {
-        tenantId: params.tenantId,
         description: e.procedureName ?? e.conditionType ?? "Treatment",
         quantity: e.quantity,
         unitPrice,
@@ -129,43 +167,32 @@ export async function finalizeChairsideSessionRecord(params: {
       };
     });
 
-    const subtotal = items.reduce((sum, i) => sum + i.total, 0);
-    const taxInfo = await getTenantInvoiceTax(params.tenantId);
-    const tax = subtotal * taxInfo.taxRateDecimal;
-    const total = subtotal + tax;
-
-    const count = await db.invoice.count({ where: { tenantId: params.tenantId } });
-    const invoice = await db.invoice.create({
-      data: {
-        tenantId: params.tenantId,
-        patientId: session.patientId,
-        invoiceNumber: generateInvoiceNumber(count + 1),
-        status: "DRAFT",
-        subtotal,
-        tax,
-        total,
-        currency: taxInfo.currency,
-        taxName: taxInfo.taxName,
-        taxRateApplied: taxInfo.taxRatePercent,
-        taxNumber: taxInfo.taxNumber,
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        notes: session.appointmentId
-          ? `Chairside session · Appointment ${session.appointmentId}`
-          : "Chairside session",
-        items: { create: items },
-      },
+    const invoice = await createInvoiceFromItems({
+      tenantId: params.tenantId,
+      patientId: session.patientId,
+      items,
+      notes: session.appointmentId
+        ? `Chairside session · Appointment ${session.appointmentId}`
+        : "Chairside session",
+      status: "DRAFT",
     });
     invoiceId = invoice.id;
   }
 
-  if (session.appointmentId && !params.skipAppointmentUpdate) {
-    await db.appointment
-      .updateMany({
-        where: tenantWhere(params.tenantId, { id: session.appointmentId }),
-        data: { status: "COMPLETED" },
-      })
-      .catch(() => null);
+  if (session.appointmentId) {
+    await deductConsumablesForSession({
+      tenantId: params.tenantId,
+      sessionId: session.id,
+      appointmentId: session.appointmentId,
+      patientId: session.patientId,
+    });
   }
+
+  await lockChartRecordsForSession({
+    tenantId: params.tenantId,
+    sessionId: session.id,
+    appointmentId: session.appointmentId,
+  });
 
   await db.chairsideSession.update({
     where: { id: params.sessionId },
@@ -174,8 +201,19 @@ export async function finalizeChairsideSessionRecord(params: {
       finalizedAt: new Date(),
       closedReason: params.closedReason,
       invoiceId,
+      noTreatmentReason: params.noTreatmentReason?.trim() || null,
     },
   });
+
+  if (session.appointmentId && !params.skipAppointmentUpdate) {
+    await completeVisit({
+      tenantId: params.tenantId,
+      appointmentId: session.appointmentId,
+      staffMemberId: params.staffMemberId,
+      skipChairsideAutoClose: true,
+      allowInvoice: params.allowInvoice,
+    });
+  }
 
   await db.auditLog
     .create({
@@ -192,6 +230,7 @@ export async function finalizeChairsideSessionRecord(params: {
           invoiceId,
           finalized: true,
           closedReason: params.closedReason,
+          noTreatmentReason: params.noTreatmentReason ?? null,
         },
       },
     })

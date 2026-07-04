@@ -3,6 +3,7 @@
 import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
+import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 
 export async function lookupByBarcode(scannedCode: string) {
   const ctx = await requireTenantContext();
@@ -97,10 +98,19 @@ export async function lookupByBarcode(scannedCode: string) {
 export async function checkinByBarcode(patientId: string, appointmentId: string) {
   const ctx = await requireTenantContext();
 
-  await db.appointment.update({
+  const appointment = await db.appointment.update({
     where: { id: appointmentId, tenantId: ctx.tenantId },
     data: { status: "ARRIVED" },
+    include: { patient: true },
   });
+
+  const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
+  await notifyAppointmentStatus(
+    appointmentId,
+    ctx.tenantId,
+    "ARRIVED",
+    patientName,
+  ).catch(() => null);
 
   await db.barcodeScan
     .create({

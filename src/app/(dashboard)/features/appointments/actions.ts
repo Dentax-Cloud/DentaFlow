@@ -8,13 +8,11 @@ import {
   autoCloseChairsideSessionsForAppointment,
   isTerminalAppointmentStatus,
 } from "@/lib/clinical/chairside-lifecycle";
+import { completeVisit } from "@/lib/clinical/complete-visit";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { broadcastAppointmentUpdate } from "@/lib/pusher";
 import { predictNoShowRisk } from "@/lib/ai";
-import {
-  maybeCreateRecallAfterAppointment,
-  refreshPatientRiskScores,
-} from "@/lib/recall/helpers";
+import { refreshPatientRiskScores } from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
 import { generateAppointmentRef } from "@/lib/ids/generate-ids";
 import { getStaffActor } from "@/lib/tenant/context";
@@ -110,6 +108,31 @@ export const updateAppointmentStatus = createAction({
     });
     if (!existing) throw new Error("Appointment not found");
 
+    if (input.status === "COMPLETED") {
+      const allowInvoice =
+        Boolean(ctx.staffMember) &&
+        hasPermission(ctx.staffMember!.role, PERMISSIONS.billing.write);
+
+      const appointment = await completeVisit({
+        tenantId: ctx.tenant.id,
+        appointmentId: input.id,
+        staffMemberId: ctx.staffMember?.id,
+        allowInvoice,
+      });
+
+      if (!appointment) throw new Error("Appointment not found");
+
+      await createAuditLog({
+        tenantId: ctx.tenant.id,
+        userId: getStaffActor(ctx).id,
+        action: AuditAction.UPDATE,
+        entity: "Appointment",
+        entityId: appointment.id,
+        metadata: { status: input.status },
+      });
+      return appointment;
+    }
+
     const appointment = await db.appointment.update({
       where: { id: input.id },
       data: { status: input.status },
@@ -124,17 +147,6 @@ export const updateAppointmentStatus = createAction({
       patientName,
     ).catch(() => null);
 
-    if (input.status === "COMPLETED") {
-      await db.patient.update({
-        where: { id: appointment.patientId },
-        data: { lastVisitAt: new Date() },
-      });
-      await maybeCreateRecallAfterAppointment({
-        tenantId: ctx.tenant.id,
-        patientId: appointment.patientId,
-      });
-    }
-
     if (input.status === "NO_SHOW") {
       await db.patient.update({
         where: { id: appointment.patientId },
@@ -142,7 +154,7 @@ export const updateAppointmentStatus = createAction({
       });
     }
 
-    if (input.status === "COMPLETED" || input.status === "NO_SHOW") {
+    if (input.status === "NO_SHOW") {
       await refreshPatientRiskScores(ctx.tenant.id, appointment.patientId);
     }
 

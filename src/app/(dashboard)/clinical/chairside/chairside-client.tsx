@@ -11,7 +11,14 @@ type Props = {
     appointmentId: string | null;
     entries: ChairsideEntryRow[];
   };
-  patient: { id: string; firstName: string; lastName: string };
+  patient: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    allergies: string[];
+    bloodGroup: string | null;
+    medicalHistory: string | null;
+  };
   procedures: ProcedureOption[];
 };
 
@@ -29,6 +36,9 @@ export default function ChairsidePageClient({ session, patient, procedures }: Pr
     <ChairsidePanel
       sessionId={session.id}
       patientName={`${patient.firstName} ${patient.lastName}`}
+      patientAllergies={patient.allergies}
+      patientBloodGroup={patient.bloodGroup}
+      patientMedicalHistory={patient.medicalHistory}
       appointmentId={session.appointmentId ?? undefined}
       initialEntries={session.entries}
       procedures={procedures}
