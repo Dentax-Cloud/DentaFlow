@@ -299,17 +299,29 @@ export function isClinicalRole(role: UserRole | string): boolean {
 }
 
 export function getRoleLabel(role: UserRole): string {
-  switch (normalizeDashboardRole(role)) {
-    case "ADMIN":
-      return role === UserRole.OWNER ? "Clinic Owner" : "Admin";
-    case "DOCTOR":
+  switch (role) {
+    case UserRole.OWNER:
+      return "Clinic Owner";
+    case UserRole.ADMIN:
+      return "Admin";
+    case UserRole.DOCTOR:
+    case UserRole.DENTIST:
       return "Doctor";
-    case "RECEPTIONIST":
+    case UserRole.HYGIENIST:
+      return "Hygienist";
+    case UserRole.NURSE:
+      return "Nurse / Assistant";
+    case UserRole.RECEPTIONIST:
       return "Receptionist";
-    case "FINANCE":
+    case UserRole.FINANCE:
+    case UserRole.ACCOUNTANT:
       return "Finance";
-    case "STORE":
-      return "Store";
+    case UserRole.STORE:
+      return "Store / Inventory";
+    case UserRole.MANAGER:
+      return "Manager";
+    case UserRole.STAFF:
+      return "Staff";
     default:
       return role;
   }

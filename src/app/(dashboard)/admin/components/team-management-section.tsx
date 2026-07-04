@@ -40,7 +40,11 @@ import {
   StaffMemberViewDialog,
 } from "@/components/admin/staff-member-dialogs";
 import { getRoleLabel } from "@/lib/rbac/permissions";
-import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/team-roles";
+import {
+  INVITABLE_ROLES,
+  canEditInvitableStaffRole,
+  normalizeToInvitableRole,
+} from "@/lib/tenant/team-roles";
 import {
   removeTeamMember,
   updateTeamMemberRole,
@@ -131,16 +135,9 @@ export function TeamManagementSection({
 
   const isAdminRole = (role: UserRole) => role === UserRole.ADMIN || role === UserRole.OWNER;
 
-  function normalizeEditableRole(role: UserRole): UserRole {
-    if (role === UserRole.DENTIST) return UserRole.DOCTOR;
-    if (role === UserRole.ACCOUNTANT) return UserRole.FINANCE;
-    return role;
-  }
-
   function canEditMember(user: StaffMember) {
     if (!canManage || user.id === currentUserId || isAdminRole(user.role)) return false;
-    const normalized = normalizeEditableRole(user.role);
-    return isInvitableRole(normalized);
+    return canEditInvitableStaffRole(user.role);
   }
 
   return (
@@ -175,7 +172,8 @@ export function TeamManagementSection({
               {users.map((user) => {
                 const isSelf = user.id === currentUserId;
                 const canEditRow = canEditMember(user);
-                const selectRole = normalizeEditableRole(user.role);
+                const selectRole =
+                  normalizeToInvitableRole(user.role) ?? UserRole.RECEPTIONIST;
 
                 return (
                   <TableRow key={user.id}>

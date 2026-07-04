@@ -2,14 +2,9 @@ import { z } from "zod";
 import { UserRole } from "@prisma/client";
 import { INVITABLE_ROLES } from "@/lib/tenant/team-roles";
 
-const invitableRoleSchema = z.enum([
-  UserRole.ADMIN,
-  UserRole.DENTIST,
-  UserRole.HYGIENIST,
-  UserRole.RECEPTIONIST,
-  UserRole.ACCOUNTANT,
-  UserRole.MANAGER,
-]);
+const invitableRoleSchema = z.enum(
+  INVITABLE_ROLES as unknown as [UserRole, UserRole, ...UserRole[]],
+);
 
 export const inviteTeamMemberSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),

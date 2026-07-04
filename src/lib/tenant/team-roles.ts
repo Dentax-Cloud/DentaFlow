@@ -1,16 +1,30 @@
 import { UserRole } from "@prisma/client";
 
-/** Roles that admins can assign when inviting or updating team members. */
+/** Roles that admins can assign when inviting or updating team members (canonical values). */
 export const INVITABLE_ROLES = [
   UserRole.ADMIN,
-  UserRole.DENTIST,
+  UserRole.DOCTOR,
   UserRole.HYGIENIST,
+  UserRole.NURSE,
   UserRole.RECEPTIONIST,
-  UserRole.ACCOUNTANT,
-  UserRole.MANAGER,
+  UserRole.FINANCE,
+  UserRole.STORE,
 ] as const;
 
 export type InvitableRole = (typeof INVITABLE_ROLES)[number];
+
+/** Map legacy stored roles to canonical invitable values for UI display and saves. */
+export function normalizeToInvitableRole(role: UserRole): InvitableRole | null {
+  if (role === UserRole.DENTIST) return UserRole.DOCTOR;
+  if (role === UserRole.ACCOUNTANT) return UserRole.FINANCE;
+  if (isInvitableRole(role)) return role;
+  return null;
+}
+
+export function canEditInvitableStaffRole(role: UserRole): boolean {
+  if (role === UserRole.OWNER || role === UserRole.ADMIN) return false;
+  return normalizeToInvitableRole(role) !== null;
+}
 
 const DENTAFLOW_ROLE_METADATA_KEY = "dentaflowRole";
 
@@ -38,13 +52,15 @@ export function resolveProvisionedUserRole(params: {
   membershipMetadata?: unknown;
   pendingInviteRole?: UserRole | null;
 }): UserRole {
-  if (params.pendingInviteRole && isInvitableRole(params.pendingInviteRole)) {
-    return params.pendingInviteRole;
+  if (params.pendingInviteRole) {
+    const role = normalizeToInvitableRole(params.pendingInviteRole);
+    if (role) return role;
   }
 
   const metadataRole = readDentaflowRoleFromMetadata(params.membershipMetadata);
-  if (metadataRole && isInvitableRole(metadataRole)) {
-    return metadataRole;
+  if (metadataRole) {
+    const role = normalizeToInvitableRole(metadataRole);
+    if (role) return role;
   }
 
   return UserRole.RECEPTIONIST;

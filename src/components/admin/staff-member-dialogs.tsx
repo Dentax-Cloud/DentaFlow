@@ -7,7 +7,11 @@ import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import { personDisplayName } from "@/lib/utils/person-display";
 import { getRoleLabel } from "@/lib/rbac/permissions";
-import { INVITABLE_ROLES, isInvitableRole } from "@/lib/tenant/team-roles";
+import {
+  INVITABLE_ROLES,
+  canEditInvitableStaffRole,
+  normalizeToInvitableRole,
+} from "@/lib/tenant/team-roles";
 import { updateStaffMemberProfile } from "@/app/(dashboard)/features/admin/actions";
 import { PersonAvatar } from "@/components/profile/person-avatar";
 import { PhotoCapture } from "@/components/profile/photo-capture";
@@ -38,17 +42,6 @@ function resolveStaffStatus(user: StaffMember): StaffStatus {
   return "ACTIVE";
 }
 
-function isEditableStaffRole(role: UserRole): boolean {
-  return (
-    role !== UserRole.OWNER &&
-    role !== UserRole.ADMIN &&
-    role !== UserRole.STAFF &&
-    role !== UserRole.STORE &&
-    role !== UserRole.NURSE &&
-    role !== UserRole.FINANCE &&
-    role !== UserRole.MANAGER
-  );
-}
 
 function statusBadgeVariant(status: StaffStatus): "default" | "secondary" | "outline" {
   switch (status) {
@@ -141,11 +134,9 @@ export function StaffMemberEditDialog({
 }: EditProps) {
   const [firstName, setFirstName] = useState(user.firstName ?? "");
   const [lastName, setLastName] = useState(user.lastName ?? "");
-  const [role, setRole] = useState<(typeof INVITABLE_ROLES)[number]>(() => {
-    if (user.role === UserRole.DOCTOR || user.role === UserRole.DENTIST) return UserRole.DENTIST;
-    if (isInvitableRole(user.role)) return user.role;
-    return UserRole.RECEPTIONIST;
-  });
+  const [role, setRole] = useState<(typeof INVITABLE_ROLES)[number]>(
+    () => normalizeToInvitableRole(user.role) ?? UserRole.RECEPTIONIST,
+  );
   const [isActive, setIsActive] = useState(user.isActive);
   const [busy, setBusy] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
@@ -153,26 +144,24 @@ export function StaffMemberEditDialog({
   useEffect(() => {
     setFirstName(user.firstName ?? "");
     setLastName(user.lastName ?? "");
-    setRole(
-      user.role === UserRole.DOCTOR || user.role === UserRole.DENTIST
-        ? UserRole.DENTIST
-        : isInvitableRole(user.role)
-          ? user.role
-          : UserRole.RECEPTIONIST,
-    );
+    setRole(normalizeToInvitableRole(user.role) ?? UserRole.RECEPTIONIST);
     setIsActive(user.isActive);
     setAvatarUrl(user.avatarUrl);
   }, [user]);
 
-  const canEditRole = isEditableStaffRole(user.role);
+  const canEditRole = canEditInvitableStaffRole(user.role);
 
   async function handleSave() {
     setBusy(true);
+    const normalizedStored = normalizeToInvitableRole(user.role);
+    const roleChanged =
+      canEditRole && normalizedStored !== null && role !== normalizedStored;
+
     const result = await updateStaffMemberProfile({
       userId: user.id,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      ...(canEditRole ? { role } : {}),
+      ...(roleChanged ? { role } : {}),
       isActive,
     });
     setBusy(false);
