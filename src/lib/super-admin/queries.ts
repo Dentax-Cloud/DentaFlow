@@ -10,9 +10,12 @@ export type TenantListItem = {
   email: string | null;
   city: string | null;
   country: string | null;
+  tenantCode: string | null;
   subscriptionPlan: SubscriptionPlan;
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
   createdAt: Date;
   deletedAt: Date | null;
   activeUsers: number;
@@ -71,6 +74,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
 
 export async function listTenantsWithStats(): Promise<TenantListItem[]> {
   const tenants = await db.tenant.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -80,9 +84,12 @@ export async function listTenantsWithStats(): Promise<TenantListItem[]> {
       email: true,
       city: true,
       country: true,
+      tenantCode: true,
       subscriptionPlan: true,
       subscriptionStatus: true,
       trialEndsAt: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
       createdAt: true,
       deletedAt: true,
     },

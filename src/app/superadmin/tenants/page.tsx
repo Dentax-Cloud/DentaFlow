@@ -11,27 +11,14 @@ import {
 } from "./actions";
 import { TenantStatusBadge } from "@/components/super-admin/tenant-status-badge";
 import { TenantPlanQuickSelect } from "@/components/super-admin/tenant-plan-quick-select";
+import { listTenantsWithStats } from "@/lib/super-admin/queries";
+import { formatCurrency } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
 export default async function SuperadminTenantsPage() {
   const [tenants, pendingTenants] = await Promise.all([
-    db.tenant.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        status: true,
-        tenantCode: true,
-        subscriptionPlan: true,
-        subscriptionStatus: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
-        createdAt: true,
-      },
-    }),
+    listTenantsWithStats(),
     db.tenant.findMany({
       where: { deletedAt: null, status: TenantStatus.PENDING },
       orderBy: { createdAt: "asc" },
@@ -93,13 +80,17 @@ export default async function SuperadminTenantsPage() {
         </Card>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-white/10">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full min-w-[960px] text-sm">
           <thead className="bg-white/5 text-left text-zinc-400">
             <tr>
               <th className="px-4 py-3">Clinic</th>
               <th className="px-4 py-3">Tenant code</th>
-              <th className="px-4 py-3">Clinic status</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Patients</th>
+              <th className="px-4 py-3">Appointments</th>
+              <th className="px-4 py-3">Staff</th>
+              <th className="px-4 py-3">Revenue</th>
               <th className="px-4 py-3">Plan & subscription</th>
               <th className="px-4 py-3">Stripe</th>
               <th className="px-4 py-3">Actions</th>
@@ -124,6 +115,12 @@ export default async function SuperadminTenantsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <TenantStatusBadge status={tenant.status} />
+                </td>
+                <td className="px-4 py-3 tabular-nums">{tenant.totalPatients}</td>
+                <td className="px-4 py-3 tabular-nums">{tenant.totalAppointments}</td>
+                <td className="px-4 py-3 tabular-nums">{tenant.activeUsers}</td>
+                <td className="px-4 py-3 tabular-nums text-zinc-300">
+                  {formatCurrency(tenant.totalRevenue)}
                 </td>
                 <td className="px-4 py-3">
                   <TenantPlanQuickSelect
