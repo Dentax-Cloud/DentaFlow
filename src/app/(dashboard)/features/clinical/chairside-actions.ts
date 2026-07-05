@@ -21,7 +21,7 @@ const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
 
 async function requireChairsideWrite() {
   const ctx = await requireTenantContext();
-  if (!ctx.staffMember || !hasPermission(ctx.staffMember.role, PERMISSIONS.clinical.write)) {
+  if (!ctx.staffMember || !hasPermission(ctx.staffMember.role, PERMISSIONS.clinical_chart.write)) {
     throw new Error(CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE);
   }
   return ctx;
@@ -145,7 +145,7 @@ export async function addChairsideEntry(input: {
   includeInInvoice?: boolean;
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const session = await db.chairsideSession.findFirst({
     where: {
@@ -202,7 +202,7 @@ export async function addChairsideEntry(input: {
 
 export async function removeChairsideEntry(entryId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
@@ -223,7 +223,7 @@ export async function updateChairsideEntry(
   options?: { amendReason?: string },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
@@ -252,7 +252,7 @@ export async function updateChairsideEntry(
 
 export async function getChairsideSession(sessionId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   return db.chairsideSession.findFirst({
     where: { id: sessionId, tenantId: ctx.tenantId },
@@ -288,7 +288,7 @@ export async function finalizeChairsideSession(
   options?: { noTreatmentReason?: string },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const session = await db.chairsideSession.findFirst({
     where: {
@@ -323,7 +323,7 @@ export async function finalizeChairsideSession(
 
 export async function getPatientChairsideSessions(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   return db.chairsideSession.findMany({
     where: { tenantId: ctx.tenantId, patientId },
@@ -337,7 +337,7 @@ export async function getPatientChairsideSessions(patientId: string) {
 
 export async function getActiveChairsideSessionsForUser() {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   return db.chairsideSession.findMany({
     where: {

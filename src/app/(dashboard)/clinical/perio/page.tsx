@@ -11,7 +11,7 @@ export default async function PerioPage({
   searchParams: Promise<{ patientId?: string }>;
 }) {
   const { patientId } = await searchParams;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_chart", "read");
 
   const patients = await db.patient.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },

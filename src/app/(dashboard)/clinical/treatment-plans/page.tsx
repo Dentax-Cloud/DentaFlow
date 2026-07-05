@@ -7,7 +7,7 @@ import { getVisitNumber } from "@/lib/clinical/treatment-plan-types";
 import { TreatmentPlansListClient } from "./treatment-plans-list-client";
 
 export default async function TreatmentPlansPage() {
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_schedule", "read");
 
   const [plans, patients] = await Promise.all([
     db.treatmentPlan.findMany({

@@ -23,7 +23,7 @@ export async function createPhotoSeries(input: {
   notes?: string;
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
   await requirePatient(ctx.tenantId, input.patientId);
 
   const series = await db.photoSeries.create({
@@ -42,7 +42,7 @@ export async function createPhotoSeries(input: {
 
 export async function getPatientPhotos(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
   await requirePatient(ctx.tenantId, patientId);
 
   return db.clinicalImage.findMany({
@@ -57,7 +57,7 @@ export async function getPatientPhotos(patientId: string) {
 
 export async function linkBeforeAfter(beforeImageId: string, afterImageId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const [before, after] = await Promise.all([
     db.clinicalImage.findFirst({
@@ -93,7 +93,7 @@ export async function createCasePresentation(input: {
   imageIds: string[];
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
   await requirePatient(ctx.tenantId, input.patientId);
 
   const images = await db.clinicalImage.findMany({
@@ -124,7 +124,7 @@ export async function createCasePresentation(input: {
 
 export async function shareCasePresentation(presentationId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const presentation = await db.casePresentation.findFirst({
     where: { id: presentationId, tenantId: ctx.tenantId },
@@ -147,7 +147,7 @@ export async function shareCasePresentation(presentationId: string) {
 
 export async function getPatientPresentations(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
   await requirePatient(ctx.tenantId, patientId);
 
   return db.casePresentation.findMany({
@@ -158,7 +158,7 @@ export async function getPatientPresentations(patientId: string) {
 
 export async function deleteCasePresentation(presentationId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   await db.casePresentation.deleteMany({
     where: { id: presentationId, tenantId: ctx.tenantId },

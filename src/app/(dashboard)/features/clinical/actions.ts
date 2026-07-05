@@ -136,7 +136,7 @@ async function upsertTooth(
 
 export const loadPatientChart = createAction({
   schema: loadPatientChartSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.read),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
     const teeth = await getPatientChartRecords(ctx.tenant.id, input.patientId);
@@ -146,7 +146,7 @@ export const loadPatientChart = createAction({
 
 export const createToothCondition = createAction({
   schema: createToothConditionSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
     const tooth = await upsertTooth(ctx.tenant.id, input.patientId, input.toothNumber);
@@ -187,7 +187,7 @@ export const saveToothCondition = createToothCondition;
 
 export const updateToothCondition = createAction({
   schema: updateToothConditionSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
 
@@ -241,7 +241,7 @@ export const updateToothCondition = createAction({
 
 export const deleteToothCondition = createAction({
   schema: deleteToothConditionSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
 
@@ -269,7 +269,7 @@ export const removeToothCondition = deleteToothCondition;
 
 export const markToothMissing = createAction({
   schema: toothPatientSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
     const tooth = await upsertTooth(ctx.tenant.id, input.patientId, input.toothNumber);
@@ -308,7 +308,7 @@ export const markToothMissing = createAction({
 
 export const restoreToothStatus = createAction({
   schema: toothPatientSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
     const tooth = await db.tooth.findUnique({
@@ -438,7 +438,7 @@ export const saveSuggestedTreatmentPlan = createAction({
 
   schema: saveTreatmentPlanSchema,
 
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
 
   handler: async (input, ctx) => {
 
@@ -617,7 +617,7 @@ const createTreatmentPlanSchema = z.object({
 
 export const createTreatmentPlan = createAction({
   schema: createTreatmentPlanSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
     const plan = await db.treatmentPlan.create({
@@ -646,7 +646,7 @@ const addTreatmentItemSchema = z.object({
 
 export const addTreatmentItem = createAction({
   schema: addTreatmentItemSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const plan = await db.treatmentPlan.findFirst({
       where: tenantWhere(ctx.tenant.id, { id: input.planId, deletedAt: null }),
@@ -699,7 +699,7 @@ const updateTreatmentPlanStatusSchema = z.object({
 
 export const updateTreatmentPlanStatus = createAction({
   schema: updateTreatmentPlanStatusSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const plan = await db.treatmentPlan.update({
       where: { id: input.planId, tenantId: ctx.tenant.id },
@@ -716,7 +716,7 @@ export const updateTreatmentPlanStatus = createAction({
 
 export const removeTreatmentItem = createAction({
   schema: z.object({ itemId: z.string(), planId: z.string() }),
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const item = await db.treatmentItem.findFirst({
       where: { id: input.itemId, tenantId: ctx.tenant.id, treatmentPlanId: input.planId },

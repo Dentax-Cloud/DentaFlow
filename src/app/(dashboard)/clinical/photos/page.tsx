@@ -11,7 +11,7 @@ export default async function PhotoPage({
   searchParams: Promise<{ patientId?: string; tab?: string; appointmentId?: string }>;
 }) {
   const { patientId, tab, appointmentId } = await searchParams;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_chart", "read");
 
   const patients = await db.patient.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },

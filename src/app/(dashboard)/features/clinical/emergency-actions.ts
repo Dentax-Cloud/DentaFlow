@@ -29,7 +29,7 @@ async function requireEmergencyRead() {
   const role = ctx.staffMember?.role;
   if (
     !role ||
-    (!hasPermission(role, PERMISSIONS.clinical.read) &&
+    (!hasPermission(role, PERMISSIONS.clinical_chart.read) &&
       !hasPermission(role, PERMISSIONS.appointments.read))
   ) {
     throw new Error("FORBIDDEN");
@@ -42,7 +42,7 @@ async function requireEmergencyWrite() {
   const role = ctx.staffMember?.role;
   if (
     !role ||
-    (!hasPermission(role, PERMISSIONS.clinical.write) &&
+    (!hasPermission(role, PERMISSIONS.clinical_chart.write) &&
       !hasPermission(role, PERMISSIONS.appointments.write))
   ) {
     throw new Error("FORBIDDEN");

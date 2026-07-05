@@ -35,7 +35,7 @@ export async function saveClinicalImage(input: {
   isBeforePhoto?: boolean;
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
   await requirePatient(ctx.tenantId, input.patientId);
 
   const isBefore = input.photoCategory === "BEFORE" || input.isBeforePhoto === true;
@@ -112,7 +112,7 @@ export async function getPatientImages(
   filters?: { type?: string; quadrant?: string },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
   await requirePatient(ctx.tenantId, patientId);
 
   return db.clinicalImage.findMany({
@@ -128,7 +128,7 @@ export async function getPatientImages(
 
 export async function getImage(imageId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   return db.clinicalImage.findFirst({
     where: { id: imageId, tenantId: ctx.tenantId },
@@ -137,7 +137,7 @@ export async function getImage(imageId: string) {
 
 export async function saveAnnotations(imageId: string, annotations: Annotation[]) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   await db.clinicalImage.updateMany({
     where: { id: imageId, tenantId: ctx.tenantId },
@@ -159,7 +159,7 @@ export async function updateImageMeta(
   },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   await db.clinicalImage.updateMany({
     where: { id: imageId, tenantId: ctx.tenantId },
@@ -175,7 +175,7 @@ export async function updateImageMeta(
 
 export async function deleteClinicalImage(imageId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const image = await db.clinicalImage.findFirst({
     where: { id: imageId, tenantId: ctx.tenantId },
@@ -191,7 +191,7 @@ export async function deleteClinicalImage(imageId: string) {
 
 export async function linkImageToTreatmentPlan(imageId: string, treatmentPlanId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.findFirst({
     where: { id: treatmentPlanId, tenantId: ctx.tenantId, deletedAt: null },

@@ -15,7 +15,7 @@ export default async function TreatmentPlanDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_schedule", "read");
 
   const plan = await db.treatmentPlan.findFirst({
     where: tenantWhere(ctx.tenant.id, { id, deletedAt: null }),

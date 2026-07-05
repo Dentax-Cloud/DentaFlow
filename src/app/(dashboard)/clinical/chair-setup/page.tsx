@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { requireTenantContext } from "@/lib/tenant/context";
+import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import ChairSetupClient from "./chair-setup-client";
@@ -18,7 +18,7 @@ import {
 } from "@/lib/rbac/staff-role";
 
 export default async function ChairSetupPage() {
-  const ctx = await requireTenantContext();
+  const ctx = await requireRouteAccess("clinical_chart", "read");
   redirectIfStaffMemberMissing(ctx);
   const userRole = requireStaffMemberRole(ctx);
   const staffId = ctx.staffMember!.id;

@@ -155,7 +155,7 @@ export function AppointmentDrawer({
   }
 
   const canStartChairside = staffRole
-    ? hasPermission(staffRole, PERMISSIONS.clinical.write)
+    ? hasPermission(staffRole, PERMISSIONS.clinical_chart.write)
     : false;
   const canMarkInChair = staffRole
     ? hasPermission(staffRole, PERMISSIONS.appointments.write)

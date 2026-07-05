@@ -22,12 +22,12 @@ export default async function ChairsidePage({
   }>;
 }) {
   const { patientId, appointmentId, sessionId } = await searchParams;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_chart", "read");
 
   if (!patientId) redirect("/clinical");
 
   const role = ctx.staffMember?.role;
-  if (!role || !hasPermission(role, PERMISSIONS.clinical.write)) {
+  if (!role || !hasPermission(role, PERMISSIONS.clinical_chart.write)) {
     return <ChairsidePermissionDenied />;
   }
 

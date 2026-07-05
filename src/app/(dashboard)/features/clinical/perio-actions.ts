@@ -34,7 +34,7 @@ export async function createPerioChart(input: {
   examinerId?: string;
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const patient = await db.patient.findFirst({
     where: { id: input.patientId, tenantId: ctx.tenantId, deletedAt: null },
@@ -90,7 +90,7 @@ export async function createPerioChart(input: {
 
 export async function getPerioHistory(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   return db.perioChart.findMany({
     where: { tenantId: ctx.tenantId, patientId },
@@ -109,7 +109,7 @@ export async function getLatestPerioChart(patientId: string) {
 
 export async function comparePerioChartRecords(chartId1: string, chartId2: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   const [chart1, chart2] = await Promise.all([
     db.perioChart.findFirst({
@@ -136,7 +136,7 @@ export async function comparePerioChartRecords(chartId1: string, chartId2: strin
 
 export async function deletePerioChart(chartId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const chart = await db.perioChart.findFirst({
     where: { id: chartId, tenantId: ctx.tenantId },
@@ -153,7 +153,7 @@ export async function deletePerioChart(chartId: string) {
 
 export async function calculatePerioRisk(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_chart.read);
 
   const latest = await getLatestPerioChart(patientId);
   if (!latest) return { risk: "LOW" as const, staging: null };

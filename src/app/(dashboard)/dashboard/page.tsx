@@ -51,7 +51,7 @@ export default async function DashboardPage() {
 
   const canSeeChairsideSessions =
     ctx.staffMember?.role &&
-    hasPermission(ctx.staffMember.role, PERMISSIONS.clinical.read);
+    hasPermission(ctx.staffMember.role, PERMISSIONS.clinical_chart.read);
   const activeSessions =
     canSeeChairsideSessions
       ? await getActiveChairsideSessionsForUser().catch(() => [])

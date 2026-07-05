@@ -6,7 +6,7 @@
 // All prices set exclusively by tenant admin
 // ============================================================
 
-import { useState, useTransition, useMemo } from "react"
+import { useState, useTransition, useMemo, useEffect } from "react"
 import { useRouter }                         from "next/navigation"
 import { toast }                             from "sonner"
 import {
@@ -21,12 +21,19 @@ import {
   setProcedurePrice,
   bulkSetPrices,
   createCustomProcedure,
+  previewProcedureCode,
   updateProcedure,
   toggleProcedureActive,
   deleteCustomProcedure,
   createBundle,
   updateBundle,
 } from "@/app/(dashboard)/admin/procedure-actions"
+import { messageFromActionError } from "@/lib/rbac/action-errors"
+
+function parseOptionalPrice(value: string): number | null {
+  if (value === "" || value === null) return null
+  return Number(value)
+}
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -163,8 +170,8 @@ function EditPricingPanel({
       try {
         // Set prices
         await setProcedurePrice(procedure.id, {
-          sellingPrice: sellingPrice ? Number(sellingPrice) : null,
-          costPrice:    costPrice    ? Number(costPrice)    : null,
+          sellingPrice: parseOptionalPrice(sellingPrice),
+          costPrice:    parseOptionalPrice(costPrice),
           branchPrices: Object.fromEntries(
             Object.entries(branchPrices)
               .filter(([, v]) => v !== "")
@@ -185,8 +192,7 @@ function EditPricingPanel({
         onSave()
         onClose()
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to save"
-        toast.error(message)
+        toast.error(messageFromActionError(err))
       }
     })
   }
@@ -455,10 +461,15 @@ export default function ProcedureCatalogClient({
 
   // Custom procedure form
   const [customForm, setCustomForm] = useState({
-    code: "", name: "", nameAr: "",
+    name: "", nameAr: "",
     category: "DIAGNOSTIC", durationMins: "30",
     sellingPrice: "", costPrice: "",
+    requiresConsent: false,
+    requiresXray: false,
+    requiresPreAuth: false,
+    isOnlineBookable: false,
   })
+  const [codePreview, setCodePreview] = useState("")
 
   // Bundle form
   const [bundleForm, setBundleForm] = useState({
@@ -466,6 +477,14 @@ export default function ProcedureCatalogClient({
     bundlePrice: "", durationMins: "60",
     selectedProcedures: [] as string[],
   })
+
+  // Preview auto-generated procedure code when category changes
+  useEffect(() => {
+    if (!showAddCustom) return
+    previewProcedureCode(customForm.category)
+      .then(setCodePreview)
+      .catch(() => setCodePreview("PRC-…"))
+  }, [showAddCustom, customForm.category])
 
   // ── Filtered procedures ──────────────────────────────────────
 
@@ -550,34 +569,39 @@ export default function ProcedureCatalogClient({
   // ── Create custom procedure ──────────────────────────────────
 
   async function handleCreateCustom() {
-    if (!customForm.code || !customForm.name) {
-      toast.error("Code and name are required")
+    if (!customForm.name) {
+      toast.error("Name is required")
       return
     }
     startTransition(async () => {
       try {
-        await createCustomProcedure({
-          code:         customForm.code.trim(),
+        const { code } = await createCustomProcedure({
           name:         customForm.name.trim(),
           nameAr:       customForm.nameAr.trim() || undefined,
           category:     customForm.category,
           durationMins: Number(customForm.durationMins) || 30,
-          sellingPrice: customForm.sellingPrice
-            ? Number(customForm.sellingPrice) : null,
-          costPrice: customForm.costPrice
-            ? Number(customForm.costPrice) : null,
+          sellingPrice: parseOptionalPrice(customForm.sellingPrice),
+          costPrice:    parseOptionalPrice(customForm.costPrice),
+          requiresConsent:  customForm.requiresConsent,
+          requiresXray:     customForm.requiresXray,
+          requiresPreAuth:  customForm.requiresPreAuth,
+          isOnlineBookable: customForm.isOnlineBookable,
         })
-        toast.success("Custom procedure created")
+        toast.success(`Custom procedure created (${code})`)
         setShowAddCustom(false)
         setCustomForm({
-          code: "", name: "", nameAr: "",
+          name: "", nameAr: "",
           category: "DIAGNOSTIC", durationMins: "30",
           sellingPrice: "", costPrice: "",
+          requiresConsent: false,
+          requiresXray: false,
+          requiresPreAuth: false,
+          isOnlineBookable: false,
         })
+        setCodePreview("")
         router.refresh()
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to create"
-        toast.error(message)
+        toast.error(messageFromActionError(err))
       }
     })
   }
@@ -589,8 +613,12 @@ export default function ProcedureCatalogClient({
     isActive: boolean
   ) {
     startTransition(async () => {
-      await toggleProcedureActive(procedureId, isActive)
-      router.refresh()
+      try {
+        await toggleProcedureActive(procedureId, isActive)
+        router.refresh()
+      } catch (err: unknown) {
+        toast.error(messageFromActionError(err))
+      }
     })
   }
 
@@ -1318,17 +1346,17 @@ export default function ProcedureCatalogClient({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium">
-                  Code <span className="text-red-500">*</span>
+                  Procedure code
                 </label>
-                <input
-                  value={customForm.code}
-                  onChange={e =>
-                    setCustomForm(p => ({...p, code: e.target.value}))
-                  }
-                  placeholder="e.g. CUSTOM-001"
-                  className="mt-1 w-full rounded-lg border px-3 py-2
-                    text-sm"
-                />
+                <div
+                  className="mt-1 w-full rounded-lg border bg-muted/40 px-3 py-2
+                    text-sm font-mono text-muted-foreground"
+                >
+                  {codePreview || "Select category…"}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Auto-generated on save
+                </p>
               </div>
               <div>
                 <label className="text-xs font-medium">
@@ -1446,6 +1474,58 @@ export default function ProcedureCatalogClient({
                   className="mt-1 w-full rounded-lg border px-3 py-2
                     text-sm"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium">
+                Clinical requirements
+              </label>
+              <div className="mt-2 space-y-2">
+                {[
+                  {
+                    key: "consent",
+                    label: "Requires patient consent form",
+                    val: customForm.requiresConsent,
+                    field: "requiresConsent" as const,
+                  },
+                  {
+                    key: "xray",
+                    label: "Requires X-ray before procedure",
+                    val: customForm.requiresXray,
+                    field: "requiresXray" as const,
+                  },
+                  {
+                    key: "preauth",
+                    label: "Requires insurance pre-authorization",
+                    val: customForm.requiresPreAuth,
+                    field: "requiresPreAuth" as const,
+                  },
+                  {
+                    key: "booking",
+                    label: "Available for online booking",
+                    val: customForm.isOnlineBookable,
+                    field: "isOnlineBookable" as const,
+                  },
+                ].map(item => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.val}
+                      onChange={e =>
+                        setCustomForm(p => ({
+                          ...p,
+                          [item.field]: e.target.checked,
+                        }))
+                      }
+                      className="rounded"
+                    />
+                    {item.label}
+                  </label>
+                ))}
               </div>
             </div>
 

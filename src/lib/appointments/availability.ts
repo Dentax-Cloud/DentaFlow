@@ -53,6 +53,35 @@ function fromMinutes(mins: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** Branch-specific schedule first, then tenant-wide (branchId null) fallback. */
+async function findDoctorSchedule(input: {
+  tenantId: string;
+  doctorId: string;
+  dayOfWeek: number;
+  branchId?: string;
+}) {
+  if (input.branchId) {
+    const branchSpecific = await db.doctorSchedule.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        doctorId: input.doctorId,
+        dayOfWeek: input.dayOfWeek,
+        branchId: input.branchId,
+      },
+    });
+    if (branchSpecific) return branchSpecific;
+  }
+
+  return db.doctorSchedule.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      doctorId: input.doctorId,
+      dayOfWeek: input.dayOfWeek,
+      branchId: null,
+    },
+  });
+}
+
 export async function getDoctorSlots(input: {
   tenantId: string;
   doctorId: string;
@@ -72,13 +101,11 @@ export async function getDoctorSlots(input: {
     return [];
   }
 
-  const schedule = await db.doctorSchedule.findFirst({
-    where: {
-      tenantId,
-      doctorId,
-      dayOfWeek,
-      ...(input.branchId ? { branchId: input.branchId } : {}),
-    },
+  const schedule = await findDoctorSchedule({
+    tenantId,
+    doctorId,
+    dayOfWeek,
+    branchId: input.branchId,
   });
 
   if (!schedule || !schedule.isWorkingDay) {

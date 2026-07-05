@@ -20,11 +20,17 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.RECEPTIONIST, "delete", "patients")).toBe(false);
   });
 
-  it("doctor can write clinical and patients but not appointments", () => {
-    expect(can(UserRole.DOCTOR, "write", "clinical")).toBe(true);
+  it("doctor can write clinical chart and patients but not appointments", () => {
+    expect(can(UserRole.DOCTOR, "write", "clinical_chart")).toBe(true);
     expect(can(UserRole.DOCTOR, "write", "patients")).toBe(true);
     expect(can(UserRole.DOCTOR, "write", "appointments")).toBe(false);
     expect(can(UserRole.DENTIST, "write", "appointments")).toBe(false);
+  });
+
+  it("receptionist has clinical schedule read but not clinical chart", () => {
+    expect(can(UserRole.RECEPTIONIST, "read", "clinical_schedule")).toBe(true);
+    expect(can(UserRole.RECEPTIONIST, "read", "clinical_chart")).toBe(false);
+    expect(can(UserRole.RECEPTIONIST, "write", "clinical_chart")).toBe(false);
   });
 
   it("finance has billing full access and reports export", () => {
@@ -32,6 +38,7 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.FINANCE, "refund", "billing")).toBe(true);
     expect(can(UserRole.FINANCE, "export", "reports")).toBe(true);
     expect(can(UserRole.ACCOUNTANT, "refund", "billing")).toBe(true);
+    expect(can(UserRole.FINANCE, "read", "clinical_chart")).toBe(false);
   });
 
   it("store has inventory full access only", () => {
@@ -62,12 +69,23 @@ describe("RBAC routes and navigation", () => {
     expect(canAccessPath(UserRole.DOCTOR, "/clinical")).toBe(true);
   });
 
+  it("blocks receptionist from clinical chart routes but allows treatment plans", () => {
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical/radiographs")).toBe(false);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical/treatment-plans")).toBe(true);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical")).toBe(false);
+  });
+
   it("filters sidebar items by role", () => {
     const doctorNav = getNavItemsForRole(UserRole.DOCTOR);
     expect(doctorNav.some((item) => item.href === "/clinical")).toBe(true);
     expect(doctorNav.some((item) => item.href === "/clinical/treatment-plans")).toBe(true);
     expect(doctorNav.some((item) => item.href === "/clinical/chairside")).toBe(false);
     expect(doctorNav.some((item) => item.href === "/admin")).toBe(false);
+
+    const receptionNav = getNavItemsForRole(UserRole.RECEPTIONIST);
+    expect(receptionNav.some((item) => item.href === "/clinical/treatment-plans")).toBe(true);
+    expect(receptionNav.some((item) => item.href === "/clinical/radiographs")).toBe(false);
+    expect(receptionNav.some((item) => item.href === "/clinical")).toBe(false);
 
     const financeNav = getNavItemsForRole(UserRole.FINANCE);
     expect(financeNav.some((item) => item.href === "/billing")).toBe(true);

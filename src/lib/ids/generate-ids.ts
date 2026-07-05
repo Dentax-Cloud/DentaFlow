@@ -241,6 +241,65 @@ export async function generateStockRef(tenantId: string): Promise<string> {
   return `STK-${tenant.tenantCode}-${date}-${String(seq).padStart(4, "0")}`;
 }
 
+const PROCEDURE_CATEGORY_CODES: Record<string, string> = {
+  DIAGNOSTIC: "DIA",
+  PREVENTIVE: "PRV",
+  RESTORATIVE: "RST",
+  ENDODONTIC: "END",
+  PERIODONTIC: "PER",
+  PROSTHODONTIC: "PRO",
+  ORAL_SURGERY: "SUR",
+  ORTHODONTIC: "ORT",
+  COSMETIC: "COS",
+  PEDIATRIC: "PED",
+  EMERGENCY: "EMG",
+  OTHER: "OTH",
+};
+
+export function procedureCategoryCode(category: string): string {
+  const key = category.toUpperCase().replace(/[\s-]+/g, "_");
+  if (PROCEDURE_CATEGORY_CODES[key]) return PROCEDURE_CATEGORY_CODES[key];
+  const consonants = key.replace(/[AEIOU_]/g, "");
+  return (consonants.substring(0, 3) || key.substring(0, 3)).padEnd(3, "X").substring(0, 3);
+}
+
+export async function generateProcedureRef(
+  tenantId: string,
+  category: string,
+): Promise<string> {
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { tenantCode: true },
+  });
+  if (!tenant?.tenantCode) throw new Error("Tenant has no code");
+
+  const categoryCode = procedureCategoryCode(category);
+  const entityKey = `PRC-${categoryCode}`;
+  const seq = await atomicIncrement(tenantId, "LIFETIME", entityKey);
+  return `PRC-${tenant.tenantCode}-${categoryCode}-${String(seq).padStart(4, "0")}`;
+}
+
+/** Preview next procedure code without consuming the sequence counter. */
+export async function peekProcedureRef(
+  tenantId: string,
+  category: string,
+): Promise<string> {
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { tenantCode: true },
+  });
+  if (!tenant?.tenantCode) throw new Error("Tenant has no code");
+
+  const categoryCode = procedureCategoryCode(category);
+  const entityKey = `PRC-${categoryCode}`;
+  const row = await db.dailyCounter.findFirst({
+    where: { tenantId, date: "LIFETIME", entity: entityKey },
+    select: { counter: true },
+  });
+  const next = (row?.counter ?? 0) + 1;
+  return `PRC-${tenant.tenantCode}-${categoryCode}-${String(next).padStart(4, "0")}`;
+}
+
 const ITEM_CATEGORY_CODES: Record<string, string> = {
   CONSUMABLE: "CON",
   MEDICATION: "MED",

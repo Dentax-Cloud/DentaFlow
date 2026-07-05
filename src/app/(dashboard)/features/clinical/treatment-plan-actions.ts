@@ -31,7 +31,7 @@ function parseToothNumbers(value?: string | null): string[] {
 
 export async function proposeTreatmentPlan(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.update({
     where: { id: planId, tenantId: ctx.tenantId },
@@ -44,7 +44,7 @@ export async function proposeTreatmentPlan(planId: string) {
 
 export async function acceptTreatmentPlan(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.update({
     where: { id: planId, tenantId: ctx.tenantId },
@@ -61,7 +61,7 @@ export async function acceptTreatmentPlan(planId: string) {
 
 export async function declineTreatmentPlan(planId: string, reason?: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.update({
     where: { id: planId, tenantId: ctx.tenantId },
@@ -78,7 +78,7 @@ export async function declineTreatmentPlan(planId: string, reason?: string) {
 
 export async function completeTreatmentPlan(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.update({
     where: { id: planId, tenantId: ctx.tenantId },
@@ -91,7 +91,7 @@ export async function completeTreatmentPlan(planId: string) {
 
 export async function startTreatmentPlan(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const tenant = await db.tenant.findUnique({
     where: { id: ctx.tenantId },
@@ -113,7 +113,7 @@ export async function startTreatmentPlan(planId: string) {
 
 export async function reviseTreatmentPlan(planId: string, reason?: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const original = await db.treatmentPlan.findFirst({
     where: { id: planId, tenantId: ctx.tenantId, deletedAt: null },
@@ -177,7 +177,7 @@ export async function addTreatmentPlanItem(
   },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.findFirst({
     where: { id: planId, tenantId: ctx.tenantId, deletedAt: null },
@@ -239,7 +239,7 @@ export async function updateTreatmentPlanItem(
   },
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const item = await db.treatmentItem.findFirst({
     where: { id: itemId, tenantId: ctx.tenantId },
@@ -281,7 +281,7 @@ export async function updateTreatmentPlanItem(
 
 export async function removeTreatmentPlanItem(itemId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const item = await db.treatmentItem.findFirst({
     where: { id: itemId, tenantId: ctx.tenantId },
@@ -432,7 +432,7 @@ export async function generateInvoiceFromPlan(
 
 export async function createPlanShareLink(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const plan = await db.treatmentPlan.findFirst({
     where: { id: planId, tenantId: ctx.tenantId, deletedAt: null },
@@ -459,7 +459,7 @@ export async function createPlanShareLink(planId: string) {
 
 export async function getTreatmentPlanWithItems(planId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   return db.treatmentPlan.findFirst({
     where: { id: planId, tenantId: ctx.tenantId, deletedAt: null },
@@ -472,7 +472,7 @@ export async function getTreatmentPlanWithItems(planId: string) {
 
 export async function getPatientTreatmentPlans(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   return db.treatmentPlan.findMany({
     where: { patientId, tenantId: ctx.tenantId, deletedAt: null },
@@ -498,7 +498,7 @@ export async function createTreatmentPlanRecord(input: {
   notes?: string;
 }) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const patient = await db.patient.findFirst({
     where: tenantWhere(ctx.tenantId, { id: input.patientId, deletedAt: null }),

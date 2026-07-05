@@ -129,7 +129,7 @@ async function buildAutoFillVariables(
 
 export const getNoteAutoFillContext = createAction({
   schema: noteAutoFillSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.read),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     const variables = await buildAutoFillVariables(
       ctx.tenant.id,
@@ -161,7 +161,7 @@ export const enhanceNoteText = createAction({
 
 export const saveClinicalNote = createAction({
   schema: saveClinicalNoteSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const providerId = await requireStaffId(ctx);
     const providerName = providerNameFromCtx(ctx);
@@ -225,7 +225,7 @@ export const saveClinicalNote = createAction({
 
 export const updateClinicalNote = createAction({
   schema: updateClinicalNoteSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const providerName = providerNameFromCtx(ctx);
 
@@ -279,7 +279,7 @@ export const updateClinicalNote = createAction({
 
 export const getNoteVersions = createAction({
   schema: noteIdSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.read),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     const note = await db.clinicalNote.findFirst({
       where: tenantWhere(ctx.tenant.id, {

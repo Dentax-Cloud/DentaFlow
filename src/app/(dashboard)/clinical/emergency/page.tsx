@@ -11,7 +11,7 @@ export default async function EmergencyPage({
   searchParams: Promise<{ intakeId?: string; tab?: string; date?: string }>;
 }) {
   const { intakeId, tab, date } = await searchParams;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_chart", "read");
 
   const patients = await db.patient.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },

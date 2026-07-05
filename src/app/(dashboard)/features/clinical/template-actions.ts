@@ -64,7 +64,7 @@ export async function seedClinicalTemplatesForTenant(tenantId: string) {
 
 export const listTemplates = createAction({
   schema: listTemplatesSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.read),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     await seedPlatformTemplates();
     await seedClinicalTemplatesForTenant(ctx.tenant.id);
@@ -216,7 +216,7 @@ export const clonePlatformTemplate = createAction({
 
 export const renderTemplate = createAction({
   schema: renderTemplateSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.read),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     const template = await db.clinicalTemplate.findFirst({
       where: {
@@ -243,7 +243,7 @@ export const renderTemplate = createAction({
 
 export const createNoteFromTemplate = createAction({
   schema: createNoteFromTemplateSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical.write),
+  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
   handler: async (input, ctx) => {
     const providerId = await requireStaffId(ctx);
 

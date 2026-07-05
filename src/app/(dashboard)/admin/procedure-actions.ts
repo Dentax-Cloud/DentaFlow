@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions"
 import { db }                   from "@/lib/db"
 import { revalidatePath }       from "next/cache"
 import { randomUUID }           from "crypto"
+import { generateProcedureRef, peekProcedureRef } from "@/lib/ids/generate-ids"
 import type { Prisma } from "@prisma/client"
 import type {
   ContraindicationRule,
@@ -500,7 +501,6 @@ export async function getAvailableGPMRProcedures(options?: {
 // Not linked to GPMR — clinic-specific procedure
 
 export async function createCustomProcedure(input: {
-  code:            string
   name:            string
   nameAr?:         string
   category:        string
@@ -511,22 +511,24 @@ export async function createCustomProcedure(input: {
   requiresXray?:   boolean
   requiresPreAuth?:boolean
   isOnlineBookable?:boolean
-}): Promise<string> {
+}): Promise<{ id: string; code: string }> {
   await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
-  // Ensure code is unique for this tenant
+  const code = await generateProcedureRef(ctx.tenantId, input.category)
+
+  // Safety net — duplicate codes should not occur with sequential refs
   const existing = await db.procedureCatalog.findFirst({
     where: {
       tenantId: ctx.tenantId,
-      code:     input.code.trim(),
+      code,
     },
   })
 
   if (existing) {
     throw new Error(
-      `Procedure code "${input.code}" already exists in your catalog. ` +
-      `Please use a different code.`
+      `Procedure code "${code}" already exists in your catalog. ` +
+      `Please try again.`
     )
   }
 
@@ -546,7 +548,7 @@ export async function createCustomProcedure(input: {
       id,
       tenantId:        ctx.tenantId,
       gpmrId:          null,    // custom — not from GPMR
-      code:            input.code.trim(),
+      code,
       name:            input.name.trim(),
       nameAr:          input.nameAr?.trim() ?? null,
       category:        input.category,
@@ -563,7 +565,13 @@ export async function createCustomProcedure(input: {
   })
 
   revalidatePath("/admin/procedure-catalog")
-  return id
+  return { id, code }
+}
+
+export async function previewProcedureCode(category: string): Promise<string> {
+  await requireAdminReadPermission()
+  const ctx = await requireTenantContext()
+  return peekProcedureRef(ctx.tenantId, category)
 }
 
 // ── Update procedure settings ─────────────────────────────────

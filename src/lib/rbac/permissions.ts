@@ -12,9 +12,14 @@ export const PERMISSIONS = {
     write: "appointments:write",
     delete: "appointments:delete",
   },
-  clinical: {
-    read: "clinical:read",
-    write: "clinical:write",
+  /** Read-only: treatment plan summaries, appointment clinical status. */
+  clinical_schedule: {
+    read: "clinical_schedule:read",
+  },
+  /** Odontogram, perio, imaging, chairside, SOAP notes, clinical writes. */
+  clinical_chart: {
+    read: "clinical_chart:read",
+    write: "clinical_chart:write",
   },
   billing: {
     read: "billing:read",
@@ -52,7 +57,8 @@ export type PermissionKey = {
 export const RESOURCES = {
   patients: "patients",
   appointments: "appointments",
-  clinical: "clinical",
+  clinical_schedule: "clinical_schedule",
+  clinical_chart: "clinical_chart",
   billing: "billing",
   inventory: "inventory",
   reports: "reports",
@@ -83,6 +89,7 @@ export function normalizeDashboardRole(role: UserRole): DashboardRole {
     case UserRole.DOCTOR:
     case UserRole.DENTIST:
     case UserRole.HYGIENIST:
+    case UserRole.NURSE:
       return "DOCTOR";
     case UserRole.RECEPTIONIST:
       return "RECEPTIONIST";
@@ -99,22 +106,15 @@ export function normalizeDashboardRole(role: UserRole): DashboardRole {
 /**
  * Permission matrix — source of truth for role access.
  *
- * | Feature              | ADMIN | DOCTOR | RECEPTIONIST | FINANCE | STORE |
- * |----------------------|-------|--------|--------------|---------|-------|
- * | Patients             | Full  | Write  | Write        | Read    | Read  |
- * | Appointments         | Full  | Read   | Full         | Read    | Read  |
- * | Clinical             | Full  | Full   | Read         | Read    | Read  |
- * | Billing              | Full  | Read   | Read         | Full    | Read  |
- * | Inventory            | Full  | Read   | Read         | Read    | Full  |
- * | Reports              | Full  | Limited| Limited      | Full    | Limited|
- * | Team Management      | Full  | No     | No           | No      | No    |
- * | Admin Settings       | Full  | No     | No           | No      | No    |
+ * clinical_schedule: plan/status summaries (reception read-only)
+ * clinical_chart: odontogram, perio, imaging, chairside (clinical staff)
  */
 export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLevel>> = {
   ADMIN: {
     patients: "full",
     appointments: "full",
-    clinical: "full",
+    clinical_schedule: "full",
+    clinical_chart: "full",
     billing: "full",
     inventory: "full",
     reports: "full",
@@ -126,7 +126,8 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
   DOCTOR: {
     patients: "write",
     appointments: "read",
-    clinical: "full",
+    clinical_schedule: "read",
+    clinical_chart: "full",
     billing: "read",
     inventory: "read",
     reports: "limited",
@@ -138,7 +139,8 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
   RECEPTIONIST: {
     patients: "write",
     appointments: "full",
-    clinical: "read",
+    clinical_schedule: "read",
+    clinical_chart: "none",
     billing: "read",
     inventory: "read",
     reports: "limited",
@@ -150,7 +152,8 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
   FINANCE: {
     patients: "read",
     appointments: "read",
-    clinical: "read",
+    clinical_schedule: "none",
+    clinical_chart: "none",
     billing: "full",
     inventory: "read",
     reports: "full",
@@ -162,7 +165,8 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
   STORE: {
     patients: "read",
     appointments: "read",
-    clinical: "read",
+    clinical_schedule: "none",
+    clinical_chart: "none",
     billing: "read",
     inventory: "full",
     reports: "limited",
@@ -240,10 +244,12 @@ function permissionKeyToCheck(permission: PermissionKey): { resource: Resource; 
       return { resource: "appointments", action: "write" };
     case PERMISSIONS.appointments.delete:
       return { resource: "appointments", action: "delete" };
-    case PERMISSIONS.clinical.read:
-      return { resource: "clinical", action: "read" };
-    case PERMISSIONS.clinical.write:
-      return { resource: "clinical", action: "write" };
+    case PERMISSIONS.clinical_schedule.read:
+      return { resource: "clinical_schedule", action: "read" };
+    case PERMISSIONS.clinical_chart.read:
+      return { resource: "clinical_chart", action: "read" };
+    case PERMISSIONS.clinical_chart.write:
+      return { resource: "clinical_chart", action: "write" };
     case PERMISSIONS.billing.read:
       return { resource: "billing", action: "read" };
     case PERMISSIONS.billing.write:

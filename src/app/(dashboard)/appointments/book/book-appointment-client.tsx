@@ -9,6 +9,7 @@ import {
   getSlotsForDoctor,
   bookAppointment,
 } from "@/app/(dashboard)/features/appointments/appointment-booking-actions";
+import { createPatient } from "@/app/(dashboard)/features/patients/actions";
 import type { DoctorAvailability, TimeSlot } from "@/lib/appointments/availability";
 
 type Procedure = {
@@ -45,6 +46,7 @@ export default function BookAppointmentClient({
 
   const [patient, setPatient] = useState<PatientResult | null>(null);
   const [procedure, setProcedure] = useState<Procedure | null>(null);
+  const [generalConsultation, setGeneralConsultation] = useState(false);
   const [customDuration, setCustomDuration] = useState<number | null>(null);
   const [doctor, setDoctor] = useState<DoctorAvailability | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -56,8 +58,16 @@ export default function BookAppointmentClient({
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [patientSearch, setPatientSearch] = useState("");
   const [patientResults, setPatientResults] = useState<PatientResult[]>([]);
+  const [showQuickRegister, setShowQuickRegister] = useState(false);
+  const [quickReg, setQuickReg] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    dateOfBirth: "",
+  });
 
-  const durationMins = customDuration ?? procedure?.durationMins ?? 30;
+  const durationMins =
+    customDuration ?? procedure?.durationMins ?? (generalConsultation ? 30 : 30);
 
   useEffect(() => {
     if (patientSearch.length < 2) {
@@ -122,6 +132,44 @@ export default function BookAppointmentClient({
         `Appointment booked for ${patient.firstName} ${patient.lastName}`,
       );
       router.push("/appointments");
+    });
+  }
+
+  async function handleQuickRegister() {
+    if (!quickReg.firstName.trim() || !quickReg.lastName.trim()) {
+      toast.error("First and last name are required");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await createPatient({
+        firstName: quickReg.firstName.trim(),
+        lastName: quickReg.lastName.trim(),
+        phone: quickReg.phone.trim() || undefined,
+        dateOfBirth: quickReg.dateOfBirth || undefined,
+      });
+
+      if (!result.success) {
+        toast.error(result.error ?? "Registration failed");
+        return;
+      }
+
+      const p = result.data;
+      setPatient({
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        patientId: p.patientId,
+        patientNumber: p.patientNumber,
+        phone: p.phone,
+        allergies: p.allergies ?? [],
+        insuranceProvider: null,
+      });
+      setPatientSearch(`${p.firstName} ${p.lastName}`);
+      setShowQuickRegister(false);
+      setQuickReg({ firstName: "", lastName: "", phone: "", dateOfBirth: "" });
+      toast.success("Patient registered");
+      setStep(2);
     });
   }
 
@@ -211,6 +259,91 @@ export default function BookAppointmentClient({
             </div>
           )}
 
+          {!patient && (
+            <div className="border-t pt-4 space-y-3">
+              {!showQuickRegister ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQuickRegister(true);
+                    if (patientSearch && !quickReg.phone) {
+                      setQuickReg((prev) => ({ ...prev, phone: patientSearch }));
+                    }
+                  }}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Patient not found? Register new patient
+                </button>
+              ) : (
+                <div className="bg-gray-50 border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">Quick registration</h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickRegister(false)}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium">First name *</label>
+                      <input
+                        value={quickReg.firstName}
+                        onChange={(e) =>
+                          setQuickReg((p) => ({ ...p, firstName: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Last name *</label>
+                      <input
+                        value={quickReg.lastName}
+                        onChange={(e) =>
+                          setQuickReg((p) => ({ ...p, lastName: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium">Phone</label>
+                      <input
+                        value={quickReg.phone}
+                        onChange={(e) =>
+                          setQuickReg((p) => ({ ...p, phone: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Date of birth</label>
+                      <input
+                        type="date"
+                        value={quickReg.dateOfBirth}
+                        onChange={(e) =>
+                          setQuickReg((p) => ({ ...p, dateOfBirth: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleQuickRegister}
+                    disabled={isPending}
+                    className="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-green-700"
+                  >
+                    {isPending ? "Registering…" : "Register & continue →"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {patient && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -257,12 +390,37 @@ export default function BookAppointmentClient({
         <div className="bg-white border rounded-xl p-5 space-y-4">
           <h2 className="font-semibold">Select Procedure</h2>
 
+          <button
+            type="button"
+            onClick={() => {
+              setGeneralConsultation(true);
+              setProcedure(null);
+              setCustomDuration(null);
+            }}
+            className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
+              generalConsultation
+                ? "border-blue-500 bg-blue-50"
+                : "border-dashed hover:bg-gray-50"
+            }`}
+          >
+            <p className="font-medium text-sm">
+              General Consultation (procedure TBD)
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Initial visit — procedure to be determined at appointment
+            </p>
+          </button>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
             {procedures.map((proc) => (
               <button
                 key={proc.id}
                 type="button"
-                onClick={() => setProcedure(proc)}
+                onClick={() => {
+                  setGeneralConsultation(false);
+                  setProcedure(proc);
+                  setCustomDuration(null);
+                }}
                 className={`text-left p-3 rounded-xl border transition-colors ${
                   procedure?.id === proc.id
                     ? "border-blue-500 bg-blue-50"
@@ -280,7 +438,7 @@ export default function BookAppointmentClient({
             ))}
           </div>
 
-          {procedure && (
+          {(procedure || generalConsultation) && (
             <div className="flex items-center gap-3">
               <label className="text-sm text-muted-foreground">
                 Duration (min):
@@ -289,7 +447,11 @@ export default function BookAppointmentClient({
                 type="number"
                 min={5}
                 step={5}
-                value={customDuration ?? procedure.durationMins}
+                value={
+                  customDuration ??
+                  procedure?.durationMins ??
+                  (generalConsultation ? 30 : 30)
+                }
                 onChange={(e) => setCustomDuration(Number(e.target.value))}
                 className="w-24 rounded-lg border px-3 py-1.5 text-sm text-center"
               />
@@ -316,7 +478,7 @@ export default function BookAppointmentClient({
             <button
               type="button"
               onClick={() => setStep(3)}
-              disabled={!procedure}
+              disabled={!procedure && !generalConsultation}
               className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
             >
               Continue →
@@ -531,7 +693,9 @@ export default function BookAppointmentClient({
               },
               {
                 label: "Procedure",
-                value: procedure?.name ?? "General",
+                value: generalConsultation
+                  ? "General Consultation (procedure TBD)"
+                  : (procedure?.name ?? "General"),
               },
               {
                 label: "Duration",

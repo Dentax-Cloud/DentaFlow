@@ -15,7 +15,7 @@ export async function GET(
   const { estimateId } = await params;
 
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   const estimate = await db.treatmentEstimate.findFirst({
     where: tenantWhere(ctx.tenantId, { id: estimateId }),

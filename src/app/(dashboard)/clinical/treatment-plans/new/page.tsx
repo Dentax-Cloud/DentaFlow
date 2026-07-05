@@ -11,7 +11,7 @@ export default async function NewTreatmentPlanPage({
   searchParams: Promise<{ patientId?: string }>;
 }) {
   const { patientId } = await searchParams;
-  const ctx = await requireRouteAccess("clinical", "read");
+  const ctx = await requireRouteAccess("clinical_schedule", "read");
 
   const [patients, procedures] = await Promise.all([
     db.patient.findMany({

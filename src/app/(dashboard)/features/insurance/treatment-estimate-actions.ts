@@ -80,7 +80,7 @@ export async function generateTreatmentEstimate(
   procedureCodes?: string[],
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const patient = await db.patient.findFirst({
     where: tenantWhere(ctx.tenantId, { id: patientId, deletedAt: null }),
@@ -182,7 +182,7 @@ export async function generateTreatmentEstimate(
 
 export async function createPreAuthorization(estimateId: string, policyId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const estimate = await getEstimateOrThrow(ctx.tenantId, estimateId);
   const policy = await db.patientInsurancePolicy.findFirst({
@@ -212,7 +212,7 @@ export async function createPreAuthorization(estimateId: string, policyId: strin
 
 export async function submitPreAuthorization(preAuthId: string, referenceNumber: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const preAuth = await getPreAuthOrThrow(ctx.tenantId, preAuthId);
   if (preAuth.status !== "DRAFT") {
@@ -242,7 +242,7 @@ export async function recordPreAuthDecision(
   denialReason?: string,
 ) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.write);
+  await requirePermission(PERMISSIONS.clinical_chart.write);
 
   const parsed = z.enum(PRE_AUTH_DECISION_STATUSES).safeParse(status);
   if (!parsed.success) throw new Error("Invalid pre-authorization status");
@@ -269,7 +269,7 @@ export async function recordPreAuthDecision(
 
 export async function generateEstimatePdf(estimateId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   const estimate = await getEstimateOrThrow(ctx.tenantId, estimateId);
   const tenant = await db.tenant.findUnique({
@@ -316,7 +316,7 @@ export async function generateEstimatePdf(estimateId: string) {
 
 export async function getTreatmentPlanEstimateData(treatmentPlanId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   const [latestEstimate, latestPreAuth, plan] = await Promise.all([
     db.treatmentEstimate.findFirst({
@@ -363,7 +363,7 @@ export async function getTreatmentPlanEstimateData(treatmentPlanId: string) {
 
 export async function getPatientTreatmentPlanPreAuths(patientId: string) {
   const ctx = await requireTenantContext();
-  await requirePermission(PERMISSIONS.clinical.read);
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
 
   const preAuths = await db.preAuthorization.findMany({
     where: {
