@@ -1,11 +1,17 @@
 import type { Transporter } from "nodemailer";
 import { getSetting } from "@/lib/settings/platform-settings";
 
+export type MailAttachment = {
+  filename: string;
+  content: Buffer;
+};
+
 export type SendMailParams = {
   to: string | string[];
   subject: string;
   text: string;
   html?: string;
+  attachments?: MailAttachment[];
 };
 
 export async function getMailTransporter(): Promise<Transporter | null> {
@@ -76,6 +82,10 @@ export async function sendMail(params: SendMailParams): Promise<boolean> {
       subject: params.subject,
       text: params.text,
       html: params.html ?? params.text.replace(/\n/g, "<br>"),
+      attachments: params.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      })),
     });
     console.log(`[mail] sent "${params.subject}" to ${to}`, info.messageId);
     return true;

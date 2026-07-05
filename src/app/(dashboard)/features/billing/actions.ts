@@ -12,7 +12,7 @@ import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { getStripeClient } from "@/lib/stripe";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
-import { notifyInvoicePaid, sendInvoiceReceiptEmail } from "@/lib/notifications/invoice-notifications";
+import { notifyInvoicePaid, sendInvoiceEmailToPatient, sendPaymentReceiptEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { getStaffActor } from "@/lib/tenant/context";
 
 const createInvoiceSchema = z.object({
@@ -96,6 +96,13 @@ export const createInvoice = createAction({
       metadata: { invoiceNumber: invoice.invoiceNumber, total: Number(invoice.total) },
     });
 
+    if (input.sendNow) {
+      await sendInvoiceEmailToPatient({
+        tenantId: ctx.tenant.id,
+        invoiceId: invoice.id,
+      }).catch(() => null);
+    }
+
     return invoice;
   },
 });
@@ -151,12 +158,11 @@ export const recordPayment = createAction({
       }).catch(() => null);
     }
 
-    if (input.method === PaymentMethod.CASH || input.method === PaymentMethod.CARD) {
-      await sendInvoiceReceiptEmail({
-        tenantId: ctx.tenant.id,
-        invoiceId: invoice.id,
-      }).catch(() => null);
-    }
+    await sendPaymentReceiptEmailToPatient({
+      tenantId: ctx.tenant.id,
+      invoiceId: invoice.id,
+      paymentId: payment.id,
+    }).catch(() => null);
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
@@ -180,10 +186,19 @@ export const markInvoiceSent = createAction({
     });
     if (!invoice) throw new Error("Invoice not found");
 
-    return db.invoice.update({
+    const updated = await db.invoice.update({
       where: { id: invoice.id },
       data: { status: InvoiceStatus.SENT },
     });
+
+    if (!invoice.emailedAt) {
+      await sendInvoiceEmailToPatient({
+        tenantId: ctx.tenant.id,
+        invoiceId: invoice.id,
+      }).catch(() => null);
+    }
+
+    return updated;
   },
 });
 

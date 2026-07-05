@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   createPreAuthorization,
+  emailEstimateToPatient,
   generateEstimatePdf,
   generateTreatmentEstimate,
   recordPreAuthDecision,
@@ -75,6 +76,23 @@ export function TreatmentEstimatePanel({
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Could not generate estimate");
+      }
+    });
+  }
+
+  function handleEmailEstimate() {
+    if (!estimate) return;
+    startTransition(async () => {
+      try {
+        const result = await emailEstimateToPatient(estimate.id);
+        if (result.sent) {
+          toast.success("Estimate emailed to patient");
+        } else {
+          toast.message("No email sent — patient has no email on file or mail is not configured");
+        }
+        router.refresh();
+      } catch {
+        toast.error("Could not email estimate");
       }
     });
   }
@@ -205,6 +223,9 @@ export function TreatmentEstimatePanel({
               </Button>
               <Button size="sm" variant="outline" onClick={handleDownloadPdf} disabled={isPending}>
                 Download PDF
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleEmailEstimate} disabled={isPending}>
+                Email to patient
               </Button>
             </div>
 

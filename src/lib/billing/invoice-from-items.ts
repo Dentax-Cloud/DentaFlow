@@ -3,6 +3,7 @@ import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { generateInvoiceRef } from "@/lib/ids/generate-ids";
+import { sendInvoiceEmailToPatient } from "@/lib/notifications/invoice-notifications";
 
 export type InvoiceLineItem = {
   description: string;
@@ -42,7 +43,7 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
 
   const count = await db.invoice.count({ where: { tenantId: params.tenantId } });
 
-  return db.invoice.create({
+  const invoice = await db.invoice.create({
     data: {
       tenantId: params.tenantId,
       patientId: params.patientId,
@@ -76,4 +77,11 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
       },
     },
   });
+
+  await sendInvoiceEmailToPatient({
+    tenantId: params.tenantId,
+    invoiceId: invoice.id,
+  }).catch(() => null);
+
+  return invoice;
 }

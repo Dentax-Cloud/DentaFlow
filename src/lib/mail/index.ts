@@ -8,7 +8,7 @@ import { buildWelcomeEmail } from "./templates/welcome";
 
 export { getMailConfig, isMailConfigured } from "./config";
 export { sendMail, getMailTransporter } from "./send";
-export type { SendMailParams } from "./send";
+export type { SendMailParams, MailAttachment } from "./send";
 
 export async function sendWelcomeEmail(params: {
   to: string;

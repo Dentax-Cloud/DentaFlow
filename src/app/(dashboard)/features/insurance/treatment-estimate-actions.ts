@@ -20,6 +20,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { sendEstimateEmailToPatient } from "@/lib/notifications/invoice-notifications";
 
 const PRE_AUTH_DECISION_STATUSES = [
   "APPROVED",
@@ -84,6 +85,7 @@ export async function generateTreatmentEstimate(
 
   const patient = await db.patient.findFirst({
     where: tenantWhere(ctx.tenantId, { id: patientId, deletedAt: null }),
+    select: { id: true, email: true },
   });
   if (!patient) throw new Error("Patient not found");
 
@@ -153,6 +155,11 @@ export async function generateTreatmentEstimate(
     revalidatePath(`/clinical/treatment-plans/${planId}`);
   }
   revalidatePath(`/patients/${patientId}`);
+
+  await sendEstimateEmailToPatient({
+    tenantId: ctx.tenantId,
+    estimateId: estimate.id,
+  }).catch(() => null);
 
   return {
     estimate: serializeTreatmentEstimate(estimate),
@@ -265,6 +272,23 @@ export async function recordPreAuthDecision(
 
   await revalidatePreAuthPaths(ctx.tenantId, preAuthId);
   return serializePreAuthorization(updated);
+}
+
+export async function emailEstimateToPatient(estimateId: string) {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.clinical_schedule.read);
+
+  const estimate = await getEstimateOrThrow(ctx.tenantId, estimateId);
+  const sent = await sendEstimateEmailToPatient({
+    tenantId: ctx.tenantId,
+    estimateId: estimate.id,
+  });
+
+  if (estimate.treatmentPlanId) {
+    revalidatePath(`/clinical/treatment-plans/${estimate.treatmentPlanId}`);
+  }
+
+  return { sent };
 }
 
 export async function generateEstimatePdf(estimateId: string) {
