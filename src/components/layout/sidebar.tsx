@@ -24,6 +24,7 @@ export type SidebarUser = {
   lastName?: string | null;
   email: string;
   avatarUrl?: string | null;
+  staffRef?: string | null;
 };
 
 function displayName(user: SidebarUser) {
@@ -179,7 +180,10 @@ export function Sidebar({
 
       <div className="border-t p-4">
         {user && (
-          <div className="mb-3 flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+          <Link
+            href="/account"
+            className="mb-3 flex items-center gap-3 rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted"
+          >
             <Avatar className="h-9 w-9">
               <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
               <AvatarFallback className="text-xs">{initials(user)}</AvatarFallback>
@@ -187,9 +191,14 @@ export function Sidebar({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{displayName(user)}</p>
               <p className="truncate text-xs text-muted-foreground">{getRoleLabel(userRole)}</p>
+              {user.staffRef ? (
+                <p className="truncate font-mono text-[10px] text-muted-foreground">
+                  {user.staffRef}
+                </p>
+              ) : null}
             </div>
             <NotificationBell />
-          </div>
+          </Link>
         )}
         <SignOutButton redirectUrl="/">
           <Button variant="outline" className="w-full justify-start gap-2" size="sm">

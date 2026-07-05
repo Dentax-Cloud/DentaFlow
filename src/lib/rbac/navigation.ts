@@ -266,7 +266,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/admin",
-    label: "Admin",
+    label: "Team & Settings",
     icon: Settings,
     resource: "admin",
     action: "read",

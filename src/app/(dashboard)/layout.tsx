@@ -50,6 +50,7 @@ export default async function DashboardLayout({
               lastName: ctx.staffMember.lastName,
               email: ctx.staffMember.email,
               avatarUrl: ctx.staffMember.avatarUrl,
+              staffRef: ctx.staffMember.staffRef,
             }
           : undefined
       }

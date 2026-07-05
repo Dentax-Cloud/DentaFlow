@@ -5,7 +5,8 @@ import {
   readDentaflowRoleFromMetadata,
   dentaflowRoleMetadata,
 } from "@/lib/tenant/team-roles";
-import { splitInviteFullName } from "@/lib/tenant/team-invites";
+import { isClinicalInviteRole, toStaffInviteProfileData } from "@/lib/staff/invite-profile";
+import { getStaffMemberDisplayStatus } from "@/lib/staff/staff-status";
 
 describe("team invite role mapping", () => {
   it("stores and reads dentaflow role metadata", () => {
@@ -24,15 +25,52 @@ describe("team invite role mapping", () => {
   it("falls back to receptionist when no invite role", () => {
     expect(resolveProvisionedUserRole({})).toBe(UserRole.RECEPTIONIST);
   });
+});
 
-  it("splits invite full name on first space", () => {
-    expect(splitInviteFullName("Jane Doe")).toEqual({
+describe("invite acceptance profile", () => {
+  it("maps form fields to staff profile data", () => {
+    expect(
+      toStaffInviteProfileData({
+        firstName: "Jane",
+        lastName: "Doe",
+        phone: "+971501234567",
+        emergencyContactName: "John Doe",
+        emergencyContactPhone: "+971509876543",
+        addressLine1: "Office 12",
+        city: "Dubai",
+        country: "UAE",
+        licenseNumber: "LIC-123",
+      }),
+    ).toEqual({
       firstName: "Jane",
       lastName: "Doe",
+      phone: "+971501234567",
+      emergencyContactName: "John Doe",
+      emergencyContactPhone: "+971509876543",
+      addressLine1: "Office 12",
+      city: "Dubai",
+      country: "UAE",
+      licenseNumber: "LIC-123",
     });
-    expect(splitInviteFullName("Madonna")).toEqual({
-      firstName: "Madonna",
-      lastName: "",
-    });
+  });
+
+  it("detects clinical invite roles for license field", () => {
+    expect(isClinicalInviteRole("DOCTOR")).toBe(true);
+    expect(isClinicalInviteRole("HYGIENIST")).toBe(true);
+    expect(isClinicalInviteRole("RECEPTIONIST")).toBe(false);
+  });
+});
+
+describe("staff display status", () => {
+  it("derives invited, active, and suspended consistently", () => {
+    expect(
+      getStaffMemberDisplayStatus({ authUserId: null, isActive: true }),
+    ).toBe("Invited");
+    expect(
+      getStaffMemberDisplayStatus({ authUserId: "auth_1", isActive: true }),
+    ).toBe("Active");
+    expect(
+      getStaffMemberDisplayStatus({ authUserId: "auth_1", isActive: false }),
+    ).toBe("Suspended");
   });
 });

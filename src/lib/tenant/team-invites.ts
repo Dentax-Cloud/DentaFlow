@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { sendTeamInviteEmail } from "@/lib/mail";
 import { generateStaffRef } from "@/lib/ids/generate-ids";
+import type { StaffInviteProfileData } from "@/lib/staff/invite-profile";
 import { normalizeToInvitableRole } from "@/lib/tenant/team-roles";
 
 const PENDING_INVITES_KEY = "pendingTeamInvites";
@@ -33,16 +34,20 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-/** Split on first space; single-word names use empty lastName. */
-export function splitInviteFullName(fullName: string): { firstName: string; lastName: string } {
-  const trimmed = fullName.trim();
-  const spaceIndex = trimmed.indexOf(" ");
-  if (spaceIndex === -1) {
-    return { firstName: trimmed, lastName: "" };
-  }
+function staffProfileWriteData(
+  profile: StaffInviteProfileData,
+  existing?: { firstName: string | null; lastName: string | null },
+) {
   return {
-    firstName: trimmed.slice(0, spaceIndex).trim(),
-    lastName: trimmed.slice(spaceIndex + 1).trim(),
+    firstName: profile.firstName || existing?.firstName || null,
+    lastName: profile.lastName || existing?.lastName || null,
+    phone: profile.phone,
+    emergencyContactName: profile.emergencyContactName,
+    emergencyContactPhone: profile.emergencyContactPhone,
+    addressLine1: profile.addressLine1,
+    city: profile.city,
+    country: profile.country,
+    licenseNumber: profile.licenseNumber,
   };
 }
 
@@ -226,7 +231,7 @@ export async function acceptEmailInvite(params: {
   token: string;
   authUserId: string;
   email: string;
-  fullName: string;
+  profile: StaffInviteProfileData;
 }) {
   const resolved = await resolveEmailInviteToken(params.token);
   if (!resolved || resolved.email !== normalizeEmail(params.email)) {
@@ -235,7 +240,7 @@ export async function acceptEmailInvite(params: {
 
   const normalizedEmail = normalizeEmail(params.email);
   const staffRole = parseInviteStaffRole(resolved.role);
-  const { firstName, lastName } = splitInviteFullName(params.fullName);
+  const profileData = staffProfileWriteData(params.profile);
 
   await db.$transaction(async (tx) => {
     await tx.tenant_memberships.upsert({
@@ -275,8 +280,7 @@ export async function acceptEmailInvite(params: {
         where: { id: existingStaff.id },
         data: {
           authUserId: params.authUserId,
-          firstName: firstName || existingStaff.firstName,
-          lastName: lastName || existingStaff.lastName,
+          ...staffProfileWriteData(params.profile, existingStaff),
           role: staffRole,
           staffRef,
           isActive: true,
@@ -289,8 +293,7 @@ export async function acceptEmailInvite(params: {
         data: {
           tenantId: resolved.tenantId,
           email: normalizedEmail,
-          firstName,
-          lastName: lastName || null,
+          ...profileData,
           role: staffRole,
           authUserId: params.authUserId,
           staffRef,

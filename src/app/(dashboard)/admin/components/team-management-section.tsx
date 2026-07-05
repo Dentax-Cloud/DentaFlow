@@ -46,6 +46,10 @@ import {
   normalizeToInvitableRole,
 } from "@/lib/tenant/team-roles";
 import {
+  getStaffMemberDisplayStatus,
+  staffStatusBadgeVariant,
+} from "@/lib/staff/staff-status";
+import {
   removeTeamMember,
   updateTeamMemberRole,
 } from "@/app/(dashboard)/features/admin/actions";
@@ -152,7 +156,7 @@ export function TeamManagementSection({
             <CardDescription>
               {users.length} member{users.length === 1 ? "" : "s"}
               {pendingInvitations.length > 0 &&
-                ` · ${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}`}
+                ` · ${pendingInvitations.length} invited (not yet joined)`}
             </CardDescription>
           </div>
           {canManage && <InviteUserDialog />}
@@ -162,6 +166,7 @@ export function TeamManagementSection({
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>
+                <TableHead>Staff ID</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -174,6 +179,7 @@ export function TeamManagementSection({
                 const canEditRow = canEditMember(user);
                 const selectRole =
                   normalizeToInvitableRole(user.role) ?? UserRole.RECEPTIONIST;
+                const status = getStaffMemberDisplayStatus(user);
 
                 return (
                   <TableRow key={user.id}>
@@ -195,6 +201,9 @@ export function TeamManagementSection({
                           )}
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {user.staffRef ?? "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{user.email}</TableCell>
                     <TableCell>
@@ -220,13 +229,7 @@ export function TeamManagementSection({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.isActive ? "secondary" : "outline"}>
-                        {!user.authUserId && user.isActive
-                          ? "Invited"
-                          : user.isActive
-                            ? "Active"
-                            : "Suspended"}
-                      </Badge>
+                      <Badge variant={staffStatusBadgeVariant(status)}>{status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -284,12 +287,13 @@ export function TeamManagementSection({
                       <span className="text-muted-foreground italic">Invited user</span>
                     </div>
                   </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">—</TableCell>
                   <TableCell className="text-muted-foreground">{inv.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{getRoleLabel(inv.role)}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">Pending</Badge>
+                    <Badge variant={staffStatusBadgeVariant("Invited")}>Invited</Badge>
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
                 </TableRow>

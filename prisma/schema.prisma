@@ -172,20 +172,27 @@ model Branch {
 }
 
 model StaffMember {
-  id              String           @id @default(cuid())
-  tenantId        String
-  email           String
-  firstName       String?
-  lastName        String?
-  avatarUrl       String?
-  role            UserRole         @default(RECEPTIONIST)
-  staffRef        String?
-  roleCode        String?
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
-  authUserId      String?
+  id                     String           @id @default(cuid())
+  tenantId               String
+  email                  String
+  firstName              String?
+  lastName               String?
+  phone                  String?
+  emergencyContactName   String?
+  emergencyContactPhone  String?
+  addressLine1           String?
+  city                   String?
+  country                String?
+  licenseNumber          String?
+  avatarUrl              String?
+  role                   UserRole         @default(RECEPTIONIST)
+  staffRef               String?
+  roleCode               String?
+  isActive               Boolean          @default(true)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  deletedAt              DateTime?
+  authUserId             String?
   appointments    Appointment[]    @relation("AssignedProvider")
   auditLogs       AuditLog[]
   clinicalNotes   ClinicalNote[]

@@ -12,6 +12,10 @@ import {
   canEditInvitableStaffRole,
   normalizeToInvitableRole,
 } from "@/lib/tenant/team-roles";
+import {
+  getStaffMemberDisplayStatus,
+  staffStatusBadgeVariant,
+} from "@/lib/staff/staff-status";
 import { updateStaffMemberProfile } from "@/app/(dashboard)/features/admin/actions";
 import { PersonAvatar } from "@/components/profile/person-avatar";
 import { PhotoCapture } from "@/components/profile/photo-capture";
@@ -34,24 +38,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type StaffStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
+type StaffStatus = "Invited" | "Active" | "Suspended";
 
 function resolveStaffStatus(user: StaffMember): StaffStatus {
-  if (!user.isActive) return "SUSPENDED";
-  if (!user.authUserId) return "INVITED";
-  return "ACTIVE";
+  return getStaffMemberDisplayStatus(user);
 }
 
-
 function statusBadgeVariant(status: StaffStatus): "default" | "secondary" | "outline" {
-  switch (status) {
-    case "ACTIVE":
-      return "default";
-    case "INVITED":
-      return "secondary";
-    default:
-      return "outline";
-  }
+  return staffStatusBadgeVariant(status);
 }
 
 type ViewProps = {
@@ -91,13 +85,25 @@ export function StaffMemberViewDialog({ user, open, onOpenChange, onEdit, canEdi
           </div>
         </div>
         <dl className="grid gap-2 text-sm">
+          {user.staffRef ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Staff ID</dt>
+              <dd className="font-mono text-xs">{user.staffRef}</dd>
+            </div>
+          ) : null}
+          {user.phone ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Phone</dt>
+              <dd>{user.phone}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Joined</dt>
             <dd>{formatDate(user.createdAt)}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Account</dt>
-            <dd>{user.authUserId ? "Accepted invite" : "Pending invite"}</dd>
+            <dt className="text-muted-foreground">Sign-in</dt>
+            <dd>{user.authUserId ? "Active account" : "Invited — not signed in yet"}</dd>
           </div>
         </dl>
         <DialogFooter>
@@ -262,7 +268,7 @@ export function StaffMemberEditDialog({
             </Select>
             {!user.authUserId && (
               <p className="text-xs text-muted-foreground">
-                This member has not accepted their invite yet (INVITED).
+                This member has not signed in yet (Invited).
               </p>
             )}
           </div>

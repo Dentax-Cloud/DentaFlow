@@ -5,21 +5,18 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { acceptEmailInvite, resolveEmailInviteToken } from "@/lib/tenant/team-invites";
+import {
+  inviteAcceptProfileSchema,
+  toStaffInviteProfileData,
+} from "@/lib/staff/invite-profile";
 
 export async function getInviteByToken(token: string) {
   if (!token) return null;
   return resolveEmailInviteToken(token);
 }
 
-const acceptSchema = z.object({
-  token: z.string().min(1),
-  email: z.string().email(),
-  name: z.string().min(1),
-  password: z.string().min(8),
-});
-
-export async function acceptTeamInviteAction(input: z.infer<typeof acceptSchema>) {
-  const parsed = acceptSchema.safeParse(input);
+export async function acceptTeamInviteAction(input: z.infer<typeof inviteAcceptProfileSchema>) {
+  const parsed = inviteAcceptProfileSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false as const, error: "Invalid form data" };
   }
@@ -36,15 +33,21 @@ export async function acceptTeamInviteAction(input: z.infer<typeof acceptSchema>
 
   const existing = await db.auth_users.findUnique({ where: { email } });
   if (existing) {
-    return { success: false as const, error: "An account with this email already exists. Sign in instead." };
+    return {
+      success: false as const,
+      error: "An account with this email already exists. Sign in instead.",
+    };
   }
+
+  const profile = toStaffInviteProfileData(parsed.data);
+  const displayName = `${profile.firstName} ${profile.lastName}`.trim();
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   const authUser = await db.auth_users.create({
     data: {
       id: `auth_${randomUUID()}`,
       email,
-      name: parsed.data.name,
+      name: displayName,
       passwordHash,
     },
   });
@@ -53,7 +56,7 @@ export async function acceptTeamInviteAction(input: z.infer<typeof acceptSchema>
     token: parsed.data.token,
     authUserId: authUser.id,
     email,
-    fullName: parsed.data.name,
+    profile,
   });
 
   return { success: true as const, email };
