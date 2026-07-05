@@ -177,7 +177,7 @@ async function finalizeClinicSetup(
         data: {
           tenantId,
           branchId: branch.id,
-          name: `Operatory ${i}`,
+          name: `Chair ${i}`,
           number: i,
         },
       });

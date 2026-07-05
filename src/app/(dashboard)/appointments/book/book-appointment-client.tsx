@@ -33,12 +33,20 @@ type PatientResult = {
   insuranceProvider: string | null;
 };
 
+type InitialPrefill = {
+  date?: string;
+  time?: string;
+  doctorId?: string;
+};
+
 export default function BookAppointmentClient({
   procedures,
   branches,
+  initialPrefill,
 }: {
   procedures: Procedure[];
   branches: Branch[];
+  initialPrefill?: InitialPrefill;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -49,8 +57,8 @@ export default function BookAppointmentClient({
   const [generalConsultation, setGeneralConsultation] = useState(false);
   const [customDuration, setCustomDuration] = useState<number | null>(null);
   const [doctor, setDoctor] = useState<DoctorAvailability | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedDate, setSelectedDate] = useState(initialPrefill?.date ?? "");
+  const [selectedTime, setSelectedTime] = useState(initialPrefill?.time ?? "");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const [notes, setNotes] = useState("");
 
@@ -104,6 +112,41 @@ export default function BookAppointmentClient({
       branchId: branchId || undefined,
     }).then(setSlots);
   }, [doctor, selectedDate, durationMins, branchId]);
+
+  useEffect(() => {
+    if (!initialPrefill?.doctorId || !doctors.length || doctor) return;
+    const match = doctors.find((d) => d.doctorId === initialPrefill.doctorId);
+    if (match) setDoctor(match);
+  }, [initialPrefill?.doctorId, doctors, doctor]);
+
+  useEffect(() => {
+    if (step !== 4 || !initialPrefill?.time || !slots.length) return;
+    const slot = slots.find((s) => s.time === initialPrefill.time && s.available);
+    if (slot) setSelectedTime(initialPrefill.time);
+  }, [slots, step, initialPrefill?.time]);
+
+  function continueFromProcedure() {
+    if (initialPrefill?.date && initialPrefill?.time) {
+      setStep(3);
+      return;
+    }
+    setStep(3);
+  }
+
+  function continueFromDoctor() {
+    if (!doctor || !selectedDate) return;
+    if (initialPrefill?.time) {
+      const matchingSlot = slots.find(
+        (s) => s.time === initialPrefill.time && s.available,
+      );
+      if (matchingSlot) {
+        setSelectedTime(initialPrefill.time);
+        setStep(5);
+        return;
+      }
+    }
+    setStep(4);
+  }
 
   async function handleBook() {
     if (!patient || !doctor || !selectedDate || !selectedTime) return;
@@ -389,6 +432,11 @@ export default function BookAppointmentClient({
       {step === 2 && (
         <div className="bg-white border rounded-xl p-5 space-y-4">
           <h2 className="font-semibold">Select Procedure</h2>
+          {initialPrefill?.date && initialPrefill?.time && (
+            <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              Pre-selected from calendar: {initialPrefill.date} at {initialPrefill.time}
+            </p>
+          )}
 
           <button
             type="button"
@@ -477,7 +525,7 @@ export default function BookAppointmentClient({
             </button>
             <button
               type="button"
-              onClick={() => setStep(3)}
+              onClick={continueFromProcedure}
               disabled={!procedure && !generalConsultation}
               className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
             >
@@ -624,7 +672,7 @@ export default function BookAppointmentClient({
             </button>
             <button
               type="button"
-              onClick={() => setStep(4)}
+              onClick={continueFromDoctor}
               disabled={!doctor || !selectedDate}
               className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
             >

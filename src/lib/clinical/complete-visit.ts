@@ -29,6 +29,9 @@ export async function completeVisit(params: CompleteVisitParams) {
     include: { patient: true, chair: true, doctor: { include: { user: true } } },
   });
   if (!appointment) throw new Error("Appointment not found");
+  if (appointment.isBlock || !appointment.patient) {
+    throw new Error("Cannot complete a blocked time entry");
+  }
 
   const wasAlreadyCompleted = appointment.status === "COMPLETED";
 
@@ -50,16 +53,16 @@ export async function completeVisit(params: CompleteVisitParams) {
     ).catch(() => null);
 
     await db.patient.update({
-      where: { id: appointment.patientId },
+      where: { id: appointment.patient.id },
       data: { lastVisitAt: new Date() },
     });
 
     await maybeCreateRecallAfterAppointment({
       tenantId: params.tenantId,
-      patientId: appointment.patientId,
+      patientId: appointment.patient.id,
     });
 
-    await refreshPatientRiskScores(params.tenantId, appointment.patientId);
+    await refreshPatientRiskScores(params.tenantId, appointment.patient.id);
   }
 
   if (!params.skipChairsideAutoClose) {

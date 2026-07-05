@@ -29,6 +29,7 @@ export async function getDoctorProductivityReport(
     where: {
       tenantId,
       deletedAt: null,
+      isBlock: false,
       status: "COMPLETED",
       startTime: { gte: start, lte: end },
       doctorId: { not: null },
@@ -217,6 +218,7 @@ export async function getChairUtilizationReport(tenantId: string, range: ReportD
       where: {
         tenantId,
         deletedAt: null,
+        isBlock: false,
         chairId: { not: null },
         startTime: { gte: start, lte: end },
         status: { notIn: ["CANCELED", "NO_SHOW"] },

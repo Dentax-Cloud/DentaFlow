@@ -15,6 +15,8 @@ type AppointmentDetail = {
   id: string;
   appointmentRef: string | null;
   status: string;
+  isBlock?: boolean;
+  title?: string;
   startTime: string;
   endTime: string;
   notes: string | null;
@@ -32,7 +34,7 @@ type AppointmentDetail = {
     insuranceProvider: string | null;
     insuranceNetwork: string | null;
     insuranceCoPayPercent: number | null;
-  };
+  } | null;
   doctor: {
     id: string;
     firstName: string | null;
@@ -162,11 +164,11 @@ export function AppointmentDrawer({
     : false;
 
   async function handleBeginChairside() {
-    if (!appointment) return;
+    if (!appointment || appointment.isBlock || !appointment.patient) return;
     startTransition(async () => {
       try {
         const result = await beginChairsideVisit({
-          patientId: appointment.patient.id,
+          patientId: appointment.patient!.id,
           appointmentId: appointment.id,
         });
         await refreshAppointment(appointment.id);
@@ -204,10 +206,18 @@ export function AppointmentDrawer({
 
   function handleCancel() {
     if (!appointment) return;
-    void confirmBeforeStatusChange(appointment.id, "CANCELED", () => {
-      if (!confirm("Cancel this appointment? This cannot be undone.")) return;
+    const label = appointment.isBlock
+      ? "Remove this blocked time?"
+      : "Cancel this appointment? This cannot be undone.";
+    const run = () => {
+      if (!confirm(label)) return;
       executeStatusChange("CANCELED");
-    });
+    };
+    if (appointment.isBlock) {
+      run();
+      return;
+    }
+    void confirmBeforeStatusChange(appointment.id, "CANCELED", run);
   }
 
   const showMarkInChair =
@@ -218,9 +228,12 @@ export function AppointmentDrawer({
   const showChairside =
     canStartChairside &&
     appointment != null &&
+    !appointment.isBlock &&
+    appointment.patient != null &&
     ["ARRIVED", "IN_CHAIR"].includes(appointment.status);
 
   const showStatusAdvance =
+    !appointment?.isBlock &&
     statusCfg?.next &&
     statusCfg.nextLabel &&
     (statusCfg.next !== "IN_CHAIR" || showMarkInChair);
@@ -262,6 +275,77 @@ export function AppointmentDrawer({
           </div>
         ) : appointment ? (
           <div className="flex-1 overflow-y-auto">
+            {appointment.isBlock ? (
+              <>
+                <div className="border-b px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                      <Clock className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Blocked time</p>
+                      <p className="text-sm text-muted-foreground">{appointment.title}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-b px-5 py-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        {new Date(appointment.startTime).toLocaleDateString("en-AE", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {new Date(appointment.startTime).toLocaleTimeString("en-AE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {" → "}
+                        {new Date(appointment.endTime).toLocaleTimeString("en-AE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    {appointment.doctor && (
+                      <div className="text-muted-foreground">
+                        Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
+                      </div>
+                    )}
+                    {appointment.chair && (
+                      <div className="text-muted-foreground">Chair: {appointment.chair.name}</div>
+                    )}
+                    {appointment.notes && (
+                      <div className="mt-2 rounded border bg-muted/50 p-2 text-xs">
+                        {appointment.notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {appointment.status !== "CANCELED" && (
+                  <div className="px-5 py-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancel}
+                      disabled={isPending}
+                      className="w-full border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      Remove block
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
             <div className="border-b px-5 py-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -270,27 +354,29 @@ export function AppointmentDrawer({
                   </div>
                   <div>
                     <p className="font-semibold">
-                      {appointment.patient.firstName} {appointment.patient.lastName}
+                      {appointment.patient?.firstName} {appointment.patient?.lastName}
                     </p>
                     <p className="font-mono text-xs text-muted-foreground">
-                      {appointment.patient.patientId ?? appointment.patient.patientNumber}
+                      {appointment.patient?.patientId ?? appointment.patient?.patientNumber}
                     </p>
                   </div>
                 </div>
+                {appointment.patient && (
                 <button
                   type="button"
                   onClick={() => {
-                    router.push(`/patients/${appointment.patient.id}`);
+                    router.push(`/patients/${appointment.patient!.id}`);
                     onClose();
                   }}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
                 >
                   360 View <ChevronRight className="h-3 w-3" />
                 </button>
+                )}
               </div>
 
               <div className="mt-3 space-y-1.5">
-                {appointment.patient.allergies.length > 0 && (
+                {appointment.patient && appointment.patient.allergies.length > 0 && (
                   <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
                     <p className="text-xs font-medium text-red-700">
@@ -298,7 +384,7 @@ export function AppointmentDrawer({
                     </p>
                   </div>
                 )}
-                {appointment.patient.bloodGroup && (
+                {appointment.patient?.bloodGroup && (
                   <span className="inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
                     {appointment.patient.bloodGroup}
                   </span>
@@ -306,13 +392,13 @@ export function AppointmentDrawer({
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                {appointment.patient.phone && (
+                {appointment.patient?.phone && (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Phone className="h-3 w-3" />
                     {appointment.patient.phone}
                   </div>
                 )}
-                {appointment.patient.insuranceProvider && (
+                {appointment.patient?.insuranceProvider && (
                   <div className="text-muted-foreground">
                     {appointment.patient.insuranceProvider}
                     {appointment.patient.insuranceNetwork &&
@@ -467,6 +553,8 @@ export function AppointmentDrawer({
                 </Button>
               )}
             </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center text-muted-foreground">

@@ -377,7 +377,7 @@ async function seedTenant(clinic: TestClinicDef, index: number): Promise<TenantS
         number: c,
         doctorId: doctor?.id ?? null,
         chairType: c === 1 ? "GENERAL" : "HYGIENE",
-        roomName: `Operatory ${c}`,
+        roomName: `Chair ${c}`,
         isActive: true,
       },
     });

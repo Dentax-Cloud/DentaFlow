@@ -81,7 +81,7 @@ export const completeOnboarding = createAction({
           data: {
             tenantId: ctx.tenant.id,
             branchId: branch.id,
-            name: `Operatory ${i}`,
+            name: `Chair ${i}`,
             number: i,
           },
         });

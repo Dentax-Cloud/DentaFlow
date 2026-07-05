@@ -501,7 +501,7 @@ export default function ChairSetupClient({
       <div className="border-b bg-white px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Operatory Management</h1>
+            <h1 className="text-2xl font-bold">Chair Management</h1>
             <p className="text-sm text-muted-foreground">
               Chair setup, doctor schedules, tray inventory &amp; day sessions
             </p>
@@ -695,7 +695,7 @@ export default function ChairSetupClient({
 
           {!storeOnly && (
             <TabsContent value="help" className="prose prose-sm max-w-none">
-              <h3>Operatory setup guidance</h3>
+              <h3>Chair setup guidance</h3>
               {countryCode === "AE" ? (
                 <ul>
                   <li>Assign doctors to chairs before opening the day session.</li>

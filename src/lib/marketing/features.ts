@@ -128,12 +128,12 @@ export const FEATURE_DETAILS: Record<FeatureSlug, FeatureDetail> = {
   scheduling: {
     ...FEATURE_SUMMARIES[1],
     metaDescription:
-      "Smart dental scheduling with drag-and-drop calendar, operatory chair board, and automated patient reminders.",
+      "Smart dental scheduling with drag-and-drop calendar, chair board, and automated patient reminders.",
     heroSubtitle: "Fill chairs. Reduce no-shows. Run a smoother day.",
     overview:
       "Coordinate providers, operatories, and patients from a single scheduling hub. DentaFlow combines a week-view calendar with a live chair board so front desk and clinical teams stay aligned in real time.",
     benefits: [
-      "Maximize chair utilization with visual operatory management",
+      "Maximize chair utilization with visual chair management",
       "Reschedule appointments with drag-and-drop speed",
       "Flag high no-show risk patients before they miss visits",
       "Keep teams synced with optional real-time Pusher updates",
@@ -145,7 +145,7 @@ export const FEATURE_DETAILS: Record<FeatureSlug, FeatureDetail> = {
       },
       {
         title: "Chair board",
-        description: "See which operatory is active, available, or awaiting turnover.",
+        description: "See which chair is active, available, or awaiting turnover.",
       },
       {
         title: "Status workflow",

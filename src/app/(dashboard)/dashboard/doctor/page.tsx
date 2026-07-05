@@ -48,6 +48,7 @@ export default async function DoctorDashboardPage() {
       tenantId: ctx.tenantId,
       doctorId: doctorRecord.id,
       deletedAt: null,
+      isBlock: false,
       startTime: { gte: todayStart, lte: todayEnd },
       status: { notIn: ["CANCELED", "NO_SHOW"] },
     },
@@ -95,6 +96,7 @@ export default async function DoctorDashboardPage() {
       tenantId: ctx.tenantId,
       doctorId: doctorRecord.id,
       deletedAt: null,
+      isBlock: false,
       startTime: { gte: weekStart, lte: weekEnd },
     },
     _count: { id: true },
@@ -121,14 +123,16 @@ export default async function DoctorDashboardPage() {
       <DoctorDashboardClient
       doctorName={`${staffMember.firstName ?? ""} ${staffMember.lastName ?? ""}`.trim()}
       role={staffMember.role}
-      appointments={appointments.map((a) => ({
+      appointments={appointments
+        .filter((a) => a.patient != null)
+        .map((a) => ({
         ...serializeDecimal(a),
         startTime: a.startTime.toISOString(),
         endTime: a.endTime.toISOString(),
         patient: {
-          ...serializeDecimal(a.patient),
-          insuranceCoPayPercent: a.patient.insuranceCoPayPercent
-            ? Number(a.patient.insuranceCoPayPercent)
+          ...serializeDecimal(a.patient!),
+          insuranceCoPayPercent: a.patient!.insuranceCoPayPercent
+            ? Number(a.patient!.insuranceCoPayPercent)
             : null,
         },
       }))}

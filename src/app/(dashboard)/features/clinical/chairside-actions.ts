@@ -63,7 +63,9 @@ async function ensureAppointmentInChair(tenantId: string, appointmentId: string)
     include: { patient: true, chair: true },
   });
 
-  const patientName = `${updated.patient.firstName} ${updated.patient.lastName}`;
+  const patientName = updated.patient
+    ? `${updated.patient.firstName} ${updated.patient.lastName}`
+    : "Patient";
   await notifyAppointmentStatus(appointmentId, tenantId, "IN_CHAIR", patientName).catch(
     () => null,
   );
@@ -85,6 +87,14 @@ export async function startChairsideSession(input: {
   await assertConsentForVisit(ctx.tenantId, input.patientId);
 
   if (input.appointmentId) {
+    const apt = await db.appointment.findFirst({
+      where: { id: input.appointmentId, tenantId: ctx.tenantId, deletedAt: null },
+      select: { isBlock: true },
+    });
+    if (apt?.isBlock) {
+      throw new Error("Blocked time cannot be opened as a chairside visit");
+    }
+
     await ensureAppointmentInChair(ctx.tenantId, input.appointmentId);
 
     const existing = await db.chairsideSession.findFirst({

@@ -103,6 +103,7 @@ export async function getRoleDashboardExtras(
   const todayWhere = {
     tenantId,
     deletedAt: null,
+    isBlock: false,
     startTime: { gte: todayStart, lte: todayEnd },
     ...(doctorId ? { doctorId } : {}),
   };
@@ -118,6 +119,7 @@ export async function getRoleDashboardExtras(
       where: {
         tenantId,
         deletedAt: null,
+        isBlock: false,
         startTime: { gte: todayStart, lte: todayEnd },
         status: { in: ["ARRIVED", "CONFIRMED"] },
       },
@@ -132,13 +134,15 @@ export async function getRoleDashboardExtras(
   ]);
 
   return {
-    todayAppointments: todayList.map((a) => ({
+    todayAppointments: todayList
+      .filter((a) => a.patient != null)
+      .map((a) => ({
       id: a.id,
       title: a.title,
       status: a.status,
       startTime: a.startTime,
-      patientId: a.patient.id,
-      patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+      patientId: a.patient!.id,
+      patientName: `${a.patient!.firstName} ${a.patient!.lastName}`,
     })),
     waitingCount,
     pendingTreatmentPlans: pendingPlans,

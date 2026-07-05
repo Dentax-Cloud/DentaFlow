@@ -99,10 +99,14 @@ export async function checkinByBarcode(patientId: string, appointmentId: string)
   const ctx = await requireTenantContext();
 
   const appointment = await db.appointment.update({
-    where: { id: appointmentId, tenantId: ctx.tenantId },
+    where: { id: appointmentId, tenantId: ctx.tenantId, isBlock: false },
     data: { status: "ARRIVED" },
     include: { patient: true },
   });
+
+  if (!appointment.patient) {
+    throw new Error("Patient appointment not found");
+  }
 
   const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
   await notifyAppointmentStatus(

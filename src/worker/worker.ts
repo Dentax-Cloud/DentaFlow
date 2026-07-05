@@ -154,6 +154,7 @@ async function sendRemindersForWindow(params: {
   const appointments = await db.appointment.findMany({
     where: {
       deletedAt: null,
+      isBlock: false,
       startTime: { gte: params.windowStart, lte: params.windowEnd },
       status: { in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED] },
     },
@@ -172,7 +173,7 @@ async function sendRemindersForWindow(params: {
   let sent = 0;
 
   for (const appt of appointments) {
-    if (!appt.patient.email) continue;
+    if (!appt.patient?.email || !appt.patientId) continue;
     if (await wasReminderSent(appt.id, params.kind)) continue;
 
     try {

@@ -24,7 +24,8 @@ import {
 import { getPusherClient, isRealtimeAvailable, tenantChannel } from "@/lib/pusher-client";
 import { Radio, WifiOff, AlertCircle, CalendarPlus } from "lucide-react";
 import Link from "next/link";
-import { BookAppointmentDialog } from "@/components/appointments/book-appointment-dialog";
+import { SlotActionMenu } from "@/components/appointments/slot-action-menu";
+import { BlockTimeDialog } from "@/components/appointments/block-time-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
@@ -33,9 +34,10 @@ import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from 
 import { AppointmentStatus } from "@prisma/client";
 
 type AppointmentWithRelations = Appointment & {
-  patient: Patient;
+  patient: Patient | null;
   chair: Chair | null;
   doctor: (Doctor & { user: StaffMember }) | null;
+  isBlock?: boolean;
 };
 
 type DoctorWithRelations = Doctor & { user: StaffMember };
@@ -70,10 +72,8 @@ const statusVariant: Record<string, "default" | "secondary" | "success" | "warni
 export function AppointmentsClient({
   initialAppointments,
   chairs,
-  patients,
   doctors,
   tenantId,
-  defaultPatientId,
   initialAppointmentId,
   emergencyWaiting = 0,
   emergencyImmediate = 0,
@@ -82,10 +82,8 @@ export function AppointmentsClient({
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
-  patients: Patient[];
   doctors: DoctorWithRelations[];
   tenantId: string;
-  defaultPatientId?: string;
   initialAppointmentId?: string;
   emergencyWaiting?: number;
   emergencyImmediate?: number;
@@ -98,6 +96,8 @@ export function AppointmentsClient({
   const [view, setView] = useState<"calendar" | "board">("calendar");
   const [slotStart, setSlotStart] = useState<Date | undefined>();
   const [slotEnd, setSlotEnd] = useState<Date | undefined>();
+  const [slotMenuOpen, setSlotMenuOpen] = useState(false);
+  const [blockTimeOpen, setBlockTimeOpen] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(
     initialAppointmentId ?? null,
   );
@@ -124,7 +124,9 @@ export function AppointmentsClient({
 
   const events: Event[] = useMemo(() => {
     return appointments.map((a) => ({
-      title: `${a.patient.firstName} ${a.patient.lastName} — ${a.title}`,
+      title: a.isBlock
+        ? `Blocked: ${a.title}`
+        : `${a.patient?.firstName ?? ""} ${a.patient?.lastName ?? ""} — ${a.title}`.trim(),
       start: new Date(a.startTime),
       end: new Date(a.endTime),
       resource: a,
@@ -165,6 +167,8 @@ export function AppointmentsClient({
   }
 
   function renderStatusActions(apt: AppointmentWithRelations) {
+    if (apt.isBlock) return null;
+
     const actions: { label: string; status: AppointmentStatus }[] = [];
     if (apt.status === "SCHEDULED" || apt.status === "CONFIRMED") {
       actions.push({ label: "Check in", status: "ARRIVED" });
@@ -340,15 +344,6 @@ export function AppointmentsClient({
               Book
             </Link>
           </Button>
-          <BookAppointmentDialog
-            patients={patients}
-            doctors={doctors}
-            chairs={chairs}
-            defaultPatientId={defaultPatientId}
-            defaultStart={slotStart}
-            defaultEnd={slotEnd}
-            onCreated={() => router.refresh()}
-          />
           <Button
             variant={view === "calendar" ? "default" : "outline"}
             onClick={() => setView("calendar")}
@@ -390,13 +385,25 @@ export function AppointmentsClient({
                   if (!apt || !start || !end) return;
                   void rescheduleAppointment(apt.id, new Date(start), new Date(end));
                 }}
+                eventPropGetter={(event) => {
+                  const apt = (event as { resource?: AppointmentWithRelations }).resource;
+                  if (apt?.isBlock) {
+                    return {
+                      style: {
+                        backgroundColor: "#6b7280",
+                        borderColor: "#4b5563",
+                        color: "#f9fafb",
+                        opacity: 0.92,
+                      },
+                    };
+                  }
+                  return {};
+                }}
                 onSelectSlot={(slot: SlotInfo) => {
                   if (!slot.start || !slot.end) return;
                   setSlotStart(new Date(slot.start));
                   setSlotEnd(new Date(slot.end));
-                  toast.message("Book this slot", {
-                    description: "Click New appointment to schedule a patient in the selected time.",
-                  });
+                  setSlotMenuOpen(true);
                 }}
                 onSelectEvent={(evt) => {
                   const apt = (evt as { resource?: AppointmentWithRelations }).resource;
@@ -465,11 +472,15 @@ export function AppointmentsClient({
                             className="w-full rounded-md border bg-muted/30 p-2 text-left text-xs hover:bg-muted/50"
                           >
                             <div className="font-medium inline-flex items-center gap-1.5">
-                              {a.patient.firstName} {a.patient.lastName}
-                              <InsuranceStatusBadge
-                                status={insuranceStatusMap[a.patient.id]}
-                                compact
-                              />
+                              {a.isBlock
+                                ? `Blocked: ${a.title}`
+                                : `${a.patient?.firstName ?? ""} ${a.patient?.lastName ?? ""}`}
+                              {!a.isBlock && a.patient && (
+                                <InsuranceStatusBadge
+                                  status={insuranceStatusMap[a.patient.id]}
+                                  compact
+                                />
+                              )}
                             </div>
                             <div className="text-muted-foreground">
                               {format(new Date(a.startTime), "h:mm a")} — {a.title}
@@ -508,7 +519,7 @@ export function AppointmentsClient({
               <CardTitle className="text-base">Appointments (drag to assign)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {appointments.map((apt) => (
+              {appointments.filter((apt) => !apt.isBlock).map((apt) => (
                 <div
                   key={apt.id}
                   draggable
@@ -523,9 +534,9 @@ export function AppointmentsClient({
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium inline-flex items-center gap-1.5">
-                        {apt.patient.firstName} {apt.patient.lastName}
+                        {apt.patient!.firstName} {apt.patient!.lastName}
                         <InsuranceStatusBadge
-                          status={insuranceStatusMap[apt.patient.id]}
+                          status={insuranceStatusMap[apt.patient!.id]}
                           compact
                         />
                       </p>
@@ -543,7 +554,7 @@ export function AppointmentsClient({
                   </div>
                 </div>
               ))}
-              {appointments.length === 0 && (
+              {appointments.filter((apt) => !apt.isBlock).length === 0 && (
                 <p className="text-center text-muted-foreground py-6">
                   No appointments
                 </p>
@@ -559,30 +570,34 @@ export function AppointmentsClient({
           {appointments.map((apt) => (
             <Card
               key={apt.id}
-              className="cursor-pointer hover:bg-muted/30"
+              className={`cursor-pointer hover:bg-muted/30 ${apt.isBlock ? "border-dashed border-muted-foreground/40 bg-muted/20" : ""}`}
               onClick={() => setSelectedAppointmentId(apt.id)}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="font-medium inline-flex items-center gap-1.5">
-                    {apt.patient.firstName} {apt.patient.lastName}
-                    <InsuranceStatusBadge
-                      status={insuranceStatusMap[apt.patient.id]}
-                      compact
-                    />
+                    {apt.isBlock
+                      ? `Blocked: ${apt.title}`
+                      : `${apt.patient?.firstName ?? ""} ${apt.patient?.lastName ?? ""}`}
+                    {!apt.isBlock && apt.patient && (
+                      <InsuranceStatusBadge
+                        status={insuranceStatusMap[apt.patient.id]}
+                        compact
+                      />
+                    )}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {format(new Date(apt.startTime), "EEE, MMM d · h:mm a")} — {apt.title}
                   </p>
-                  {apt.noShowRisk && (
+                  {!apt.isBlock && apt.noShowRisk && (
                     <Badge variant="warning" className="mt-1">
                       No-show risk: {apt.noShowRisk}
                     </Badge>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-                  <Badge variant={statusVariant[apt.status] ?? "secondary"}>
-                    {statusLabel[apt.status] ?? apt.status.replace("_", " ")}
+                  <Badge variant={apt.isBlock ? "secondary" : (statusVariant[apt.status] ?? "secondary")}>
+                    {apt.isBlock ? "Blocked" : (statusLabel[apt.status] ?? apt.status.replace("_", " "))}
                   </Badge>
                   {apt.status !== "CANCELED" && apt.status !== "NO_SHOW" && apt.status !== "INVOICED" &&
                     renderStatusActions(apt)}
@@ -600,6 +615,24 @@ export function AppointmentsClient({
         appointmentId={selectedAppointmentId}
         onClose={() => setSelectedAppointmentId(null)}
         staffRole={staffRole}
+      />
+
+      <SlotActionMenu
+        open={slotMenuOpen}
+        onOpenChange={setSlotMenuOpen}
+        slotStart={slotStart}
+        slotEnd={slotEnd}
+        onBlockTime={() => setBlockTimeOpen(true)}
+      />
+
+      <BlockTimeDialog
+        open={blockTimeOpen}
+        onOpenChange={setBlockTimeOpen}
+        doctors={doctors}
+        chairs={chairs}
+        defaultStart={slotStart}
+        defaultEnd={slotEnd}
+        onCreated={() => router.refresh()}
       />
     </div>
   );

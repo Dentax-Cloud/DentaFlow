@@ -21,6 +21,7 @@ export default async function ReceptionPage() {
     db.appointment.findMany({
       where: {
         tenantId: ctx.tenant.id,
+        isBlock: false,
         startTime: { gte: start, lte: end },
         deletedAt: null,
       },
@@ -34,6 +35,7 @@ export default async function ReceptionPage() {
     db.appointment.findMany({
       where: {
         tenantId: ctx.tenant.id,
+        isBlock: false,
         startTime: { gte: start, lte: end },
         status: "ARRIVED",
         deletedAt: null,
@@ -74,10 +76,10 @@ export default async function ReceptionPage() {
               >
                 <div>
                   <div className="font-medium">
-                    {apt.patient.firstName} {apt.patient.lastName}
+                    {apt.patient!.firstName} {apt.patient!.lastName}
                   </div>
                   <div className="font-mono text-xs text-muted-foreground">
-                    {apt.patient.patientId ?? apt.appointmentRef}
+                    {apt.patient!.patientId ?? apt.appointmentRef}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Chair: {apt.chair?.name ?? "Unassigned"}
@@ -112,10 +114,10 @@ export default async function ReceptionPage() {
               >
                 <div>
                   <div className="font-medium">
-                    {apt.patient.firstName} {apt.patient.lastName}
+                    {apt.patient!.firstName} {apt.patient!.lastName}
                   </div>
                   <div className="font-mono text-xs text-muted-foreground">
-                    {apt.patient.patientId ?? apt.appointmentRef}
+                    {apt.patient!.patientId ?? apt.appointmentRef}
                   </div>
                 </div>
                 <div className="text-right text-sm">

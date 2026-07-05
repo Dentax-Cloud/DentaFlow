@@ -58,7 +58,7 @@ export function conflictMessage(conflicts: SchedulingConflict[]): string {
   if (conflicts.includes("chair") && conflicts.includes("doctor")) {
     return "This chair and doctor are already booked for that time.";
   }
-  if (conflicts.includes("chair")) return "This operatory is already booked for that time.";
+  if (conflicts.includes("chair")) return "This chair is already booked for that time.";
   if (conflicts.includes("doctor")) return "This doctor is already booked for that time.";
   return "Scheduling conflict detected.";
 }

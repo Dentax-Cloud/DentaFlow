@@ -88,16 +88,20 @@ export async function GET(
         id: appointment.id,
         appointmentRef: appointment.appointmentRef,
         status: appointment.status,
+        isBlock: appointment.isBlock,
+        title: appointment.title,
         startTime: appointment.startTime.toISOString(),
         endTime: appointment.endTime.toISOString(),
         notes: appointment.notes,
         type: appointment.type,
-        patient: {
-          ...appointment.patient,
-          insuranceCoPayPercent: appointment.patient.insuranceCoPayPercent
-            ? Number(appointment.patient.insuranceCoPayPercent)
-            : null,
-        },
+        patient: appointment.patient
+          ? {
+              ...appointment.patient,
+              insuranceCoPayPercent: appointment.patient.insuranceCoPayPercent
+                ? Number(appointment.patient.insuranceCoPayPercent)
+                : null,
+            }
+          : null,
         doctor,
         chair: appointment.chair,
         branch: appointment.branch,

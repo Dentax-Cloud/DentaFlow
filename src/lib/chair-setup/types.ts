@@ -11,7 +11,7 @@ export type TrayItemCategory =
   | "MATERIAL"
   | "EQUIPMENT";
 
-export type ChairOperatoryStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+export type ChairStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
 
 export type ChairDisplayStatus =
   | "INACTIVE"

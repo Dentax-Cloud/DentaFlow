@@ -11,37 +11,22 @@ import {
 import { completeVisit } from "@/lib/clinical/complete-visit";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { broadcastAppointmentUpdate } from "@/lib/pusher";
-import { predictNoShowRisk } from "@/lib/ai";
 import { refreshPatientRiskScores } from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
-import { generateAppointmentRef } from "@/lib/ids/generate-ids";
 import { getStaffActor } from "@/lib/tenant/context";
 import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import { AuditAction } from "@prisma/client";
 import {
-  createAppointmentSchema,
+  createBlockTimeSchema,
   updateAppointmentChairSchema,
   updateAppointmentStatusSchema,
   updateAppointmentTimeSchema,
 } from "./schemas";
 
-export const createAppointment = createAction({
-  schema: createAppointmentSchema,
+export const createBlockTime = createAction({
+  schema: createBlockTimeSchema,
   permission: () => requirePermission(PERMISSIONS.appointments.write),
   handler: async (input, ctx) => {
-    const patient = await db.patient.findFirst({
-      where: tenantWhere(ctx.tenant.id, { id: input.patientId }),
-    });
-    if (!patient) throw new Error("Patient not found");
-
-    const history = await db.appointment.groupBy({
-      by: ["status"],
-      where: { tenantId: ctx.tenant.id, patientId: input.patientId },
-      _count: true,
-    });
-
-    const total = history.reduce((s, h) => s + h._count, 0);
-    const noShows = history.find((h) => h.status === "NO_SHOW")?._count ?? 0;
     const start = new Date(input.startTime);
     const end = new Date(input.endTime);
 
@@ -55,34 +40,32 @@ export const createAppointment = createAction({
       throw new Error(conflictMessage(conflicts));
     }
 
-    let noShowRisk = null;
-    try {
-      const prediction = await predictNoShowRisk({
-        totalAppointments: total,
-        noShows,
-        cancellations: history.find((h) => h.status === "CANCELED")?._count ?? 0,
-        dayOfWeek: start.toLocaleDateString("en-US", { weekday: "long" }),
-        hour: start.getHours(),
-        patientNoShowHistory: noShows,
+    if (input.doctorId) {
+      const doctor = await db.doctor.findFirst({
+        where: tenantWhere(ctx.tenant.id, { id: input.doctorId }),
       });
-      noShowRisk = prediction.riskLevel;
-    } catch {
-      // AI optional
+      if (!doctor) throw new Error("Doctor not found");
+    }
+
+    if (input.chairId) {
+      const chair = await db.chair.findFirst({
+        where: tenantWhere(ctx.tenant.id, { id: input.chairId, isActive: true }),
+      });
+      if (!chair) throw new Error("Chair not found");
     }
 
     const appointment = await db.appointment.create({
       data: {
         tenantId: ctx.tenant.id,
-        patientId: input.patientId,
+        patientId: null,
+        isBlock: true,
         title: input.title,
         startTime: start,
         endTime: end,
         doctorId: input.doctorId,
         chairId: input.chairId,
-        type: input.type,
         notes: input.notes,
-        noShowRisk: noShowRisk ?? undefined,
-        appointmentRef: await generateAppointmentRef(ctx.tenant.id),
+        status: "SCHEDULED",
       },
       include: { patient: true, chair: true, doctor: { include: { user: true } } },
     });
@@ -94,6 +77,7 @@ export const createAppointment = createAction({
       action: AuditAction.CREATE,
       entity: "Appointment",
       entityId: appointment.id,
+      metadata: { isBlock: true },
     });
     return appointment;
   },
@@ -107,6 +91,27 @@ export const updateAppointmentStatus = createAction({
       where: tenantWhere(ctx.tenant.id, { id: input.id }),
     });
     if (!existing) throw new Error("Appointment not found");
+
+    if (existing.isBlock) {
+      if (input.status !== "CANCELED") {
+        throw new Error("Blocked time can only be removed by canceling the block");
+      }
+      const appointment = await db.appointment.update({
+        where: { id: input.id },
+        data: { status: "CANCELED" },
+        include: { patient: true, chair: true, doctor: { include: { user: true } } },
+      });
+      await broadcastAppointmentUpdate(ctx.tenant.id, appointment);
+      await createAuditLog({
+        tenantId: ctx.tenant.id,
+        userId: getStaffActor(ctx).id,
+        action: AuditAction.UPDATE,
+        entity: "Appointment",
+        entityId: appointment.id,
+        metadata: { status: input.status, isBlock: true },
+      });
+      return appointment;
+    }
 
     if (input.status === "COMPLETED") {
       const allowInvoice =
@@ -136,25 +141,27 @@ export const updateAppointmentStatus = createAction({
     const appointment = await db.appointment.update({
       where: { id: input.id },
       data: { status: input.status },
-      include: { patient: true, chair: true },
+      include: { patient: true, chair: true, doctor: { include: { user: true } } },
     });
 
-    const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
-    await notifyAppointmentStatus(
-      appointment.id,
-      ctx.tenant.id,
-      input.status,
-      patientName,
-    ).catch(() => null);
+    if (appointment.patient) {
+      const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
+      await notifyAppointmentStatus(
+        appointment.id,
+        ctx.tenant.id,
+        input.status,
+        patientName,
+      ).catch(() => null);
+    }
 
-    if (input.status === "NO_SHOW") {
+    if (input.status === "NO_SHOW" && appointment.patientId) {
       await db.patient.update({
         where: { id: appointment.patientId },
         data: { noShowCount: { increment: 1 } },
       });
     }
 
-    if (input.status === "NO_SHOW") {
+    if (input.status === "NO_SHOW" && appointment.patientId) {
       await refreshPatientRiskScores(ctx.tenant.id, appointment.patientId);
     }
 
@@ -192,6 +199,7 @@ export const updateAppointmentChair = createAction({
       where: tenantWhere(ctx.tenant.id, { id: input.id }),
     });
     if (!existing) throw new Error("Appointment not found");
+    if (existing.isBlock) throw new Error("Chair assignment does not apply to blocked time");
 
     if (input.chairId) {
       const chair = await db.chair.findFirst({

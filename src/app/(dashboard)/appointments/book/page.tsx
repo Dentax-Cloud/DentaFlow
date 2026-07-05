@@ -4,8 +4,13 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import BookAppointmentClient from "./book-appointment-client";
 
-export default async function BookAppointmentPage() {
+type Props = {
+  searchParams: Promise<{ date?: string; time?: string; doctorId?: string }>;
+};
+
+export default async function BookAppointmentPage({ searchParams }: Props) {
   const ctx = await requireRouteAccess("appointments", "write");
+  const { date, time, doctorId } = await searchParams;
 
   const [procedures, branches] = await Promise.all([
     db.procedureCatalog.findMany({
@@ -47,6 +52,11 @@ export default async function BookAppointmentPage() {
           requiresPreAuth: p.requiresPreAuth,
         }))}
         branches={branches}
+        initialPrefill={{
+          date: date ?? undefined,
+          time: time ?? undefined,
+          doctorId: doctorId ?? undefined,
+        }}
       />
     </div>
   );

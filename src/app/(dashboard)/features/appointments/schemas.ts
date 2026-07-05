@@ -1,14 +1,12 @@
 import { z } from "zod";
 import { AppointmentStatus } from "@prisma/client";
 
-export const createAppointmentSchema = z.object({
-  patientId: z.string(),
+export const createBlockTimeSchema = z.object({
   title: z.string().min(1),
   startTime: z.string(),
   endTime: z.string(),
   doctorId: z.string().optional(),
   chairId: z.string().optional(),
-  type: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -28,4 +26,4 @@ export const updateAppointmentTimeSchema = z.object({
   endTime: z.string(),
 });
 
-export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
+export type CreateBlockTimeInput = z.infer<typeof createBlockTimeSchema>;

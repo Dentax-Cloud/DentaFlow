@@ -175,7 +175,7 @@ export default async function LandingPage() {
               <ul className="mt-8 space-y-4">
                 {[
                   "Per-tenant data isolation with Clerk Organizations",
-                  "Branch & operatory management for multi-location groups",
+                  "Branch & chair management for multi-location groups",
                   "Super-admin dashboard for platform operators",
                   "Starter → Professional → Enterprise plan gating",
                 ].map((item) => (

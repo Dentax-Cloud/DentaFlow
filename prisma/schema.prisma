@@ -411,7 +411,7 @@ model Chair {
 model Appointment {
   id           String            @id @default(cuid())
   tenantId     String
-  patientId    String
+  patientId    String?
   doctorId     String?
   chairId      String?
   branchId     String?
@@ -420,6 +420,7 @@ model Appointment {
   startTime    DateTime
   endTime      DateTime
   status       AppointmentStatus @default(SCHEDULED)
+  isBlock      Boolean           @default(false)
   type         String?
   notes        String?
   reminderSent Boolean           @default(false)
@@ -438,7 +439,7 @@ model Appointment {
   branch         Branch?           @relation(fields: [branchId], references: [id])
   chair        Chair?            @relation(fields: [chairId], references: [id])
   doctor       Doctor?           @relation(fields: [doctorId], references: [id])
-  patient      Patient           @relation(fields: [patientId], references: [id])
+  patient      Patient?          @relation(fields: [patientId], references: [id])
   provider     StaffMember?      @relation("AssignedProvider", fields: [providerId], references: [id])
   tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clinicalNotes ClinicalNote[]
