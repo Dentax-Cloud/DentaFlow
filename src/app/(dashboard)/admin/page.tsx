@@ -9,6 +9,7 @@ import { AdminClient } from "./admin-client";
 import { parseRecallSettings } from "@/lib/recall/helpers";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
+import { SCHEDULE_CLINICAL_ROLES } from "@/lib/appointments/default-doctor-schedule";
 
 export default async function AdminPage() {
   const ctx = await requireRouteAccess("admin", "read");
@@ -39,6 +40,31 @@ export default async function AdminPage() {
       db.tenant.findUnique({ where: { id: ctx.tenant.id }, select: { metadata: true } }),
     ]);
 
+  const clinicalStaffIds = users
+    .filter((u) =>
+      (SCHEDULE_CLINICAL_ROLES as readonly UserRole[]).includes(u.role),
+    )
+    .map((u) => u.id);
+
+  const configuredDoctorIds =
+    clinicalStaffIds.length > 0
+      ? new Set(
+          (
+            await db.doctorSchedule.groupBy({
+              by: ["doctorId"],
+              where: {
+                tenantId: ctx.tenant.id,
+                doctorId: { in: clinicalStaffIds },
+              },
+            })
+          ).map((row) => row.doctorId),
+        )
+      : new Set<string>();
+
+  const staffIdsWithoutSchedule = clinicalStaffIds.filter(
+    (id) => !configuredDoctorIds.has(id),
+  );
+
   const recallSettings = parseRecallSettings(tenant?.metadata);
 
   return (
@@ -54,6 +80,7 @@ export default async function AdminPage() {
       permissions={getRolePermissions(role)}
       recallSettings={recallSettings}
       tenantId={ctx.tenant.id}
+      staffIdsWithoutSchedule={staffIdsWithoutSchedule}
       uploadsEnabled={await isUploadthingConfigured()}
       showUploadConfigHint={showUploadConfigHint}
     />

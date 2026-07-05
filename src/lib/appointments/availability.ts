@@ -13,6 +13,7 @@ export type DoctorAvailability = {
   calendarColor: string;
   role: string;
   specialization: string | null;
+  hasScheduleConfigured: boolean;
   isWorkingToday: boolean;
   totalSlots: number;
   availableSlots: number;
@@ -247,7 +248,20 @@ export async function getAllDoctorAvailability(input: {
 
   const results: DoctorAvailability[] = [];
 
+  const configuredDoctorIds = new Set(
+    (
+      await db.doctorSchedule.groupBy({
+        by: ["doctorId"],
+        where: {
+          tenantId,
+          doctorId: { in: doctors.map((d) => d.id) },
+        },
+      })
+    ).map((row) => row.doctorId),
+  );
+
   for (const doctor of doctors) {
+    const hasScheduleConfigured = configuredDoctorIds.has(doctor.id);
     const slots = await getDoctorSlots({
       tenantId,
       doctorId: doctor.id,
@@ -265,6 +279,7 @@ export async function getAllDoctorAvailability(input: {
       calendarColor: doctor.doctor?.color ?? "#0ea5e9",
       role: doctor.role,
       specialization: doctor.doctor?.specialty ?? null,
+      hasScheduleConfigured,
       isWorkingToday,
       totalSlots: slots.length,
       availableSlots: availableSlots.length,

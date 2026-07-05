@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { StaffMember } from "@prisma/client";
 import { UserRole } from "@prisma/client";
 import { toast } from "sonner";
-import { Calendar, Eye, Pencil, Users } from "lucide-react";
+import { Calendar, Eye, Pencil, Users, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,7 @@ type TeamManagementSectionProps = {
   pendingInvitations: PendingInvitation[];
   currentUserId: string;
   canManage: boolean;
+  staffIdsWithoutSchedule: string[];
   uploadsEnabled: boolean;
   showUploadConfigHint?: boolean;
 };
@@ -102,10 +103,12 @@ export function TeamManagementSection({
   pendingInvitations,
   currentUserId,
   canManage,
+  staffIdsWithoutSchedule,
   uploadsEnabled,
   showUploadConfigHint = false,
 }: TeamManagementSectionProps) {
   const router = useRouter();
+  const missingScheduleSet = new Set(staffIdsWithoutSchedule);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [viewTarget, setViewTarget] = useState<StaffMember | null>(null);
@@ -180,6 +183,8 @@ export function TeamManagementSection({
                 const selectRole =
                   normalizeToInvitableRole(user.role) ?? UserRole.RECEPTIONIST;
                 const status = getStaffMemberDisplayStatus(user);
+                const missingSchedule =
+                  isClinicalStaffRole(user.role) && missingScheduleSet.has(user.id);
 
                 return (
                   <TableRow key={user.id}>
@@ -192,14 +197,25 @@ export function TeamManagementSection({
                           email={user.email}
                           size="sm"
                         />
-                        <span className="font-medium">
-                          {user.firstName || user.lastName
-                            ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
-                            : "Unnamed user"}
-                          {isSelf && (
-                            <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                        <div className="min-w-0">
+                          <span className="font-medium">
+                            {user.firstName || user.lastName
+                              ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+                              : "Unnamed user"}
+                            {isSelf && (
+                              <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                            )}
+                          </span>
+                          {missingSchedule && (
+                            <Link
+                              href={`/admin/staff/${user.id}/schedule`}
+                              className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
+                            >
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              No schedule set
+                            </Link>
                           )}
-                        </span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">

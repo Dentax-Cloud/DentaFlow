@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { sendTeamInviteEmail } from "@/lib/mail";
 import { generateStaffRef } from "@/lib/ids/generate-ids";
+import { ensureDefaultDoctorSchedule, isScheduleClinicalRole } from "@/lib/appointments/default-doctor-schedule";
 import type { StaffInviteProfileData } from "@/lib/staff/invite-profile";
 import { normalizeToInvitableRole } from "@/lib/tenant/team-roles";
 
@@ -272,6 +273,8 @@ export async function acceptEmailInvite(params: {
       },
     });
 
+    let staffMemberId: string;
+
     if (existingStaff) {
       const staffRef =
         existingStaff.staffRef ?? (await generateStaffRef(resolved.tenantId, staffRole));
@@ -286,10 +289,11 @@ export async function acceptEmailInvite(params: {
           isActive: true,
         },
       });
+      staffMemberId = existingStaff.id;
     } else {
       const staffRef = await generateStaffRef(resolved.tenantId, staffRole);
 
-      await tx.staffMember.create({
+      const created = await tx.staffMember.create({
         data: {
           tenantId: resolved.tenantId,
           email: normalizedEmail,
@@ -300,6 +304,11 @@ export async function acceptEmailInvite(params: {
           isActive: true,
         },
       });
+      staffMemberId = created.id;
+    }
+
+    if (isScheduleClinicalRole(staffRole)) {
+      await ensureDefaultDoctorSchedule(resolved.tenantId, staffMemberId, tx);
     }
 
     await tx.auth_users.update({

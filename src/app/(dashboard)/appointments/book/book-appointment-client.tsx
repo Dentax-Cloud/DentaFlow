@@ -545,12 +545,16 @@ export default function BookAppointmentClient({
                         setSelectedTime("");
                       }}
                       disabled={
-                        !doc.isWorkingToday || doc.availableSlots === 0
+                        !doc.hasScheduleConfigured ||
+                        !doc.isWorkingToday ||
+                        doc.availableSlots === 0
                       }
                       className={`w-full text-left p-4 rounded-xl border transition-colors ${
                         doctor?.doctorId === doc.doctorId
                           ? "border-blue-500 bg-blue-50"
-                          : !doc.isWorkingToday || doc.availableSlots === 0
+                          : !doc.hasScheduleConfigured ||
+                              !doc.isWorkingToday ||
+                              doc.availableSlots === 0
                             ? "opacity-50 cursor-not-allowed bg-gray-50"
                             : "hover:bg-gray-50"
                       }`}
@@ -577,9 +581,13 @@ export default function BookAppointmentClient({
                           </div>
                         </div>
                         <div className="text-right">
-                          {!doc.isWorkingToday ? (
+                          {!doc.hasScheduleConfigured ? (
+                            <span className="text-xs font-medium text-amber-700">
+                              No schedule configured — contact admin
+                            </span>
+                          ) : !doc.isWorkingToday ? (
                             <span className="text-xs text-muted-foreground">
-                              Not working
+                              Not working today
                             </span>
                           ) : doc.availableSlots === 0 ? (
                             <span className="text-xs text-red-600 font-medium">

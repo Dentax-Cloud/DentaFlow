@@ -3,19 +3,10 @@ export const runtime = "nodejs";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { buildDefaultWeeklySchedule } from "@/lib/appointments/default-doctor-schedule";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import DoctorScheduleClient from "./doctor-schedule-client";
-
-const DAY_NAMES = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
 
 export default async function DoctorSchedulePage({
   params,
@@ -53,20 +44,9 @@ export default async function DoctorSchedulePage({
     orderBy: { date: "asc" },
   });
 
-  const fullSchedule = DAY_NAMES.map((_, i) => {
-    const existing = schedule.find((s) => s.dayOfWeek === i);
-    return (
-      existing ?? {
-        dayOfWeek: i,
-        isWorkingDay: ![5, 0].includes(i),
-        startTime: "09:00",
-        endTime: "17:00",
-        breaks: [{ start: "13:00", end: "14:00" }],
-        slotDurationMins: 30,
-        bufferMins: 10,
-        maxAppointments: null,
-      }
-    );
+  const fullSchedule = buildDefaultWeeklySchedule().map((day) => {
+    const existing = schedule.find((s) => s.dayOfWeek === day.dayOfWeek);
+    return existing ?? { ...day, maxAppointments: null };
   });
 
   return (

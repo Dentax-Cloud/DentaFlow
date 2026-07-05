@@ -16,6 +16,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "seed:test-data": "tsx scripts/seed-test-data.ts",
     "backfill:tray-templates": "tsx scripts/backfill-tray-templates.ts",
+    "backfill:doctor-schedules": "tsx scripts/backfill-doctor-schedules.ts",
     "db:migrate-insurance": "tsx prisma/scripts/migrate-legacy-insurance-policies.ts",
     "db:studio": "prisma studio",
     "test": "vitest run",

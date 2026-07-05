@@ -67,6 +67,8 @@ export function AdminClient({
 
   tenantId,
 
+  staffIdsWithoutSchedule,
+
   uploadsEnabled,
 
   showUploadConfigHint,
@@ -94,6 +96,8 @@ export function AdminClient({
   recallSettings: RecallSettings;
 
   tenantId: string;
+
+  staffIdsWithoutSchedule: string[];
 
   uploadsEnabled: boolean;
 
@@ -194,6 +198,8 @@ export function AdminClient({
         currentUserId={currentUserId}
 
         canManage={canManageTeam}
+
+        staffIdsWithoutSchedule={staffIdsWithoutSchedule}
 
         uploadsEnabled={uploadsEnabled}
 

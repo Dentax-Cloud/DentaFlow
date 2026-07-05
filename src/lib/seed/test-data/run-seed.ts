@@ -44,6 +44,7 @@ import {
 } from "./helpers";
 import { importGpmrForTenant, priceAllProceduresForTenant } from "./gpmr-import";
 import { seedStandardTrayTemplates } from "@/lib/chair-setup/seed-tray-templates";
+import { ensureDefaultDoctorSchedule } from "@/lib/appointments/default-doctor-schedule";
 
 export type SeedSummary = {
   tenants: number;
@@ -351,6 +352,9 @@ async function seedTenant(clinic: TestClinicDef, index: number): Promise<TenantS
             color: "#0ea5e9",
           },
         });
+      }
+      if (role === UserRole.DOCTOR || role === UserRole.HYGIENIST) {
+        await ensureDefaultDoctorSchedule(tenantId, staff.id);
       }
     }
   }
