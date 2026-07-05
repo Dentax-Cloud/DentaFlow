@@ -12,9 +12,16 @@ import {
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import { isDoctorRole } from "@/lib/chair-setup/helpers";
 import { AppointmentStatus } from "@prisma/client";
+import {
+  redirectIfStaffMemberMissing,
+  requireStaffMemberRole,
+} from "@/lib/rbac/staff-role";
 
 export default async function ChairSetupPage() {
   const ctx = await requireTenantContext();
+  redirectIfStaffMemberMissing(ctx);
+  const userRole = requireStaffMemberRole(ctx);
+  const staffId = ctx.staffMember!.id;
   const today = new Date().toISOString().split("T")[0];
   const dayStart = new Date(`${today}T00:00:00`);
   const dayEnd = new Date(`${today}T23:59:59.999`);
@@ -92,9 +99,6 @@ export default async function ChairSetupPage() {
       openedByName = [opener.firstName, opener.lastName].filter(Boolean).join(" ");
     }
   }
-
-  const userRole = ctx.staffMember?.role ?? "STAFF";
-  const staffId = ctx.staffMember?.id;
 
   let visibleChairs = chairs.filter((c) => c.isActive || c.status !== "INACTIVE");
   if (isDoctorRole(userRole) && staffId) {

@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 
 import { getServerAuthSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant/context";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { clearPendingTeamInvite } from "@/lib/tenant/team-invites";
@@ -13,6 +15,11 @@ export async function POST(request: Request) {
   }
 
   const ctx = await requireTenantContext();
+  try {
+    await requirePermission(PERMISSIONS.admin.write);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const body = (await request.json()) as { batchId?: string };
   const batchId = body.batchId;
 

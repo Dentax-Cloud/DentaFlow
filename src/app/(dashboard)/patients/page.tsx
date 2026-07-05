@@ -4,12 +4,12 @@ import { getPrimaryInsuranceStatusMap } from "@/app/(dashboard)/features/insuran
 import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { serializeMany } from "@/lib/utils/serialize";
-import { UserRole } from "@prisma/client";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { PatientsClient } from "./patients-client";
 
 export default async function PatientsPage() {
   const ctx = await requireRouteAccess("patients", "read");
-  const role = ctx.staffMember?.role ?? UserRole.OWNER;
+  const role = requireStaffMemberRole(ctx);
   const canWrite = hasPermission(role, PERMISSIONS.patients.write);
 
   const [patients, formFields, insuranceStatusMap] = await Promise.all([

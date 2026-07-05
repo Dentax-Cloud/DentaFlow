@@ -7,6 +7,8 @@
 // ============================================================
 
 import { requireTenantContext } from "@/lib/tenant/context"
+import { requirePermission } from "@/lib/rbac/guard"
+import { PERMISSIONS } from "@/lib/rbac/permissions"
 import { db }                   from "@/lib/db"
 import { revalidatePath }       from "next/cache"
 import { randomUUID }           from "crypto"
@@ -28,6 +30,14 @@ type PackInsuranceCodes = {
 /** DB `price` uses 0 as the unpriced sentinel; API layer exposes `sellingPrice: null`. */
 const UNPRICED_DB_PRICE = 0
 
+async function requireAdminWritePermission() {
+  await requirePermission(PERMISSIONS.admin.write)
+}
+
+async function requireAdminReadPermission() {
+  await requirePermission(PERMISSIONS.admin.read)
+}
+
 function sellingPriceFromDb(price: Prisma.Decimal | number): number | null {
   const n = Number(price)
   return n > UNPRICED_DB_PRICE ? n : null
@@ -47,6 +57,7 @@ function durationMinsFromDb(duration: number | null | undefined): number {
 export async function importFromGPMR(
   gpmrIds?: string[]
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   const tenant = await db.tenant.findUnique({
@@ -166,6 +177,7 @@ export async function setProcedurePrice(
     }>
   }
 ): Promise<void> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   // Verify procedure belongs to this tenant
@@ -225,6 +237,7 @@ export async function bulkSetPrices(
     costPrice:    number | null
   }>
 ): Promise<{ updated: number; errors: string[] }> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
   let updated = 0
   const errors: string[] = []
@@ -287,6 +300,7 @@ export async function getTenantProcedures(options?: {
   activeOnly?:   boolean
   search?:       string
 }) {
+  await requireAdminReadPermission()
   const ctx = await requireTenantContext()
 
   const where: Prisma.ProcedureCatalogWhereInput = { tenantId: ctx.tenantId }
@@ -398,6 +412,7 @@ export async function getAvailableGPMRProcedures(options?: {
   category?: string
   search?:   string
 }) {
+  await requireAdminReadPermission()
   const ctx = await requireTenantContext()
 
   const tenant = await db.tenant.findUnique({
@@ -497,6 +512,7 @@ export async function createCustomProcedure(input: {
   requiresPreAuth?:boolean
   isOnlineBookable?:boolean
 }): Promise<string> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   // Ensure code is unique for this tenant
@@ -567,6 +583,7 @@ export async function updateProcedure(
     workflowConfig?: Prisma.InputJsonValue
   }
 ): Promise<void> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   const { durationMins, ...rest } = input
@@ -588,6 +605,7 @@ export async function toggleProcedureActive(
   procedureId: string,
   isActive:    boolean
 ): Promise<void> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   await db.procedureCatalog.updateMany({
@@ -604,6 +622,7 @@ export async function toggleProcedureActive(
 export async function deleteCustomProcedure(
   procedureId: string
 ): Promise<void> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   const procedure = await db.procedureCatalog.findFirst({
@@ -642,6 +661,7 @@ export async function createBundle(input: {
     displayOrder:       number
   }>
 }): Promise<string> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   const tenant = await db.tenant.findUnique({
@@ -694,6 +714,7 @@ export async function updateBundle(
     }>
   }
 ): Promise<void> {
+  await requireAdminWritePermission()
   const ctx = await requireTenantContext()
 
   await db.procedureBundle.updateMany({
@@ -705,6 +726,7 @@ export async function updateBundle(
 }
 
 export async function getBundles() {
+  await requireAdminReadPermission()
   const ctx = await requireTenantContext()
 
   const bundles = await db.procedureBundle.findMany({
@@ -727,6 +749,7 @@ export async function getBundles() {
 // ── Get procedure categories ──────────────────────────────────
 
 export async function getProcedureCategories(): Promise<string[]> {
+  await requireAdminReadPermission()
   const ctx = await requireTenantContext()
 
   const result = await db.procedureCatalog.findMany({
@@ -744,6 +767,7 @@ export async function getProcedureCategories(): Promise<string[]> {
 // ── Get unpriced count for sidebar badge ─────────────────────
 
 export async function getUnpricedProcedureCount(): Promise<number> {
+  await requireAdminReadPermission()
   const ctx = await requireTenantContext()
 
   return db.procedureCatalog.count({

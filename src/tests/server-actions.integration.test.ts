@@ -6,6 +6,21 @@ import { SubscriptionPlan } from "@/lib/subscription/plan-types";
 
 describe("server actions integration (harness)", () => {
   beforeEach(() => {
+    const staffMember = {
+      id: "user_test",
+      tenantId: "tenant_test",
+      authUserId: "user_test",
+      email: "test@example.com",
+      firstName: "Test",
+      lastName: "User",
+      avatarUrl: null,
+      role: UserRole.OWNER,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    } as Parameters<typeof __setTestTenantContext>[0]["staffMember"];
+
     __setTestTenantContext({
       tenant: {
         id: "tenant_test",
@@ -28,20 +43,8 @@ describe("server actions integration (harness)", () => {
         updatedAt: new Date(),
         deletedAt: null,
       } as Parameters<typeof __setTestTenantContext>[0]["tenant"],
-      user: {
-        id: "user_test",
-        tenantId: "tenant_test",
-        authUserId: "user_test",
-        email: "test@example.com",
-        firstName: "Test",
-        lastName: "User",
-        avatarUrl: null,
-        role: UserRole.OWNER,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null,
-      } as Parameters<typeof __setTestTenantContext>[0]["user"],
+      staffMember,
+      user: staffMember,
       authUserId: "user_test",
       tenantSlug: "test-clinic",
       tenantId: "tenant_test",
@@ -56,7 +59,7 @@ describe("server actions integration (harness)", () => {
       currency: "AED",
       taxRate: 5,
       taxName: "VAT",
-    } as Parameters<typeof __setTestTenantContext>[0]);
+    } as unknown as Parameters<typeof __setTestTenantContext>[0]);
   });
 
   afterEach(() => {

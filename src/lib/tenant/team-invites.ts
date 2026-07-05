@@ -1,8 +1,10 @@
 import type { Tenant } from "@prisma/client";
 import { UserRole } from "@prisma/client";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { sendTeamInviteEmail } from "@/lib/mail";
+import { generateStaffRef } from "@/lib/ids/generate-ids";
+import { normalizeToInvitableRole } from "@/lib/tenant/team-roles";
 
 const PENDING_INVITES_KEY = "pendingTeamInvites";
 const EMAIL_INVITES_KEY = "emailInvites";
@@ -29,6 +31,30 @@ function parseTenantMetadata(raw: Tenant["metadata"]): TenantMetadata {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+/** Split on first space; single-word names use empty lastName. */
+export function splitInviteFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim();
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex === -1) {
+    return { firstName: trimmed, lastName: "" };
+  }
+  return {
+    firstName: trimmed.slice(0, spaceIndex).trim(),
+    lastName: trimmed.slice(spaceIndex + 1).trim(),
+  };
+}
+
+function parseInviteStaffRole(role: string): UserRole {
+  if (!(Object.values(UserRole) as string[]).includes(role)) {
+    throw new Error("Invalid invite role");
+  }
+  const asRole = role as UserRole;
+  const normalized = normalizeToInvitableRole(asRole);
+  if (normalized) return normalized;
+  if (asRole === UserRole.OWNER) return UserRole.OWNER;
+  throw new Error("Invalid invite role");
 }
 
 export function getPendingTeamInvite(tenant: Tenant, email: string): UserRole | null {
@@ -200,36 +226,83 @@ export async function acceptEmailInvite(params: {
   token: string;
   authUserId: string;
   email: string;
+  fullName: string;
 }) {
   const resolved = await resolveEmailInviteToken(params.token);
   if (!resolved || resolved.email !== normalizeEmail(params.email)) {
     throw new Error("Invalid or expired invite");
   }
 
-  const { randomUUID } = await import("crypto");
-  await db.tenant_memberships.upsert({
-    where: {
-      userId_tenantId: { userId: params.authUserId, tenantId: resolved.tenantId },
-    },
-    create: {
-      id: randomUUID(),
-      userId: params.authUserId,
-      tenantId: resolved.tenantId,
-      role: resolved.role,
-      isActive: true,
-      invitedEmail: resolved.email,
-      acceptedAt: new Date(),
-    },
-    update: {
-      role: resolved.role,
-      isActive: true,
-      acceptedAt: new Date(),
-    },
-  });
+  const normalizedEmail = normalizeEmail(params.email);
+  const staffRole = parseInviteStaffRole(resolved.role);
+  const { firstName, lastName } = splitInviteFullName(params.fullName);
 
-  await db.auth_users.update({
-    where: { id: params.authUserId },
-    data: { activeTenantId: resolved.tenantId },
+  await db.$transaction(async (tx) => {
+    await tx.tenant_memberships.upsert({
+      where: {
+        userId_tenantId: { userId: params.authUserId, tenantId: resolved.tenantId },
+      },
+      create: {
+        id: randomUUID(),
+        userId: params.authUserId,
+        tenantId: resolved.tenantId,
+        // Secondary/legacy — RBAC reads StaffMember.role only (see staff-role.ts).
+        role: resolved.role,
+        isActive: true,
+        invitedEmail: normalizedEmail,
+        acceptedAt: new Date(),
+      },
+      update: {
+        role: resolved.role,
+        isActive: true,
+        acceptedAt: new Date(),
+      },
+    });
+
+    const existingStaff = await tx.staffMember.findFirst({
+      where: {
+        tenantId: resolved.tenantId,
+        email: normalizedEmail,
+        deletedAt: null,
+      },
+    });
+
+    if (existingStaff) {
+      const staffRef =
+        existingStaff.staffRef ?? (await generateStaffRef(resolved.tenantId, staffRole));
+
+      await tx.staffMember.update({
+        where: { id: existingStaff.id },
+        data: {
+          authUserId: params.authUserId,
+          firstName: firstName || existingStaff.firstName,
+          lastName: lastName || existingStaff.lastName,
+          role: staffRole,
+          staffRef,
+          isActive: true,
+        },
+      });
+    } else {
+      const staffRef = await generateStaffRef(resolved.tenantId, staffRole);
+
+      await tx.staffMember.create({
+        data: {
+          tenantId: resolved.tenantId,
+          email: normalizedEmail,
+          firstName,
+          lastName: lastName || null,
+          role: staffRole,
+          authUserId: params.authUserId,
+          staffRef,
+          isActive: true,
+        },
+      });
+    }
+
+    await tx.auth_users.update({
+      where: { id: params.authUserId },
+      data: { activeTenantId: resolved.tenantId },
+    });
   });
 
   await clearPendingTeamInvite(resolved.tenantId, resolved.email);

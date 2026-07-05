@@ -2,10 +2,13 @@ export const runtime = "nodejs";
 
 import { redirect } from "next/navigation";
 import { getServerAuthSession } from "@/lib/auth";
-import { UserRole } from "@prisma/client";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getTenantContext } from "@/lib/tenant/context";
 import { isMaintenanceMode } from "@/lib/settings/platform-settings";
+import {
+  ACCOUNT_SETUP_INCOMPLETE_PATH,
+  requireStaffMemberRole,
+} from "@/lib/rbac/staff-role";
 
 export default async function DashboardLayout({
   children,
@@ -31,7 +34,11 @@ export default async function DashboardLayout({
     redirect("/pending-approval");
   }
 
-  const userRole = ctx.staffMember?.role ?? UserRole.OWNER;
+  if (!ctx.staffMember) {
+    redirect(ACCOUNT_SETUP_INCOMPLETE_PATH);
+  }
+
+  const userRole = requireStaffMemberRole(ctx);
 
   return (
     <DashboardShell

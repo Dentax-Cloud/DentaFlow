@@ -10,6 +10,7 @@ import { getPatientTreatmentPlanPreAuths } from "@/app/(dashboard)/features/insu
 import { getTenantInsuranceProviders } from "@/app/(dashboard)/features/admin/customization-actions";
 import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { mapPatientToFormValues } from "@/lib/tenant/sync-country-profile";
 import { PatientDetailClient } from "./PatientDetailClient";
 import { mapPatientTo360Profile } from "./map-patient-360";
@@ -26,7 +27,7 @@ export default async function PatientDetailPage({
   const { id } = await params;
   const { edit } = await searchParams;
   const ctx = await requireRouteAccess("patients", "read");
-  const role = ctx.staffMember?.role ?? UserRole.OWNER;
+  const role = requireStaffMemberRole(ctx);
   const canWrite = hasPermission(role, PERMISSIONS.patients.write);
   const showUploadConfigHint =
     role === UserRole.OWNER ||

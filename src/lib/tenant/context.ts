@@ -13,6 +13,7 @@ export type { TenantTrialInfo };
 
 export type TenantContext = {
   tenant: Tenant;
+  /** Authoritative RBAC role for this tenant — never infer from tenant_memberships.role. */
   staffMember: StaffMember | null;
   authUserId: string;
   tenantSlug: string;

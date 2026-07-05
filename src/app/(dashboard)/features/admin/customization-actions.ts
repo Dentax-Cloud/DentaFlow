@@ -1,11 +1,21 @@
 "use server";
 
 import { requireTenantContext } from "@/lib/tenant/context";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCountryProfile } from "@/lib/countries";
 import { deriveInsuranceProviderCode } from "@/lib/insurance/provider-code";
 import type { Prisma } from "@prisma/client";
+
+async function requireAdminWritePermission() {
+  await requirePermission(PERMISSIONS.admin.write);
+}
+
+async function requireAdminReadPermission() {
+  await requirePermission(PERMISSIONS.admin.read);
+}
 
 export async function getTenantInsuranceProviders() {
   const ctx = await requireTenantContext();
@@ -56,6 +66,7 @@ export async function addCustomInsuranceProvider(input: {
     defaultCoPayPercent: number;
   }>;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const code = deriveInsuranceProviderCode(input.name);
@@ -119,6 +130,7 @@ export async function updateInsuranceProvider(
     isActive: boolean;
   }>,
 ) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const payload = { ...data };
@@ -142,6 +154,7 @@ export async function updateInsuranceProvider(
 }
 
 export async function deleteCustomInsuranceProvider(id: string) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.tenantInsuranceProvider.updateMany({
@@ -161,6 +174,7 @@ export async function upsertFeeSchedule(input: {
   coPayPercent?: number;
   notes?: string;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const existing = await db.insuranceFeeSchedule.findFirst({
@@ -201,6 +215,7 @@ export async function upsertFeeSchedule(input: {
 }
 
 export async function getFeeSchedules(providerCode?: string) {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
 
   return db.insuranceFeeSchedule.findMany({
@@ -213,6 +228,7 @@ export async function getFeeSchedules(providerCode?: string) {
 }
 
 export async function getCustomFields(entity = "PATIENT") {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
 
   return db.tenantCustomField.findMany({
@@ -233,6 +249,7 @@ export async function createCustomField(input: {
   helpText?: string;
   section: string;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const safeKey = input.fieldKey
@@ -289,6 +306,7 @@ export async function updateCustomField(
     sortOrder: number;
   }>,
 ) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.tenantCustomField.updateMany({
@@ -300,6 +318,7 @@ export async function updateCustomField(
 }
 
 export async function deleteCustomField(id: string) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.tenantCustomField.updateMany({
@@ -311,6 +330,7 @@ export async function deleteCustomField(id: string) {
 }
 
 export async function getMembershipPlans() {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
   return db.membershipPlan.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
@@ -327,6 +347,7 @@ export async function createMembershipPlan(input: {
   discountPercent: number;
   includedServices?: Array<{ procedureCode: string; qty: number }>;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
   const tenant = await db.tenant.findUnique({
     where: { id: ctx.tenantId },
@@ -357,6 +378,7 @@ export async function assignMembership(input: {
   startDate: string;
   paidAmount: number;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const plan = await db.membershipPlan.findFirst({
@@ -388,6 +410,7 @@ export async function assignMembership(input: {
 }
 
 export async function getCorporateAccounts() {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
   return db.corporateAccount.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
@@ -408,6 +431,7 @@ export async function createCorporateAccount(input: {
   invoicingCycle: string;
   notes?: string;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.corporateAccount.create({
@@ -425,6 +449,7 @@ export async function linkPatientToCorporate(
   patientId: string,
   corporateAccountId: string,
 ) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.patient.update({
@@ -434,6 +459,7 @@ export async function linkPatientToCorporate(
 }
 
 export async function getPaymentMethods() {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
   return db.tenantPaymentMethod.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
@@ -446,6 +472,7 @@ export async function addPaymentMethod(input: {
   type: string;
   config?: Record<string, string>;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   const maxOrder = await db.tenantPaymentMethod.aggregate({
@@ -467,6 +494,7 @@ export async function addPaymentMethod(input: {
 }
 
 export async function getReferralContacts() {
+  await requireAdminReadPermission();
   const ctx = await requireTenantContext();
   return db.referralContact.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
@@ -483,6 +511,7 @@ export async function addReferralContact(input: {
   address?: string;
   notes?: string;
 }) {
+  await requireAdminWritePermission();
   const ctx = await requireTenantContext();
 
   await db.referralContact.create({

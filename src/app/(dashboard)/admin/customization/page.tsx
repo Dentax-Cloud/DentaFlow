@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
-import { requireTenantContext } from "@/lib/tenant/context";
+import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getCountryProfile } from "@/lib/countries";
 import { db } from "@/lib/db";
 import CustomizationClient from "./customization-client";
 
 export default async function CustomizationPage() {
-  const ctx = await requireTenantContext();
+  const ctx = await requireRouteAccess("admin", "read");
 
   const tenant = await db.tenant.findUnique({
     where: { id: ctx.tenantId },

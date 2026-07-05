@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
-import { requireTenantContext } from "@/lib/tenant/context";
-import { db } from "@/lib/db";
+import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getCountryProfile } from "@/lib/countries";
+import { db } from "@/lib/db";
 import DataImportClient from "./data-import-client";
 
 export default async function DataImportPage() {
-  const ctx = await requireTenantContext();
+  const ctx = await requireRouteAccess("admin", "read");
 
   const [tenant, customFields, importHistory] = await Promise.all([
     db.tenant.findUnique({

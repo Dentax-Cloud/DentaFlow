@@ -4,6 +4,8 @@ import { getServerAuthSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { processImport, type ImportMode } from "@/lib/import/import-processor";
 import type { ImportEntity } from "@/lib/import/template-generator";
 import { parseImportFileBuffer } from "@/lib/import/parse-upload-file";
@@ -18,6 +20,11 @@ export async function POST(request: Request) {
   }
 
   const ctx = await requireTenantContext();
+  try {
+    await requirePermission(PERMISSIONS.admin.write);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const formData = await request.formData();
   const file = formData.get("file");

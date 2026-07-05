@@ -53,6 +53,7 @@ export async function acceptTeamInviteAction(input: z.infer<typeof acceptSchema>
     token: parsed.data.token,
     authUserId: authUser.id,
     email,
+    fullName: parsed.data.name,
   });
 
   return { success: true as const, email };

@@ -1,3 +1,4 @@
+import { UserRole } from "@prisma/client";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { getRolePermissions, hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
@@ -6,12 +7,12 @@ import { getBranches, getAuditLogs, countAuditLogs } from "@/app/(dashboard)/fea
 import { serializeDecimal, serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { AdminClient } from "./admin-client";
 import { parseRecallSettings } from "@/lib/recall/helpers";
-import { UserRole } from "@prisma/client";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 
 export default async function AdminPage() {
   const ctx = await requireRouteAccess("admin", "read");
-  const role = ctx.staffMember?.role ?? ctx.user?.role ?? UserRole.OWNER;
+  const role = requireStaffMemberRole(ctx);
   const showUploadConfigHint =
     role === UserRole.OWNER ||
     role === UserRole.ADMIN ||

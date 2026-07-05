@@ -18,6 +18,10 @@ import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist
 import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import {
+  redirectIfStaffMemberMissing,
+  requireStaffMemberRole,
+} from "@/lib/rbac/staff-role";
 
 export default async function DashboardPage() {
   const session = await getServerAuthSession();
@@ -26,7 +30,8 @@ export default async function DashboardPage() {
   const ctx = await getTenantContext();
   if (!ctx) redirect("/select-org");
 
-  const userRole = ctx.staffMember?.role ?? "RECEPTIONIST";
+  redirectIfStaffMemberMissing(ctx);
+  const userRole = requireStaffMemberRole(ctx);
 
   if (isClinicalRole(userRole)) {
     redirect("/dashboard/doctor");

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { buildClinicProfileView } from "@/lib/tenant/clinic-profile";
 import { getCountryProfile } from "@/lib/countries";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
-import { UserRole } from "@prisma/client";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { ClinicProfileClient } from "@/components/clinic/clinic-profile-client";
 
 export default async function ClinicProfilePage() {
@@ -29,10 +29,7 @@ export default async function ClinicProfilePage() {
 
   const profile = buildClinicProfileView(ctx.tenant, settings, chairCount);
   const countryProfile = getCountryProfile(tenantRecord?.countryCode ?? ctx.tenant.countryCode ?? "AE");
-  const canEdit = hasPermission(
-    ctx.staffMember?.role ?? ctx.user?.role ?? UserRole.OWNER,
-    PERMISSIONS.admin.write,
-  );
+  const canEdit = hasPermission(requireStaffMemberRole(ctx), PERMISSIONS.admin.write);
 
   return (
     <ClinicProfileClient

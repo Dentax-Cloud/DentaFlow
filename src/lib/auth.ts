@@ -113,6 +113,7 @@ export const authOptions: NextAuthOptions = {
 
       const ctx = await loadMembershipContext(userId, preferredTenantId);
       token.activeTenantId = ctx.activeTenantId;
+      // Legacy membership role — not used for RBAC; permissions use StaffMember.role (see staff-role.ts).
       token.role = ctx.role;
       token.isSuperAdmin = ctx.isSuperAdmin;
       token.subscriptionStatus = ctx.subscriptionStatus;
@@ -124,6 +125,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.userId;
         session.user.activeTenantId = token.activeTenantId;
+        // Legacy membership role — not used for RBAC; permissions use StaffMember.role (see staff-role.ts).
         session.user.role = token.role;
         session.user.isSuperAdmin = token.isSuperAdmin;
         session.user.subscriptionStatus = token.subscriptionStatus;

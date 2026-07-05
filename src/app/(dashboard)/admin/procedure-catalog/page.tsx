@@ -6,7 +6,7 @@
 
 export const runtime = "nodejs"
 
-import { requireTenantContext }       from "@/lib/tenant/context"
+import { requireRouteAccess } from "@/lib/rbac/require-route-access"
 import { db }                         from "@/lib/db"
 import {
   getTenantProcedures,
@@ -18,7 +18,7 @@ import {
 import ProcedureCatalogClient         from "./procedure-catalog-client"
 
 export default async function ProcedureCatalogPage() {
-  const ctx = await requireTenantContext()
+  const ctx = await requireRouteAccess("admin", "read");
 
   // Fetch tenant settings
   const tenant = await db.tenant.findUnique({

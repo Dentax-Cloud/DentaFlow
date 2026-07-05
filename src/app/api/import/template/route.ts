@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 
 import { getServerAuthSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant/context";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import {
   generateImportTemplate,
   type ImportEntity,
@@ -16,6 +18,11 @@ export async function GET(request: Request) {
   }
 
   const ctx = await requireTenantContext();
+  try {
+    await requirePermission(PERMISSIONS.admin.read);
+  } catch {
+    return new Response("Forbidden", { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const raw = (searchParams.get("entity") ?? "PATIENT").toUpperCase();
   const entity = (VALID_ENTITIES.includes(raw as ImportEntity)

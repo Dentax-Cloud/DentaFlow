@@ -5,6 +5,7 @@ import {
   readDentaflowRoleFromMetadata,
   dentaflowRoleMetadata,
 } from "@/lib/tenant/team-roles";
+import { splitInviteFullName } from "@/lib/tenant/team-invites";
 
 describe("team invite role mapping", () => {
   it("stores and reads dentaflow role metadata", () => {
@@ -22,5 +23,16 @@ describe("team invite role mapping", () => {
 
   it("falls back to receptionist when no invite role", () => {
     expect(resolveProvisionedUserRole({})).toBe(UserRole.RECEPTIONIST);
+  });
+
+  it("splits invite full name on first space", () => {
+    expect(splitInviteFullName("Jane Doe")).toEqual({
+      firstName: "Jane",
+      lastName: "Doe",
+    });
+    expect(splitInviteFullName("Madonna")).toEqual({
+      firstName: "Madonna",
+      lastName: "",
+    });
   });
 });
