@@ -136,6 +136,8 @@ export async function calculateInsuranceSplit(input: {
   const preAuthOverride = context.policyId
     ? await resolveApprovedPreAuthAmounts(context.policyId, input.totalAmount)
     : null;
+  // Pre-auth honoring requires a real PatientInsurancePolicy row (policyId).
+  // Legacy Patient.insurance* fallback never sets policyId — no pre-auth path there.
 
   if (preAuthOverride) {
     return {

@@ -929,6 +929,7 @@ model Invoice {
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items                 InvoiceItem[]
   payments              Payment[]
+  claims                Claim[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId])
@@ -1002,6 +1003,7 @@ model PatientInsurancePolicy {
   provider               TenantInsuranceProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
   treatmentEstimates     TreatmentEstimate[]
   preAuthorizations      PreAuthorization[]
+  claims                 Claim[]
 
   @@index([tenantId, patientId])
   @@index([tenantId, patientId, rank, isActive])
@@ -1058,20 +1060,37 @@ model PreAuthorization {
 }
 
 model Claim {
-  id          String          @id @default(cuid())
-  tenantId    String
-  policyId    String
-  invoiceId   String?
-  claimNumber String?
-  amount      Decimal         @db.Decimal(12, 2)
-  status      ClaimStatus     @default(DRAFT)
-  submittedAt DateTime?
-  notes       String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                String          @id @default(cuid())
+  tenantId          String
+  policyId          String
+  invoiceId         String
+  appealedClaimId   String?
+  claimNumber       String?
+  amount            Decimal         @db.Decimal(12, 2)
+  submittedAmount   Decimal         @db.Decimal(12, 2)
+  approvedAmount    Decimal?        @db.Decimal(12, 2)
+  paidAmount        Decimal?        @db.Decimal(12, 2)
+  paymentVariance   Decimal?        @db.Decimal(12, 2)
+  status            ClaimStatus     @default(DRAFT)
+  claimFormat       ClaimFormat     @default(MANUAL)
+  procedureSnapshot Json
+  submittedAt       DateTime?
+  decisionAt        DateTime?
+  denialReason      String?
+  denialCategory    ClaimDenialCategory?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  policy            PatientInsurancePolicy  @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  invoice           Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  appealedClaim     Claim?                  @relation("ClaimAppeal", fields: [appealedClaimId], references: [id], onDelete: SetNull)
+  appeals           Claim[]                 @relation("ClaimAppeal")
 
   @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, policyId])
 }
 
 model Lead {
@@ -2057,12 +2076,28 @@ enum PreAuthStatus {
   EXPIRED
 }
 
+enum ClaimFormat {
+  MANUAL
+}
+
 enum ClaimStatus {
   DRAFT
   SUBMITTED
+  IN_REVIEW
   APPROVED
+  PARTIALLY_APPROVED
   DENIED
+  APPEALED
   PAID
+  WRITTEN_OFF
+}
+
+enum ClaimDenialCategory {
+  COVERAGE
+  AUTHORIZATION
+  CODING
+  DOCUMENTATION
+  OTHER
 }
 
 enum LeadStatus {

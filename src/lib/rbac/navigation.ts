@@ -178,6 +178,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/billing/claims",
+    label: "Insurance claims",
+    icon: Receipt,
+    resource: "billing",
+    action: "read",
+  },
+  {
     href: "/billing/end-of-day",
     label: "End of day",
     icon: BarChart3,

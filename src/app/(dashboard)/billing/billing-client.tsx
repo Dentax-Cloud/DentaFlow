@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -189,7 +190,11 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
             Outstanding: {formatCurrency(totalOutstanding)}
           </p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/billing/claims">Insurance claims</Link>
+          </Button>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -305,6 +310,7 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="space-y-2">
