@@ -174,12 +174,12 @@ export async function atomicIncrement(
   entity: string,
 ): Promise<number> {
   const result = await db.$queryRaw<Array<{ counter: number }>>`
-    INSERT INTO "DailyCounter" ("id", "tenantId", "date", "entity", "counter")
-    VALUES (gen_random_uuid()::text, ${tenantId}, ${date}, ${entity}, 1)
+    INSERT INTO "DailyCounter" ("id", "tenantId", "date", "entity", "counter", "updatedAt")
+    VALUES (gen_random_uuid()::text, ${tenantId}, ${date}, ${entity}, 1, CURRENT_TIMESTAMP)
     ON CONFLICT ("tenantId", "date", "entity")
     DO UPDATE SET
       "counter" = "DailyCounter"."counter" + 1,
-      "updatedAt" = NOW()
+      "updatedAt" = CURRENT_TIMESTAMP
     RETURNING "counter"
   `;
   return result[0]?.counter ?? 1;
