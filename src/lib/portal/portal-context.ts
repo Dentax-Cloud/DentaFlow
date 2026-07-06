@@ -36,6 +36,7 @@ export type PortalContext = {
     bookingMaxDays: number;
     bookingBufferMins: number;
     portalWelcomeMsg: string | null;
+    timezone: string;
   };
 };
 
@@ -87,6 +88,7 @@ export async function requirePortalContext(slug: string): Promise<PortalContext>
         bookingMaxDays: true,
         bookingBufferMins: true,
         portalWelcomeMsg: true,
+        timezone: true,
         subscriptionPlan: true,
       },
     }),

@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createBlockTime } from "@/app/(dashboard)/features/appointments/actions";
+import { splitDateTimeLocalValue } from "@/lib/datetime/clinic-timezone";
 import type { Chair, Doctor, StaffMember } from "@prisma/client";
 
 type DoctorWithUser = Doctor & { user: StaffMember };
@@ -71,14 +72,19 @@ export function BlockTimeDialog({
       return;
     }
 
+    const startParts = splitDateTimeLocalValue(startTime);
+    const endParts = splitDateTimeLocalValue(endTime);
+
     setLoading(true);
     const result = await createBlockTime({
       title: title.trim(),
       notes: notes || undefined,
       doctorId: doctorId || undefined,
       chairId: chairId || undefined,
-      startTime: new Date(startTime).toISOString(),
-      endTime: new Date(endTime).toISOString(),
+      startDate: startParts.date,
+      startTime: startParts.time,
+      endDate: endParts.date,
+      endTime: endParts.time,
     });
     setLoading(false);
 

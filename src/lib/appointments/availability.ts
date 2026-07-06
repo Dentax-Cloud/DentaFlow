@@ -1,4 +1,10 @@
 import { db } from "@/lib/db";
+import {
+  clinicMinutesSinceMidnight,
+  getClinicDayBounds,
+  getClinicNowParts,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
 
 export type TimeSlot = {
   time: string;
@@ -92,6 +98,12 @@ export async function getDoctorSlots(input: {
 }): Promise<TimeSlot[]> {
   const { tenantId, doctorId, date, durationMins } = input;
 
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { timezone: true },
+  });
+  const clinicTz = resolveClinicTimezone(tenant?.timezone);
+
   const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
 
   const exception = await db.doctorScheduleException.findFirst({
@@ -155,8 +167,7 @@ export async function getDoctorSlots(input: {
     current += stepMins;
   }
 
-  const dateStart = new Date(`${date}T00:00:00.000Z`);
-  const dateEnd = new Date(`${date}T23:59:59.999Z`);
+  const { start: dateStart, end: dateEnd } = getClinicDayBounds(date, clinicTz);
 
   const appointmentDoctorId = await resolveDoctorRecordId(doctorId, tenantId);
 
@@ -185,21 +196,22 @@ export async function getDoctorSlots(input: {
     select: { requestedTime: true, durationMins: true },
   });
 
-  const now = new Date();
-  const isToday = date === now.toISOString().split("T")[0];
-  const nowMins = now.getHours() * 60 + now.getMinutes() + 30;
+  const { dateStr: clinicToday, minutesSinceMidnight: nowMins } =
+    getClinicNowParts(clinicTz);
+  const isToday = date === clinicToday;
+  const pastSlotCutoff = nowMins + 30;
 
   return allSlots.map((slot) => {
     const slotStartMins = toMinutes(slot.time);
     const slotEndMins = toMinutes(slot.endTime);
 
-    if (isToday && slotStartMins <= nowMins) {
+    if (isToday && slotStartMins <= pastSlotCutoff) {
       return { ...slot, available: false };
     }
 
     const apptConflict = existingAppts.some((appt) => {
-      const aStart = appt.startTime.getHours() * 60 + appt.startTime.getMinutes();
-      const aEnd = appt.endTime.getHours() * 60 + appt.endTime.getMinutes();
+      const aStart = clinicMinutesSinceMidnight(appt.startTime, clinicTz);
+      const aEnd = clinicMinutesSinceMidnight(appt.endTime, clinicTz);
       return slotStartMins < aEnd && slotEndMins > aStart;
     });
 

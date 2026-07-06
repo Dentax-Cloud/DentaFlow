@@ -52,6 +52,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       chairs={serializeMany(chairs)}
       doctors={doctors.map((doctor) => serializeEntity(doctor, { user: "object" }))}
       tenantId={ctx.tenant.id}
+      clinicTimezone={ctx.tenant.timezone ?? "Asia/Dubai"}
       initialAppointmentId={appointmentId}
       emergencyWaiting={emergencyStats.filter((e) => e.status === "WAITING").length}
       emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}

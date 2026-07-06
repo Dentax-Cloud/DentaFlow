@@ -2,6 +2,7 @@
 
 import { requirePortalContext } from "@/lib/portal/portal-context";
 import { getAvailableSlots } from "@/lib/portal/availability";
+import { clinicLocalToUtc, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 import { db } from "@/lib/db";
 import { sendMail } from "@/lib/mail";
 import { randomUUID } from "crypto";
@@ -125,7 +126,12 @@ export async function submitBookingRequest(input: {
   });
 
   if (ctx.tenant.autoConfirmBooking) {
-    const startTime = new Date(`${input.requestedDate}T${input.requestedTime}:00`);
+    const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+    const startTime = clinicLocalToUtc(
+      input.requestedDate,
+      input.requestedTime,
+      clinicTz,
+    );
     const endTime = new Date(startTime.getTime() + input.durationMins * 60 * 1000);
 
     const appointment = await db.appointment.create({

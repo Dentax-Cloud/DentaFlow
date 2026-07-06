@@ -139,6 +139,7 @@ export default async function DoctorDashboardPage() {
       unreadCount={unreadNotifications}
       totalThisWeek={totalThisWeek}
       today={today.toISOString()}
+      clinicTimezone={ctx.tenant.timezone ?? "Asia/Dubai"}
     />
     </div>
   );

@@ -10,6 +10,11 @@ import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments
 import { beginChairsideVisit } from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
+import {
+  formatClinicDate,
+  formatClinicTime,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
 
 type AppointmentDetail = {
   id: string;
@@ -119,11 +124,14 @@ export function AppointmentDrawer({
   appointmentId,
   onClose,
   staffRole,
+  clinicTimezone,
 }: {
   appointmentId: string | null;
   onClose: () => void;
   staffRole?: UserRole;
+  clinicTimezone: string;
 }) {
+  const resolvedTimezone = resolveClinicTimezone(clinicTimezone);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
@@ -293,26 +301,15 @@ export function AppointmentDrawer({
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-4 w-4" />
                       <span>
-                        {new Date(appointment.startTime).toLocaleDateString("en-AE", {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
+                        {formatClinicDate(new Date(appointment.startTime), resolvedTimezone)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-4 w-4" />
                       <span>
-                        {new Date(appointment.startTime).toLocaleTimeString("en-AE", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatClinicTime(new Date(appointment.startTime), resolvedTimezone)}
                         {" → "}
-                        {new Date(appointment.endTime).toLocaleTimeString("en-AE", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatClinicTime(new Date(appointment.endTime), resolvedTimezone)}
                       </span>
                     </div>
                     {appointment.doctor && (
@@ -415,26 +412,15 @@ export function AppointmentDrawer({
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
                   <span>
-                    {new Date(appointment.startTime).toLocaleDateString("en-AE", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
+                    {formatClinicDate(new Date(appointment.startTime), resolvedTimezone)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {new Date(appointment.startTime).toLocaleTimeString("en-AE", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatClinicTime(new Date(appointment.startTime), resolvedTimezone)}
                     {" → "}
-                    {new Date(appointment.endTime).toLocaleTimeString("en-AE", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatClinicTime(new Date(appointment.endTime), resolvedTimezone)}
                   </span>
                 </div>
                 {appointment.doctor && (

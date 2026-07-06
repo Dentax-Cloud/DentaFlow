@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import {
+  calendarGridToClinicUtc,
+  clinicDateString,
+  getClinicDayBounds,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
+import {
   Calendar as BigCalendarBase,
   dateFnsLocalizer,
   type Event,
@@ -47,6 +53,12 @@ type ChairWithRelations = Chair & {
   appointments: Appointment[];
 };
 
+const CALENDAR_HIDDEN_STATUSES = new Set(["CANCELED", "NO_SHOW"]);
+
+function isVisibleOnCalendar(status: string) {
+  return !CALENDAR_HIDDEN_STATUSES.has(status);
+}
+
 const statusLabel: Record<string, string> = {
   SCHEDULED: "Scheduled",
   CONFIRMED: "Confirmed",
@@ -74,6 +86,7 @@ export function AppointmentsClient({
   chairs,
   doctors,
   tenantId,
+  clinicTimezone,
   initialAppointmentId,
   emergencyWaiting = 0,
   emergencyImmediate = 0,
@@ -84,12 +97,14 @@ export function AppointmentsClient({
   chairs: ChairWithRelations[];
   doctors: DoctorWithRelations[];
   tenantId: string;
+  clinicTimezone: string;
   initialAppointmentId?: string;
   emergencyWaiting?: number;
   emergencyImmediate?: number;
   insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
   staffRole?: UserRole;
 }) {
+  const resolvedTimezone = resolveClinicTimezone(clinicTimezone);
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -103,6 +118,10 @@ export function AppointmentsClient({
   );
   const realtimeEnabled = isRealtimeAvailable();
   const { confirmBeforeStatusChange, dialog: chairsideDialog } = useChairsideAppointmentConfirm();
+
+  useEffect(() => {
+    setAppointments(initialAppointments);
+  }, [initialAppointments]);
 
   useEffect(() => {
     if (initialAppointmentId) {
@@ -123,7 +142,9 @@ export function AppointmentsClient({
   }, []);
 
   const events: Event[] = useMemo(() => {
-    return appointments.map((a) => ({
+    return appointments
+      .filter((a) => isVisibleOnCalendar(a.status))
+      .map((a) => ({
       title: a.isBlock
         ? `Blocked: ${a.title}`
         : `${a.patient?.firstName ?? ""} ${a.patient?.lastName ?? ""} — ${a.title}`.trim(),
@@ -141,6 +162,9 @@ export function AppointmentsClient({
     const channel = pusher.subscribe(channelName);
     channel.bind("appointment:updated", (data: AppointmentWithRelations) => {
       setAppointments((prev) => {
+        if (!isVisibleOnCalendar(data.status)) {
+          return prev.filter((a) => a.id !== data.id);
+        }
         const idx = prev.findIndex((a) => a.id === data.id);
         if (idx >= 0) {
           const next = [...prev];
@@ -253,44 +277,51 @@ export function AppointmentsClient({
     start: Date,
     end: Date,
   ) {
-    const startIso = start.toISOString();
-    const endIso = end.toISOString();
+    const startUtc = calendarGridToClinicUtc(start, resolvedTimezone);
+    const endUtc = calendarGridToClinicUtc(end, resolvedTimezone);
 
-    // optimistic
     setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, startTime: start, endTime: end } : a)),
+      prev.map((a) =>
+        a.id === id ? { ...a, startTime: startUtc, endTime: endUtc } : a,
+      ),
     );
 
     const result = await updateAppointmentTime({
       id,
-      startTime: startIso,
-      endTime: endIso,
+      startDate: format(start, "yyyy-MM-dd"),
+      startTime: format(start, "HH:mm"),
+      endDate: format(end, "yyyy-MM-dd"),
+      endTime: format(end, "HH:mm"),
     });
 
     if (!result.success) {
       toast.error(result.error);
+      router.refresh();
       return;
     }
 
     toast.success("Appointment rescheduled");
+    router.refresh();
   }
 
   const chairsWithLiveAppointments = useMemo(() => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayStr = clinicDateString(new Date(), resolvedTimezone);
+    const { start: todayStart, end: todayEnd } = getClinicDayBounds(
+      todayStr,
+      resolvedTimezone,
+    );
 
     const live = appointments.filter((a) => {
+      if (!isVisibleOnCalendar(a.status)) return false;
       const st = new Date(a.startTime);
-      return st >= todayStart && st <= todayEnd && a.status !== "CANCELED";
+      return st >= todayStart && st <= todayEnd;
     });
 
     return chairs.map((c) => ({
       chair: c,
       liveAppointments: live.filter((a) => a.chairId === c.id),
     }));
-  }, [appointments, chairs]);
+  }, [appointments, chairs, resolvedTimezone]);
 
   return (
     <div className="space-y-6">
@@ -519,7 +550,9 @@ export function AppointmentsClient({
               <CardTitle className="text-base">Appointments (drag to assign)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {appointments.filter((apt) => !apt.isBlock).map((apt) => (
+              {appointments
+                .filter((apt) => !apt.isBlock && isVisibleOnCalendar(apt.status))
+                .map((apt) => (
                 <div
                   key={apt.id}
                   draggable
@@ -615,6 +648,7 @@ export function AppointmentsClient({
         appointmentId={selectedAppointmentId}
         onClose={() => setSelectedAppointmentId(null)}
         staffRole={staffRole}
+        clinicTimezone={resolvedTimezone}
       />
 
       <SlotActionMenu

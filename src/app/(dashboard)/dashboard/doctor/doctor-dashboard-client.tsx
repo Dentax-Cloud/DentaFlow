@@ -54,6 +54,7 @@ export default function DoctorDashboardClient({
   unreadCount,
   totalThisWeek,
   today,
+  clinicTimezone,
 }: {
   doctorName: string;
   role: UserRole;
@@ -61,6 +62,7 @@ export default function DoctorDashboardClient({
   unreadCount: number;
   totalThisWeek: number;
   today: string;
+  clinicTimezone: string;
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -273,6 +275,7 @@ export default function DoctorDashboardClient({
         appointmentId={selectedId}
         onClose={() => setSelectedId(null)}
         staffRole={role}
+        clinicTimezone={clinicTimezone}
       />
     </div>
   );

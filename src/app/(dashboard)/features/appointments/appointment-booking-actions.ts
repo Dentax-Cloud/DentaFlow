@@ -7,6 +7,11 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { getDoctorSlots } from "@/lib/appointments/availability";
+import {
+  clinicLocalToUtc,
+  getClinicDayBounds,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
 import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import { generateAppointmentRef } from "@/lib/ids/generate-ids";
 import type { AppointmentStatus, Prisma } from "@prisma/client";
@@ -60,9 +65,8 @@ export async function bookAppointment(input: {
     };
   }
 
-  const [y, m, d] = input.date.split("-").map(Number);
-  const [h, min] = input.startTime.split(":").map(Number);
-  const start = new Date(y, m - 1, d, h, min);
+  const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+  const start = clinicLocalToUtc(input.date, input.startTime, clinicTz);
   const end = new Date(start.getTime() + input.durationMins * 60 * 1000);
 
   const doctorRecordId = await resolveDoctorRecordId(
@@ -166,10 +170,14 @@ export async function getMyAppointments(input?: {
   });
   if (!doctorRecord) return [];
 
-  const today = input?.date ?? new Date().toISOString().split("T")[0];
-  const [y, m, d] = today.split("-").map(Number);
-  const dayStart = new Date(y, m - 1, d, 0, 0, 0);
-  const dayEnd = new Date(y, m - 1, d, 23, 59, 59);
+  const tenant = await db.tenant.findUnique({
+    where: { id: ctx.tenantId },
+    select: { timezone: true },
+  });
+  const clinicTz = resolveClinicTimezone(tenant?.timezone);
+  const today =
+    input?.date ?? new Date().toISOString().split("T")[0];
+  const { start: dayStart, end: dayEnd } = getClinicDayBounds(today, clinicTz);
 
   const statusFilter: Prisma.AppointmentWhereInput = input?.status
     ? { status: { in: input.status as AppointmentStatus[] } }

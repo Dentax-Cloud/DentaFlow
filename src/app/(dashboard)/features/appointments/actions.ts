@@ -13,9 +13,13 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { broadcastAppointmentUpdate } from "@/lib/pusher";
 import { refreshPatientRiskScores } from "@/lib/recall/helpers";
 import { conflictMessage, findSchedulingConflicts } from "@/lib/appointments/conflicts";
+import {
+  clinicLocalToUtc,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
 import { getStaffActor } from "@/lib/tenant/context";
 import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
-import { AuditAction } from "@prisma/client";
+import { AuditAction, AppointmentStatus } from "@prisma/client";
 import {
   createBlockTimeSchema,
   updateAppointmentChairSchema,
@@ -27,8 +31,9 @@ export const createBlockTime = createAction({
   schema: createBlockTimeSchema,
   permission: () => requirePermission(PERMISSIONS.appointments.write),
   handler: async (input, ctx) => {
-    const start = new Date(input.startTime);
-    const end = new Date(input.endTime);
+    const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+    const start = clinicLocalToUtc(input.startDate, input.startTime, clinicTz);
+    const end = clinicLocalToUtc(input.endDate, input.endTime, clinicTz);
 
     const conflicts = await findSchedulingConflicts(ctx.tenant.id, {
       startTime: start,
@@ -237,8 +242,9 @@ export const updateAppointmentTime = createAction({
     });
     if (!existing) throw new Error("Appointment not found");
 
-    const start = new Date(input.startTime);
-    const end = new Date(input.endTime);
+    const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+    const start = clinicLocalToUtc(input.startDate, input.startTime, clinicTz);
+    const end = clinicLocalToUtc(input.endDate, input.endTime, clinicTz);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
       throw new Error("Invalid time range");
     }
@@ -267,7 +273,12 @@ export const updateAppointmentTime = createAction({
       action: AuditAction.UPDATE,
       entity: "Appointment",
       entityId: appointment.id,
-      metadata: { startTime: input.startTime, endTime: input.endTime },
+      metadata: {
+        startDate: input.startDate,
+        startTime: input.startTime,
+        endDate: input.endDate,
+        endTime: input.endTime,
+      },
     });
 
     return appointment;
@@ -277,11 +288,17 @@ export const updateAppointmentTime = createAction({
 export async function getAppointments(
   tenantId: string,
   range?: { start: Date; end: Date },
+  options?: { includeCanceled?: boolean },
 ) {
+  const statusFilter = options?.includeCanceled
+    ? {}
+    : { status: { notIn: [AppointmentStatus.CANCELED, AppointmentStatus.NO_SHOW] } };
+
   return db.appointment.findMany({
     where: {
       tenantId,
       deletedAt: null,
+      ...statusFilter,
       ...(range
         ? { startTime: { gte: range.start, lte: range.end } }
         : {}),

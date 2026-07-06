@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { sendAppointmentReminder, sendTrialExpiryWarning, sendMail } from "@/lib/mail";
 import { parseRecallSettings } from "@/lib/recall/helpers";
 import { expireStaleChairsideSessions } from "@/lib/clinical/chairside-lifecycle";
+import { formatClinicTime, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -166,7 +167,7 @@ async function sendRemindersForWindow(params: {
         },
       },
       provider: { select: { firstName: true, lastName: true } },
-      tenant: { select: { name: true } },
+      tenant: { select: { name: true, timezone: true } },
     },
   });
 
@@ -182,10 +183,10 @@ async function sendRemindersForWindow(params: {
         patientName: `${appt.patient.firstName} ${appt.patient.lastName}`.trim(),
         clinicName: appt.tenant.name,
         appointmentDate: appt.startTime,
-        appointmentTime: appt.startTime.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        appointmentTime: formatClinicTime(
+          appt.startTime,
+          resolveClinicTimezone(appt.tenant.timezone),
+        ),
         doctorName: formatDoctorName(appt.doctor, appt.provider),
       });
 
