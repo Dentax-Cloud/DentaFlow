@@ -131,8 +131,8 @@ export function TreatmentEstimatePanel({
     if (!preAuth) return;
     startTransition(async () => {
       try {
-        await submitPreAuthorization(preAuth.id, referenceNumber);
-        toast.success("Pre-authorization submitted");
+        const result = await submitPreAuthorization(preAuth.id, referenceNumber);
+        toast.success(result.submission.message);
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Could not submit pre-authorization");

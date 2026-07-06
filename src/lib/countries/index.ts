@@ -9,7 +9,7 @@ import { USA } from "./profiles/us";
 import { INDIA } from "./profiles/in";
 import { SINGAPORE } from "./profiles/sg";
 import { AUSTRALIA } from "./profiles/au";
-import type { CountryProfile } from "./types";
+import type { CountryProfile, PlatformInsuranceProvider } from "./types";
 
 export const COUNTRY_PROFILES: Record<string, CountryProfile> = {
   AE: UAE,
@@ -29,8 +29,23 @@ export const SUPPORTED_COUNTRIES = Object.values(COUNTRY_PROFILES).sort((a, b) =
   a.name.localeCompare(b.name),
 );
 
+export function enrichPlatformInsuranceProvider(
+  provider: PlatformInsuranceProvider,
+): PlatformInsuranceProvider {
+  return {
+    ...provider,
+    claimSubmissionMethod:
+      provider.claimSubmissionMethod ??
+      (provider.claimEmail ? "EMAIL" : "MANUAL"),
+  };
+}
+
 export function getCountryProfile(countryCode: string): CountryProfile {
-  return COUNTRY_PROFILES[countryCode.toUpperCase()] ?? UAE;
+  const base = COUNTRY_PROFILES[countryCode.toUpperCase()] ?? UAE;
+  return {
+    ...base,
+    insuranceProviders: base.insuranceProviders.map(enrichPlatformInsuranceProvider),
+  };
 }
 
 export function getCurrency(countryCode: string): string {

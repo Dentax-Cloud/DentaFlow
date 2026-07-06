@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCountryProfile } from "@/lib/countries";
 import { deriveInsuranceProviderCode } from "@/lib/insurance/provider-code";
-import type { Prisma } from "@prisma/client";
+import type { ClaimSubmissionMethod, Prisma } from "@prisma/client";
 
 async function requireAdminWritePermission() {
   await requirePermission(PERMISSIONS.admin.write);
@@ -26,28 +26,41 @@ export async function getTenantInsuranceProviders() {
     orderBy: { sortOrder: "asc" },
   });
 
-  const platformProviders = profile.insuranceProviders.map((p) => ({
-    id: `platform_${p.code}`,
-    code: p.code,
-    name: p.name,
-    nameAr: p.nameAr,
-    shortName: p.shortName,
-    isCustom: false,
-    isActive: true,
-    requiresPreAuth: p.requiresPreAuth,
-    networkTypes: p.networkTypes,
-    source: "platform" as const,
-  }));
+  const tenantByCode = new Map(custom.map((row) => [row.code, row]));
 
-  const customProviders = custom.map((c) => ({
-    ...c,
-    networkTypes: c.networkTypes as Array<{
-      code: string;
-      name: string;
-      defaultCoPayPercent: number;
-    }>,
-    source: "tenant" as const,
-  }));
+  const platformProviders = profile.insuranceProviders.map((p) => {
+    const override = tenantByCode.get(p.code);
+    return {
+      id: override?.id ?? `platform_${p.code}`,
+      code: p.code,
+      name: p.name,
+      nameAr: p.nameAr,
+      shortName: p.shortName,
+      isCustom: false,
+      isActive: true,
+      requiresPreAuth: override?.requiresPreAuth ?? p.requiresPreAuth,
+      claimEmail: override?.claimEmail ?? p.claimEmail ?? null,
+      claimSubmissionMethod:
+        override?.claimSubmissionMethod ?? p.claimSubmissionMethod ?? "MANUAL",
+      claimsPortalUrl: override?.claimsPortalUrl ?? p.claimsPortalUrl ?? null,
+      turnaroundDays: override?.turnaroundDays ?? p.turnaroundDays ?? null,
+      networkTypes: p.networkTypes,
+      hasTenantOverride: Boolean(override),
+      source: "platform" as const,
+    };
+  });
+
+  const customProviders = custom
+    .filter((c) => c.isCustom)
+    .map((c) => ({
+      ...c,
+      networkTypes: c.networkTypes as Array<{
+        code: string;
+        name: string;
+        defaultCoPayPercent: number;
+      }>,
+      source: "tenant" as const,
+    }));
 
   return { platformProviders, customProviders };
 }
@@ -57,7 +70,10 @@ export async function addCustomInsuranceProvider(input: {
   nameAr?: string;
   shortName: string;
   requiresPreAuth: boolean;
+  claimSubmissionMethod?: ClaimSubmissionMethod;
   claimEmail?: string;
+  claimsPortalUrl?: string;
+  turnaroundDays?: number;
   contactPhone?: string;
   notes?: string;
   networkTypes: Array<{
@@ -90,6 +106,14 @@ export async function addCustomInsuranceProvider(input: {
     _max: { sortOrder: true },
   });
 
+  const submissionMethod =
+    input.claimSubmissionMethod ??
+    (input.claimEmail?.trim() ? "EMAIL" : "MANUAL");
+
+  if (submissionMethod === "PORTAL" && !input.claimsPortalUrl?.trim()) {
+    throw new Error("Portal URL is required when submission method is Portal");
+  }
+
   await db.tenantInsuranceProvider.create({
     data: {
       tenantId: ctx.tenantId,
@@ -101,7 +125,10 @@ export async function addCustomInsuranceProvider(input: {
       isCustom: true,
       isActive: true,
       requiresPreAuth: input.requiresPreAuth,
+      claimSubmissionMethod: submissionMethod,
       claimEmail: input.claimEmail?.trim() || null,
+      claimsPortalUrl: input.claimsPortalUrl?.trim() || null,
+      turnaroundDays: input.turnaroundDays ?? null,
       contactPhone: input.contactPhone?.trim() || null,
       notes: input.notes?.trim() || null,
       networkTypes: input.networkTypes.map((n) => ({
@@ -123,7 +150,10 @@ export async function updateInsuranceProvider(
     nameAr: string;
     shortName: string;
     requiresPreAuth: boolean;
+    claimSubmissionMethod: ClaimSubmissionMethod;
     claimEmail: string;
+    claimsPortalUrl: string;
+    turnaroundDays: number;
     contactPhone: string;
     notes: string;
     networkTypes: Array<{ code: string; name: string; defaultCoPayPercent: number }>;
@@ -134,6 +164,13 @@ export async function updateInsuranceProvider(
   const ctx = await requireTenantContext();
 
   const payload = { ...data };
+  if (
+    payload.claimSubmissionMethod === "PORTAL" &&
+    payload.claimsPortalUrl !== undefined &&
+    !payload.claimsPortalUrl?.trim()
+  ) {
+    throw new Error("Portal URL is required when submission method is Portal");
+  }
   if (payload.networkTypes) {
     if (payload.networkTypes.length === 0) {
       throw new Error("Add at least one network type");
@@ -151,6 +188,121 @@ export async function updateInsuranceProvider(
   });
 
   revalidatePath("/admin/customization");
+}
+
+export async function overridePlatformInsuranceProvider(input: {
+  platformCode: string;
+  claimSubmissionMethod: ClaimSubmissionMethod;
+  claimEmail?: string;
+  claimsPortalUrl?: string;
+  turnaroundDays?: number;
+}) {
+  await requireAdminWritePermission();
+  const ctx = await requireTenantContext();
+  const profile = getCountryProfile(ctx.tenant.countryCode ?? "AE");
+  const platform = profile.insuranceProviders.find((p) => p.code === input.platformCode);
+  if (!platform) {
+    throw new Error("Platform insurance provider not found");
+  }
+  if (input.claimSubmissionMethod === "PORTAL" && !input.claimsPortalUrl?.trim()) {
+    throw new Error("Portal URL is required when submission method is Portal");
+  }
+
+  const maxOrder = await db.tenantInsuranceProvider.aggregate({
+    where: { tenantId: ctx.tenantId },
+    _max: { sortOrder: true },
+  });
+
+  const claimEmail =
+    input.claimEmail?.trim() || platform.claimEmail?.trim() || null;
+
+  await db.tenantInsuranceProvider.upsert({
+    where: {
+      tenantId_code: {
+        tenantId: ctx.tenantId,
+        code: platform.code,
+      },
+    },
+    create: {
+      tenantId: ctx.tenantId,
+      countryCode: ctx.tenant.countryCode ?? "AE",
+      code: platform.code,
+      name: platform.name,
+      nameAr: platform.nameAr ?? null,
+      shortName: platform.shortName,
+      isCustom: false,
+      isActive: true,
+      requiresPreAuth: platform.requiresPreAuth,
+      claimSubmissionMethod: input.claimSubmissionMethod,
+      claimEmail,
+      claimsPortalUrl: input.claimsPortalUrl?.trim() || null,
+      turnaroundDays: input.turnaroundDays ?? null,
+      networkTypes: platform.networkTypes,
+      sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
+    },
+    update: {
+      isActive: true,
+      claimSubmissionMethod: input.claimSubmissionMethod,
+      claimEmail,
+      claimsPortalUrl: input.claimsPortalUrl?.trim() || null,
+      turnaroundDays: input.turnaroundDays ?? null,
+    },
+  });
+
+  revalidatePath("/admin/customization");
+}
+
+export async function seedOnboardingInsuranceProviders(
+  tenantId: string,
+  countryCode: string,
+  selected: Array<{ code: string; claimEmail?: string }>,
+) {
+  if (selected.length === 0) return;
+
+  const profile = getCountryProfile(countryCode);
+  const maxOrder = await db.tenantInsuranceProvider.aggregate({
+    where: { tenantId },
+    _max: { sortOrder: true },
+  });
+  let sortOrder = maxOrder._max.sortOrder ?? 0;
+
+  for (const item of selected) {
+    const platform = profile.insuranceProviders.find((p) => p.code === item.code);
+    if (!platform) continue;
+
+    const claimEmail = item.claimEmail?.trim() || platform.claimEmail?.trim() || null;
+    const claimSubmissionMethod =
+      platform.claimSubmissionMethod ?? (claimEmail ? "EMAIL" : "MANUAL");
+
+    sortOrder += 1;
+    await db.tenantInsuranceProvider.upsert({
+      where: {
+        tenantId_code: { tenantId, code: platform.code },
+      },
+      create: {
+        tenantId,
+        countryCode,
+        code: platform.code,
+        name: platform.name,
+        nameAr: platform.nameAr ?? null,
+        shortName: platform.shortName,
+        isCustom: false,
+        isActive: true,
+        requiresPreAuth: platform.requiresPreAuth,
+        claimSubmissionMethod,
+        claimEmail,
+        claimsPortalUrl: platform.claimsPortalUrl ?? null,
+        turnaroundDays: platform.turnaroundDays ?? null,
+        networkTypes: platform.networkTypes,
+        sortOrder,
+      },
+      update: {
+        isActive: true,
+        claimEmail,
+        claimSubmissionMethod,
+      },
+    });
+  }
 }
 
 export async function deleteCustomInsuranceProvider(id: string) {

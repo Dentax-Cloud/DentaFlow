@@ -4,7 +4,6 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { CountryProfile } from "@/lib/countries";
 import {
   addCustomInsuranceProvider,
   addPaymentMethod,
@@ -14,6 +13,7 @@ import {
   createMembershipPlan,
   deleteCustomField,
   deleteCustomInsuranceProvider,
+  overridePlatformInsuranceProvider,
   updateInsuranceProvider,
 } from "@/app/(dashboard)/features/admin/customization-actions";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { ClaimSubmissionMethod } from "@prisma/client";
 import { deriveInsuranceProviderCode } from "@/lib/insurance/provider-code";
 
 type Tab = "insurance" | "fields" | "payments" | "memberships" | "corporate" | "referrals";
@@ -46,11 +54,35 @@ type CustomProvider = {
   shortName: string;
   isActive: boolean;
   requiresPreAuth: boolean;
+  claimSubmissionMethod: ClaimSubmissionMethod;
   claimEmail: string | null;
+  claimsPortalUrl: string | null;
+  turnaroundDays: number | null;
   contactPhone: string | null;
   notes: string | null;
   networkTypes: NetworkTypeRow[];
 };
+
+type PlatformProvider = {
+  id: string;
+  code: string;
+  name: string;
+  shortName: string;
+  requiresPreAuth: boolean;
+  claimSubmissionMethod?: ClaimSubmissionMethod;
+  claimEmail?: string | null;
+  claimsPortalUrl?: string | null;
+  turnaroundDays?: number | null;
+  networkTypes: NetworkTypeRow[];
+  hasTenantOverride?: boolean;
+};
+
+const SUBMISSION_METHODS: Array<{ value: ClaimSubmissionMethod; label: string }> = [
+  { value: "EMAIL", label: "Email" },
+  { value: "PORTAL", label: "Portal" },
+  { value: "CLEARINGHOUSE", label: "Clearinghouse" },
+  { value: "MANUAL", label: "Manual" },
+];
 
 function emptyNetworkRow(): NetworkTypeRow {
   return { code: "", name: "", defaultCoPayPercent: 20 };
@@ -62,7 +94,10 @@ function providerToForm(provider?: CustomProvider) {
     nameAr: provider?.nameAr ?? "",
     shortName: provider?.shortName ?? "",
     requiresPreAuth: provider?.requiresPreAuth ?? true,
+    claimSubmissionMethod: provider?.claimSubmissionMethod ?? "MANUAL",
     claimEmail: provider?.claimEmail ?? "",
+    claimsPortalUrl: provider?.claimsPortalUrl ?? "",
+    turnaroundDays: provider?.turnaroundDays?.toString() ?? "",
     contactPhone: provider?.contactPhone ?? "",
     notes: provider?.notes ?? "",
     networkTypes:
@@ -91,7 +126,7 @@ type Props = {
     isRequired: boolean;
     section: string;
   }>;
-  platformProviders: CountryProfile["insuranceProviders"];
+  platformProviders: PlatformProvider[];
   customProviders: CustomProvider[];
   membershipPlans: Array<{
     id: string;
@@ -210,12 +245,22 @@ function InsuranceProviderDialog({
       return;
     }
 
+    if (form.claimSubmissionMethod === "PORTAL" && !form.claimsPortalUrl.trim()) {
+      toast.error("Portal URL is required when submission method is Portal");
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       nameAr: form.nameAr.trim() || undefined,
       shortName: form.shortName.trim(),
       requiresPreAuth: form.requiresPreAuth,
+      claimSubmissionMethod: form.claimSubmissionMethod,
       claimEmail: form.claimEmail.trim() || undefined,
+      claimsPortalUrl: form.claimsPortalUrl.trim() || undefined,
+      turnaroundDays: form.turnaroundDays
+        ? Number.parseInt(form.turnaroundDays, 10)
+        : undefined,
       contactPhone: form.contactPhone.trim() || undefined,
       notes: form.notes.trim() || undefined,
       networkTypes,
@@ -292,13 +337,59 @@ function InsuranceProviderDialog({
                 )}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="provider-claim-email">Claim email</Label>
+                <Label htmlFor="provider-claim-email">Claims email</Label>
                 <Input
                   id="provider-claim-email"
                   type="email"
                   value={form.claimEmail}
                   onChange={(e) => updateField("claimEmail", e.target.value)}
                   placeholder="claims@etihad.ae"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label>Submission method</Label>
+                <Select
+                  value={form.claimSubmissionMethod}
+                  onValueChange={(value) =>
+                    updateField("claimSubmissionMethod", value as ClaimSubmissionMethod)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBMISSION_METHODS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.claimSubmissionMethod === "PORTAL" && (
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="provider-portal-url">Claims portal URL *</Label>
+                  <Input
+                    id="provider-portal-url"
+                    type="url"
+                    value={form.claimsPortalUrl}
+                    onChange={(e) => updateField("claimsPortalUrl", e.target.value)}
+                    placeholder="https://portal.insurer.com/claims"
+                  />
+                </div>
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor="provider-turnaround">Typical turnaround (days)</Label>
+                <Input
+                  id="provider-turnaround"
+                  type="number"
+                  min={1}
+                  value={form.turnaroundDays}
+                  onChange={(e) => updateField("turnaroundDays", e.target.value)}
+                  placeholder="14"
                 />
               </div>
             </div>
@@ -419,12 +510,161 @@ function InsuranceProviderDialog({
   );
 }
 
+function PlatformOverrideDialog({
+  open,
+  onOpenChange,
+  provider,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  provider?: PlatformProvider;
+  onSaved: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [form, setForm] = useState({
+    claimSubmissionMethod: "MANUAL" as ClaimSubmissionMethod,
+    claimEmail: "",
+    claimsPortalUrl: "",
+    turnaroundDays: "",
+  });
+
+  useEffect(() => {
+    if (open && provider) {
+      setForm({
+        claimSubmissionMethod: provider.claimSubmissionMethod ?? "MANUAL",
+        claimEmail: provider.claimEmail ?? "",
+        claimsPortalUrl: provider.claimsPortalUrl ?? "",
+        turnaroundDays: provider.turnaroundDays?.toString() ?? "",
+      });
+    }
+  }, [open, provider]);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!provider) return;
+    if (form.claimSubmissionMethod === "PORTAL" && !form.claimsPortalUrl.trim()) {
+      toast.error("Portal URL is required when submission method is Portal");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await overridePlatformInsuranceProvider({
+          platformCode: provider.code,
+          claimSubmissionMethod: form.claimSubmissionMethod,
+          claimEmail: form.claimEmail.trim() || undefined,
+          claimsPortalUrl: form.claimsPortalUrl.trim() || undefined,
+          turnaroundDays: form.turnaroundDays
+            ? Number.parseInt(form.turnaroundDays, 10)
+            : undefined,
+        });
+        toast.success("Submission settings saved");
+        onOpenChange(false);
+        onSaved();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to save settings");
+      }
+    });
+  }
+
+  if (!provider) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Override submission settings</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Configure how claims and pre-authorizations are sent to {provider.name}. Platform
+            network definitions remain read-only.
+          </p>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Submission method</Label>
+              <Select
+                value={form.claimSubmissionMethod}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    claimSubmissionMethod: value as ClaimSubmissionMethod,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUBMISSION_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="override-claim-email">Claims email</Label>
+              <Input
+                id="override-claim-email"
+                type="email"
+                value={form.claimEmail}
+                onChange={(e) => setForm((prev) => ({ ...prev, claimEmail: e.target.value }))}
+                placeholder="claims@insurer.com"
+              />
+            </div>
+            {form.claimSubmissionMethod === "PORTAL" && (
+              <div className="grid gap-2">
+                <Label htmlFor="override-portal-url">Claims portal URL *</Label>
+                <Input
+                  id="override-portal-url"
+                  type="url"
+                  value={form.claimsPortalUrl}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, claimsPortalUrl: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="override-turnaround">Typical turnaround (days)</Label>
+              <Input
+                id="override-turnaround"
+                type="number"
+                min={1}
+                value={form.turnaroundDays}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, turnaroundDays: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save override"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function CustomizationClient(props: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("insurance");
   const [pending, startTransition] = useTransition();
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<CustomProvider | undefined>();
+  const [platformOverrideOpen, setPlatformOverrideOpen] = useState(false);
+  const [editingPlatformProvider, setEditingPlatformProvider] = useState<
+    PlatformProvider | undefined
+  >();
 
   const activeCustomProviders = props.customProviders.filter((p) => p.isActive);
 
@@ -485,15 +725,39 @@ export default function CustomizationClient(props: Props) {
           <h2 className="text-lg font-semibold">Platform insurance providers</h2>
           <ul className="divide-y rounded-lg border">
             {props.platformProviders.map((p) => (
-              <li key={p.code} className="flex items-center justify-between p-3 text-sm">
+              <li
+                key={p.code}
+                className="flex flex-col gap-2 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
                   <p className="font-medium">{p.name}</p>
                   <p className="text-muted-foreground">
                     {p.networkTypes.length} network types · pre-auth{" "}
                     {p.requiresPreAuth ? "required" : "optional"}
+                    {p.claimSubmissionMethod
+                      ? ` · ${p.claimSubmissionMethod.toLowerCase()} submission`
+                      : ""}
+                    {p.hasTenantOverride ? " · customized" : ""}
                   </p>
+                  {(p.claimEmail || p.claimsPortalUrl) && (
+                    <p className="text-xs text-muted-foreground">
+                      {p.claimEmail ? `Claims: ${p.claimEmail}` : null}
+                      {p.claimEmail && p.claimsPortalUrl ? " · " : null}
+                      {p.claimsPortalUrl ? `Portal: ${p.claimsPortalUrl}` : null}
+                    </p>
+                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">Platform</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingPlatformProvider(p);
+                    setPlatformOverrideOpen(true);
+                  }}
+                >
+                  {p.hasTenantOverride ? "Edit submission settings" : "Override submission settings"}
+                </Button>
               </li>
             ))}
           </ul>
@@ -525,6 +789,11 @@ export default function CustomizationClient(props: Props) {
                         {p.contactPhone ? `Tel: ${p.contactPhone}` : null}
                       </p>
                     )}
+                    <p className="text-muted-foreground">
+                      Submission: {p.claimSubmissionMethod.toLowerCase()}
+                      {p.turnaroundDays ? ` · ~${p.turnaroundDays} days` : ""}
+                      {p.claimsPortalUrl ? ` · Portal configured` : ""}
+                    </p>
                     {p.notes && (
                       <p className="text-xs text-muted-foreground line-clamp-2">{p.notes}</p>
                     )}
@@ -575,6 +844,13 @@ export default function CustomizationClient(props: Props) {
             open={providerDialogOpen}
             onOpenChange={setProviderDialogOpen}
             provider={editingProvider}
+            onSaved={refreshCustomization}
+          />
+
+          <PlatformOverrideDialog
+            open={platformOverrideOpen}
+            onOpenChange={setPlatformOverrideOpen}
+            provider={editingPlatformProvider}
             onSaved={refreshCustomization}
           />
         </section>

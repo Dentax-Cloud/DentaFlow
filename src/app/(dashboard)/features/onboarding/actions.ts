@@ -9,6 +9,7 @@ import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
 import { checkBranchLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { getStaffActor } from "@/lib/tenant/context";
 import { formatAdminName } from "@/lib/auth/registration-schema";
+import { seedOnboardingInsuranceProviders } from "@/app/(dashboard)/features/admin/customization-actions";
 
 const onboardingSchema = z.object({
   clinicName: z.string().min(1),
@@ -29,6 +30,14 @@ const onboardingSchema = z.object({
     )
     .optional(),
   plan: subscriptionPlanSchema.optional(),
+  selectedInsurers: z
+    .array(
+      z.object({
+        code: z.string().min(1),
+        claimEmail: z.string().email().optional().or(z.literal("")),
+      }),
+    )
+    .optional(),
 });
 
 export const completeOnboarding = createAction({
@@ -101,6 +110,17 @@ export const completeOnboarding = createAction({
         adminName,
         trialDays: 14,
       }).catch((err) => console.error("[mail:welcome]", err));
+    }
+
+    if (input.selectedInsurers?.length) {
+      await seedOnboardingInsuranceProviders(
+        ctx.tenant.id,
+        input.country ?? ctx.tenant.countryCode ?? "AE",
+        input.selectedInsurers.map((item) => ({
+          code: item.code,
+          claimEmail: item.claimEmail || undefined,
+        })),
+      );
     }
 
     return { success: true };

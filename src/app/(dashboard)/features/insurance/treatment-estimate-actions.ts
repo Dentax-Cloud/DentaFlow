@@ -21,6 +21,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { sendEstimateEmailToPatient } from "@/lib/notifications/invoice-notifications";
+import { sendPreAuthToInsurer } from "@/lib/insurance/send-to-insurer";
 
 const PRE_AUTH_DECISION_STATUSES = [
   "APPROVED",
@@ -238,8 +239,13 @@ export async function submitPreAuthorization(preAuthId: string, referenceNumber:
     },
   });
 
+  const submission = await sendPreAuthToInsurer(preAuthId, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.staffMember?.id ?? ctx.authUserId,
+  });
+
   await revalidatePreAuthPaths(ctx.tenantId, preAuthId);
-  return serializePreAuthorization(updated);
+  return { preAuth: serializePreAuthorization(updated), submission };
 }
 
 export async function recordPreAuthDecision(

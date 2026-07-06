@@ -24,7 +24,7 @@ export default async function CustomizationPage() {
 
   const [
     customFields,
-    customProviders,
+    allTenantProviders,
     membershipPlans,
     corporateAccounts,
     paymentMethods,
@@ -61,6 +61,33 @@ export default async function CustomizationPage() {
     }),
   ]);
 
+  const tenantByCode = new Map(allTenantProviders.map((row) => [row.code, row]));
+
+  const platformProviders = profile.insuranceProviders.map((p) => {
+    const override = tenantByCode.get(p.code);
+    return {
+      ...p,
+      id: override?.id ?? `platform_${p.code}`,
+      claimEmail: override?.claimEmail ?? p.claimEmail ?? null,
+      claimSubmissionMethod:
+        override?.claimSubmissionMethod ?? p.claimSubmissionMethod ?? "MANUAL",
+      claimsPortalUrl: override?.claimsPortalUrl ?? p.claimsPortalUrl ?? null,
+      turnaroundDays: override?.turnaroundDays ?? p.turnaroundDays ?? null,
+      hasTenantOverride: Boolean(override),
+    };
+  });
+
+  const customProviders = allTenantProviders
+    .filter((p) => p.isCustom)
+    .map((p) => ({
+      ...p,
+      networkTypes: p.networkTypes as Array<{
+        code: string;
+        name: string;
+        defaultCoPayPercent: number;
+      }>,
+    }));
+
   return (
     <CustomizationClient
       tenant={
@@ -80,15 +107,8 @@ export default async function CustomizationPage() {
         name: profile.name,
       }}
       customFields={customFields}
-      platformProviders={profile.insuranceProviders}
-      customProviders={customProviders.map((p) => ({
-        ...p,
-        networkTypes: p.networkTypes as Array<{
-          code: string;
-          name: string;
-          defaultCoPayPercent: number;
-        }>,
-      }))}
+      platformProviders={platformProviders}
+      customProviders={customProviders}
       membershipPlans={membershipPlans.map((p) => ({
         ...p,
         price: Number(p.price),

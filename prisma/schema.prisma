@@ -1608,9 +1608,12 @@ model TenantInsuranceProvider {
   shortName       String
   isCustom        Boolean  @default(true)
   isActive        Boolean  @default(true)
-  requiresPreAuth Boolean  @default(true)
-  claimEmail      String?
-  contactPhone    String?
+  requiresPreAuth         Boolean               @default(true)
+  claimSubmissionMethod   ClaimSubmissionMethod @default(MANUAL)
+  claimEmail              String?
+  claimsPortalUrl         String?
+  turnaroundDays          Int?
+  contactPhone            String?
   notes           String?
   networkTypes    Json     @default("[]")
   sortOrder       Int      @default(0)
@@ -2074,6 +2077,13 @@ enum PreAuthStatus {
   PARTIALLY_APPROVED
   DENIED
   EXPIRED
+}
+
+enum ClaimSubmissionMethod {
+  EMAIL
+  PORTAL
+  CLEARINGHOUSE
+  MANUAL
 }
 
 enum ClaimFormat {

@@ -98,7 +98,7 @@ export function tieredProvider(
   tiers: Array<[string, string, number, string?]>,
   extras?: Partial<PlatformInsuranceProvider>,
 ): PlatformInsuranceProvider {
-  return {
+  const provider: PlatformInsuranceProvider = {
     code,
     name,
     shortName,
@@ -111,6 +111,10 @@ export function tieredProvider(
     })),
     ...extras,
   };
+  if (provider.claimEmail && !provider.claimSubmissionMethod) {
+    provider.claimSubmissionMethod = "EMAIL";
+  }
+  return provider;
 }
 
 export function standardNetworks(

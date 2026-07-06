@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RegistrationStepper } from "@/components/auth/registration-stepper";
 import { completeOnboarding } from "@/app/(dashboard)/features/onboarding/actions";
+import { getCountryProfile } from "@/lib/countries";
 import {
   COUNTRY_OPTIONS,
   getCountryByCode,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 const STEPS = [
   { id: 1, label: "Clinic" },
   { id: 2, label: "Locale & plan" },
+  { id: 3, label: "Insurers" },
 ] as const;
 
 const step1Schema = z.object({
@@ -79,6 +81,9 @@ export function OnboardingClient({ initial }: Props) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
+  const [step2Data, setStep2Data] = useState<Step2Data | null>(null);
+  const [selectedInsurers, setSelectedInsurers] = useState<Record<string, boolean>>({});
+  const [insurerEmails, setInsurerEmails] = useState<Record<string, string>>({});
 
   const step1Form = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
@@ -102,6 +107,10 @@ export function OnboardingClient({ initial }: Props) {
 
   const watchedCountry = step2Form.watch("country");
   const countryMeta = useMemo(() => getCountryByCode(watchedCountry), [watchedCountry]);
+  const insurerOptions = useMemo(() => {
+    const country = step2Data?.country ?? watchedCountry ?? initial.country ?? "AE";
+    return getCountryProfile(country).insuranceProviders.filter((p) => p.code !== "SELF_PAY");
+  }, [step2Data?.country, watchedCountry, initial.country]);
 
   useEffect(() => {
     if (countryMeta) {
@@ -114,8 +123,22 @@ export function OnboardingClient({ initial }: Props) {
     setStep(2);
   }
 
-  async function onStep2Submit(data: Step2Data) {
+  function onStep2Submit(data: Step2Data) {
+    setStep2Data(data);
+    const profile = getCountryProfile(data.country);
+    const defaults: Record<string, boolean> = {};
+    for (const provider of profile.insuranceProviders) {
+      if (provider.code !== "SELF_PAY") {
+        defaults[provider.code] = false;
+      }
+    }
+    setSelectedInsurers(defaults);
+    setStep(3);
+  }
+
+  async function finishOnboarding(insurers?: Array<{ code: string; claimEmail?: string }>) {
     const step1 = step1Data ?? step1Form.getValues();
+    const step2 = step2Data ?? step2Form.getValues();
     setLoading(true);
 
     const result = await completeOnboarding({
@@ -123,12 +146,13 @@ export function OnboardingClient({ initial }: Props) {
       email: step1.email || undefined,
       phone: step1.phone,
       address: step1.address,
-      city: data.city,
-      country: data.country,
-      timezone: data.timezone,
+      city: step2.city,
+      country: step2.country,
+      timezone: step2.timezone,
       chairCount: step1.chairCount,
       plan: SubscriptionPlan.STARTER,
       doctors: [],
+      selectedInsurers: insurers,
     });
 
     setLoading(false);
@@ -139,6 +163,20 @@ export function OnboardingClient({ initial }: Props) {
     } else {
       toast.error(result.error);
     }
+  }
+
+  function onStep3Submit() {
+    const selected = Object.entries(selectedInsurers)
+      .filter(([, checked]) => checked)
+      .map(([code]) => ({
+        code,
+        claimEmail: insurerEmails[code]?.trim() || undefined,
+      }));
+    void finishOnboarding(selected);
+  }
+
+  function skipInsurersStep() {
+    void finishOnboarding([]);
   }
 
   const progress = (step / STEPS.length) * 100;
@@ -252,7 +290,93 @@ export function OnboardingClient({ initial }: Props) {
                 <Button
                   type="submit"
                   className={cn("h-11 flex-1 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 font-semibold")}
+                >
+                  Continue <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {step === 3 && (
+            <div className="mt-6 space-y-4">
+              <p className="text-sm text-zinc-400">
+                Which insurers do you work with? Optional — you can configure this later in
+                Customization.
+              </p>
+              <div className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-white/10 p-3">
+                {insurerOptions.map((provider) => (
+                  <div
+                    key={provider.code}
+                    className="rounded-lg border border-white/5 bg-zinc-900/60 p-3"
+                  >
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedInsurers[provider.code] ?? false}
+                        onChange={(e) =>
+                          setSelectedInsurers((prev) => ({
+                            ...prev,
+                            [provider.code]: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-white/20 bg-zinc-900"
+                      />
+                      <span>
+                        <span className="font-medium text-white">{provider.name}</span>
+                        <span className="mt-1 block text-xs text-zinc-500">
+                          {provider.shortName}
+                          {provider.claimEmail ? ` · default ${provider.claimEmail}` : ""}
+                        </span>
+                      </span>
+                    </label>
+                    {selectedInsurers[provider.code] && (
+                      <div className="mt-3 pl-7">
+                        <Label className="text-xs text-zinc-400">
+                          Claims email (if different from default)
+                        </Label>
+                        <Input
+                          className={cn(inputClass, "mt-1 h-9")}
+                          type="email"
+                          placeholder={provider.claimEmail ?? "claims@insurer.com"}
+                          value={insurerEmails[provider.code] ?? ""}
+                          onChange={(e) =>
+                            setInsurerEmails((prev) => ({
+                              ...prev,
+                              [provider.code]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl border-white/15"
+                  onClick={() => setStep(2)}
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl border-white/15"
                   disabled={loading}
+                  onClick={skipInsurersStep}
+                >
+                  Skip for now
+                </Button>
+                <Button
+                  type="button"
+                  className={cn(
+                    "h-11 flex-1 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 font-semibold",
+                  )}
+                  disabled={loading}
+                  onClick={onStep3Submit}
                 >
                   {loading ? (
                     <>
@@ -264,7 +388,7 @@ export function OnboardingClient({ initial }: Props) {
                   )}
                 </Button>
               </div>
-            </form>
+            </div>
           )}
         </div>
       </div>

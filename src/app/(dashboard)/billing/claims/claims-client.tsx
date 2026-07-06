@@ -144,11 +144,26 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
     router.refresh();
   }
 
-  function runAction(label: string, fn: () => Promise<{ success: boolean; error?: string }>) {
+  function runAction(
+    label: string,
+    fn: () => Promise<{ success: boolean; error?: string; data?: unknown }>,
+    options?: { useSubmissionMessage?: boolean },
+  ) {
     startTransition(async () => {
       const result = await fn();
       if (result.success) {
-        toast.success(label);
+        const submission =
+          options?.useSubmissionMessage &&
+          result.data &&
+          typeof result.data === "object" &&
+          "submission" in result.data &&
+          result.data.submission &&
+          typeof result.data.submission === "object" &&
+          "message" in result.data.submission &&
+          typeof result.data.submission.message === "string"
+            ? result.data.submission.message
+            : null;
+        toast.success(submission ?? label);
         setSelected(null);
         refresh();
       } else {
@@ -331,11 +346,13 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                     <Button
                       disabled={isPending || !referenceNumber.trim()}
                       onClick={() =>
-                        runAction("Claim submitted", async () =>
-                          submitClaim({
+                        runAction(
+                          "Claim submitted",
+                          async () => submitClaim({
                             claimId: selected.id,
                             referenceNumber: referenceNumber.trim(),
                           }),
+                          { useSubmissionMessage: true },
                         )
                       }
                     >

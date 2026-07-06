@@ -8,6 +8,7 @@ export type MailAttachment = {
 
 export type SendMailParams = {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   text: string;
   html?: string;
@@ -70,6 +71,11 @@ export async function sendMail(params: SendMailParams): Promise<boolean> {
   ]);
 
   const to = Array.isArray(params.to) ? params.to.join(", ") : params.to;
+  const cc = params.cc
+    ? Array.isArray(params.cc)
+      ? params.cc.join(", ")
+      : params.cc
+    : undefined;
   const from =
     fromEmail != null
       ? `"${fromName ?? "DentaFlow"}" <${fromEmail}>`
@@ -79,6 +85,7 @@ export async function sendMail(params: SendMailParams): Promise<boolean> {
     const info = await transporter.sendMail({
       from,
       to,
+      cc,
       subject: params.subject,
       text: params.text,
       html: params.html ?? params.text.replace(/\n/g, "<br>"),

@@ -20,6 +20,7 @@ import {
   type ClaimProcedureSnapshotLine,
 } from "@/lib/insurance/claim-types";
 import { serializeClaim } from "@/lib/insurance/serialize-claim";
+import { sendClaimToInsurer } from "@/lib/insurance/send-to-insurer";
 
 const DECISION_STATUSES = [
   "APPROVED",
@@ -256,8 +257,13 @@ export const submitClaim = createAction({
       metadata: { status: ClaimStatus.SUBMITTED, referenceNumber: input.referenceNumber },
     });
 
+    const submission = await sendClaimToInsurer(claim.id, {
+      tenantId: ctx.tenant.id,
+      actorUserId: getStaffActor(ctx).id,
+    });
+
     revalidatePath("/billing/claims");
-    return serializeClaim(claim);
+    return { claim: serializeClaim(claim), submission };
   },
 });
 

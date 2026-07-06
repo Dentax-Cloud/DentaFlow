@@ -99,6 +99,7 @@ export const UAE: CountryProfile = {
       shortName: "Daman",
       requiresPreAuth: true,
       claimEmail: "claims@damanhealth.ae",
+      claimSubmissionMethod: "EMAIL",
       networkTypes: [
         { code: "THIQA", name: "Thiqa", nameAr: "ثقة", defaultCoPayPercent: 0 },
         { code: "ENHANCED", name: "Enhanced", nameAr: "محسّن", defaultCoPayPercent: 20 },

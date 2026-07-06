@@ -29,6 +29,12 @@ export type InsuranceNetworkType = {
   defaultCoPayPercent: number;
 };
 
+export type ClaimSubmissionMethodType =
+  | "EMAIL"
+  | "PORTAL"
+  | "CLEARINGHOUSE"
+  | "MANUAL";
+
 export type PlatformInsuranceProvider = {
   code: string;
   name: string;
@@ -37,6 +43,9 @@ export type PlatformInsuranceProvider = {
   networkTypes: InsuranceNetworkType[];
   requiresPreAuth: boolean;
   claimEmail?: string;
+  claimSubmissionMethod?: ClaimSubmissionMethodType;
+  claimsPortalUrl?: string;
+  turnaroundDays?: number;
 };
 
 export type PublicHoliday = {
