@@ -52,3 +52,9 @@ prisma/*.db
 /.clerk/
 .env.docker
 ".tmp/" 
+.pnpm-store/
+backups/
+set-smtp-pass.js
+store-key.js
+store-key2.js
+test-openai.js
