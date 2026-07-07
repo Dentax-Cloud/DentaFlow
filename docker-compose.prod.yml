@@ -1,45 +1,27 @@
+# TEMPORARY: web/worker share the dev database via external network
+# (dentaflow-dev_dentalflow_net) to preserve existing test data.
+# This must be split into a fully separate production database/server
+# before onboarding real pilot clinics with real patient data.
+
 name: dentaflow
 
 networks:
   dentalflow_net:
-    driver: bridge
-
-volumes:
-  postgres_data:
+    external: true
+    name: dentaflow-dev_dentalflow_net
 
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: dentaflow-db
-    restart: always
-    environment:
-      POSTGRES_DB: dentaflow
-      POSTGRES_USER: dentaflow
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dentaflow}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dentaflow -d dentaflow"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks:
-      - dentalflow_net
-
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dentaflow-web
+    container_name: dentaflow-web-prod
     restart: always
     env_file:
       - .env.production
     ports:
       # Bind to localhost only — nginx on the host terminates TLS on 443.
       - "127.0.0.1:${WEB_PORT:-3100}:3000"
-    depends_on:
-      db:
-        condition: service_healthy
     networks:
       - dentalflow_net
     healthcheck:
