@@ -210,9 +210,11 @@ AI never gives medical advice; outputs require dentist review for clinical use.
 
 ## VPS deployment (production)
 
-1. Copy env: `cp .env.production.example .env.production` and fill values on the server.
+1. Copy env: `cp .env.production.example .env.production` and fill values on the server (`NEXTAUTH_URL=https://dentax.cloud`).
 2. Build and run: `docker compose -f docker-compose.prod.yml up --build -d`
-3. Health check: `curl http://localhost:3000/api/health`
+3. Health check: `curl -fsS http://127.0.0.1:3100/api/health` (on VPS) or `curl -fsS https://dentax.cloud/api/health` after HTTPS setup.
+4. HTTPS + Let's Encrypt: see [deploy/HTTPS.md](./deploy/HTTPS.md)
+5. Backups: see [BACKUP.md](./BACKUP.md)
 
 The local git repository is the single source of truth — avoid manual edits on the VPS.
 
