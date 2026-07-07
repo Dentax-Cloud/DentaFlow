@@ -3,6 +3,28 @@
 Read this fully before touching any code. These rules exist because
 violating them has caused real production bugs in this project.
 
+## Before starting ANY task
+
+1. Confirm current branch: `git branch --show-current` — verify it
+   matches the task's intended target (usually `main` unless explicitly
+   told to work in a specific feature branch). If it does not match,
+   stop and flag this before writing any code.
+2. Confirm working tree is clean: `git status` — no uncommitted changes
+   from a prior session should be present. If there are, stop and flag
+   this rather than building on top of unknown uncommitted state.
+3. Run `pnpm build` BEFORE making changes, to confirm the starting
+   point is genuinely healthy. If the build is already broken before
+   you start, report this immediately rather than building on top of a
+   broken foundation.
+4. Run `pnpm build` AGAIN before committing any change, to confirm your
+   change didn't break anything — regardless of how isolated the change
+   seems.
+
+This rule exists because a previous session built a change while
+unknowingly checked out on a different branch than intended, which
+produced a commit with a hidden cross-branch dependency that broke main
+when applied there. This must not happen again.
+
 ## Non-negotiable rules
 
 1. **ID generation**: Always use existing generators in `src/lib/ids/generate-ids.ts`
@@ -66,4 +88,3 @@ FORBIDDEN without explicit sign-off:
 4. All merges to `main` require: build passes, tests pass, and a manual
    verification pass on the actual running app — "build succeeded" alone
    is never sufficient proof a feature works correctly in this project
-EOF
