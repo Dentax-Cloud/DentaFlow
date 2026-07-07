@@ -19,7 +19,14 @@ STAMP="$(date -u +%Y%m%d_%H%M%S)"
 OUT="${BACKUP_DIR}/dentaflow_${STAMP}.sql.gz"
 
 echo "[backup] Dumping ${DB_NAME} from ${CONTAINER}..."
-docker exec "$CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-acl | gzip -c >"$OUT"
+docker exec "$CONTAINER" pg_dump \
+  -U "$DB_USER" \
+  -d "$DB_NAME" \
+  --clean \
+  --if-exists \
+  --no-owner \
+  --no-acl \
+  | gzip -c >"$OUT"
 
 if ! gzip -t "$OUT" 2>/dev/null; then
   echo "ERROR: Backup file failed integrity check: $OUT" >&2
@@ -38,4 +45,5 @@ if [ "${#ALL_BACKUPS[@]}" -gt "$KEEP_COUNT" ]; then
   done
 fi
 
-echo "[backup] Done. ${#ALL_BACKUPS[@]:0:$KEEP_COUNT} backup(s) retained (max $KEEP_COUNT)."
+REMAINING="$(find "$BACKUP_DIR" -maxdepth 1 -name 'dentaflow_*.sql.gz' -type f 2>/dev/null | wc -l | tr -d ' ')"
+echo "[backup] Done. ${REMAINING} backup(s) retained (max ${KEEP_COUNT})."
