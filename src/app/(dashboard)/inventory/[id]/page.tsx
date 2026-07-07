@@ -37,7 +37,7 @@ export default async function InventoryItemPage({
   const [tenant, allProcedures] = await Promise.all([
     db.tenant.findUnique({
       where: { id: ctx.tenant.id },
-      select: { currency: true, tenantCode: true },
+      select: { currency: true, tenantCode: true, countryCode: true },
     }),
     db.procedureCatalog.findMany({
       where: { tenantId: ctx.tenant.id, isActive: true },
@@ -100,6 +100,9 @@ export default async function InventoryItemPage({
         maxStock: item.maxStock,
         cost,
         retailPrice,
+        taxRate: typeof serialized.taxRate === "number" ? serialized.taxRate : null,
+        hsnCode: item.hsnCode,
+        isSellable: item.isSellable,
         storageLocation: item.storageLocation,
         storageConditions: item.storageConditions,
         trackByBatch: item.trackByBatch,
@@ -138,6 +141,7 @@ export default async function InventoryItemPage({
         }),
       }}
       currency={tenant?.currency ?? "AED"}
+      countryCode={tenant?.countryCode ?? "AE"}
       tenantCode={tenant?.tenantCode ?? ""}
       totalValue={totalValue}
       linkedProcedures={linkedProcedures}

@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatCurrency, getCountryProfile } from "@/lib/countries";
+import { INDIA_EXEMPT_SERVICE_SAC } from "@/lib/billing/india-gst";
 
 export type InvoicePdfLineItem = {
   description: string;
@@ -7,6 +8,12 @@ export type InvoicePdfLineItem = {
   unitPrice: number;
   total: number;
   procedureCode?: string | null;
+  itemType?: string | null;
+  hsnSacCode?: string | null;
+  gstRate?: number | null;
+  cgstAmount?: number | null;
+  sgstAmount?: number | null;
+  igstAmount?: number | null;
 };
 
 export type InvoicePdfInput = {
@@ -26,6 +33,12 @@ export type InvoicePdfInput = {
   total: number;
   currency: string;
   countryCode: string;
+  isIndiaGst?: boolean;
+  exemptSubtotal?: number;
+  taxableSubtotal?: number;
+  cgstTotal?: number;
+  sgstTotal?: number;
+  igstTotal?: number;
   insuranceAmount: number;
   patientAmount: number;
   providerCode?: string | null;
@@ -34,7 +47,6 @@ export type InvoicePdfInput = {
   status: string;
   amountPaid: number;
   balanceDue: number;
-  /** When set, highlights a payment receipt (most recent payment). */
   receiptPaymentAmount?: number;
   receiptPaymentMethod?: string;
   receiptPaymentDate?: Date;
@@ -70,15 +82,18 @@ export async function buildInvoicePdfBytes(input: InvoicePdfInput): Promise<Uint
   };
 
   const money = (amount: number) => formatCurrency(amount, input.countryCode);
+  const isIndia = input.isIndiaGst === true;
 
   draw(input.clinicName, 18, true);
   if (input.clinicAddress) draw(input.clinicAddress, 10);
-  if (input.taxNumber) draw(`Tax / TRN: ${input.taxNumber}`, 10);
+  if (input.taxNumber) {
+    draw(isIndia ? `GSTIN: ${input.taxNumber}` : `Tax / TRN: ${input.taxNumber}`, 10);
+  }
   if (input.clinicPhone) draw(`Tel: ${input.clinicPhone}`, 10);
   if (input.clinicEmail) draw(input.clinicEmail, 10);
   y -= 8;
 
-  const title = input.receiptPaymentAmount != null ? "Payment Receipt" : "Invoice";
+  const title = input.receiptPaymentAmount != null ? "Payment Receipt" : "Tax Invoice";
   draw(title, 14, true);
   draw(`Invoice #: ${input.invoiceNumber}`, 11, true);
   if (input.invoiceRef) draw(`Reference: ${input.invoiceRef}`, 10);
@@ -88,21 +103,81 @@ export async function buildInvoicePdfBytes(input: InvoicePdfInput): Promise<Uint
   y -= 6;
 
   draw("Line items", 12, true);
-  for (const item of input.items) {
-    const label = item.procedureCode
-      ? `${item.procedureCode} — ${item.description}`
-      : item.description;
-    draw(
-      `${label}  ×${item.quantity} @ ${money(item.unitPrice)} = ${money(item.total)}`,
-      10,
-    );
+
+  if (isIndia) {
+    const services = input.items.filter((i) => i.itemType === "SERVICE" || !i.itemType);
+    const goods = input.items.filter((i) => i.itemType === "GOOD");
+
+    if (services.length > 0) {
+      draw("Services (GST exempt)", 10, true);
+      for (const item of services) {
+        const sac = item.hsnSacCode ?? INDIA_EXEMPT_SERVICE_SAC;
+        const label = item.procedureCode
+          ? `${item.procedureCode} — ${item.description}`
+          : item.description;
+        draw(
+          `${label}  SAC ${sac}  ×${item.quantity} @ ${money(item.unitPrice)} = ${money(item.total)} (exempt)`,
+          9,
+          false,
+          8,
+        );
+      }
+      y -= 4;
+    }
+
+    if (goods.length > 0) {
+      draw("Goods (taxable)", 10, true);
+      for (const item of goods) {
+        const hsn = item.hsnSacCode ? `HSN ${item.hsnSacCode}` : "HSN —";
+        const rate = item.gstRate != null ? `${item.gstRate}% GST` : "GST";
+        draw(
+          `${item.description}  ${hsn}  ${rate}  ×${item.quantity} @ ${money(item.unitPrice)} = ${money(item.total)}`,
+          9,
+          false,
+          8,
+        );
+      }
+    }
+  } else {
+    for (const item of input.items) {
+      const label = item.procedureCode
+        ? `${item.procedureCode} — ${item.description}`
+        : item.description;
+      draw(
+        `${label}  ×${item.quantity} @ ${money(item.unitPrice)} = ${money(item.total)}`,
+        10,
+      );
+    }
   }
 
   y -= 6;
-  draw(`Subtotal: ${money(input.subtotal)}`);
-  if (input.tax > 0) {
-    draw(`${input.taxName ?? "Tax"}: ${money(input.tax)}`);
+
+  if (isIndia) {
+    if ((input.exemptSubtotal ?? 0) > 0) {
+      draw(`Exempt services subtotal: ${money(input.exemptSubtotal ?? 0)}`);
+    }
+    if ((input.taxableSubtotal ?? 0) > 0) {
+      draw(`Taxable goods subtotal: ${money(input.taxableSubtotal ?? 0)}`);
+    }
+    if ((input.cgstTotal ?? 0) > 0) {
+      draw(`CGST: ${money(input.cgstTotal ?? 0)}`);
+    }
+    if ((input.sgstTotal ?? 0) > 0) {
+      draw(`SGST: ${money(input.sgstTotal ?? 0)}`);
+    }
+    if ((input.igstTotal ?? 0) > 0) {
+      draw(`IGST: ${money(input.igstTotal ?? 0)}`);
+    }
+    if (input.tax > 0) {
+      draw(`Total GST: ${money(input.tax)}`);
+    }
+  } else {
+    draw(`Subtotal: ${money(input.subtotal)}`);
+    if (input.tax > 0) {
+      draw(`${input.taxName ?? "Tax"}: ${money(input.tax)}`);
+    }
   }
+
   draw(`Total: ${money(input.total)}`, 12, true);
 
   if (input.insuranceAmount > 0 || input.providerCode) {

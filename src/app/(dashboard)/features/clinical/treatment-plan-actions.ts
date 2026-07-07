@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
-import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
+import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
 import { getVisitNumber, normalizeItemStatus } from "@/lib/clinical/treatment-plan-types";
 import { assertCanStartTreatment } from "@/lib/insurance/pre-auth-gate";
 
@@ -383,19 +383,16 @@ export async function generateInvoiceFromPlan(
   if (!plan) throw new Error("Plan not found");
   if (!plan.items.length) throw new Error("No items to invoice");
 
-  const lineItems = plan.items.map((item) => ({
+  const taxResult = await calculateInvoiceTaxAndLines({
     tenantId: ctx.tenantId,
-    description: item.description,
-    quantity: item.quantity,
-    unitPrice: Number(item.unitCost),
-    total: Number(item.totalCost),
-    procedureCode: item.procedureCode ?? undefined,
-  }));
-
-  const subtotal = lineItems.reduce((sum, i) => sum + i.total, 0);
-  const taxInfo = await getTenantInvoiceTax(ctx.tenantId);
-  const tax = subtotal * taxInfo.taxRateDecimal;
-  const total = subtotal + tax;
+    patientId: plan.patientId,
+    items: plan.items.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitCost),
+      procedureCode: item.procedureCode ?? undefined,
+    })),
+  });
 
   const count = await db.invoice.count({ where: { tenantId: ctx.tenantId } });
   const invoice = await db.invoice.create({
@@ -404,18 +401,39 @@ export async function generateInvoiceFromPlan(
       patientId: plan.patientId,
       invoiceNumber: generateInvoiceNumber(count + 1),
       status: "DRAFT",
-      subtotal,
-      tax,
-      total,
-      currency: taxInfo.currency,
-      taxName: taxInfo.taxName,
-      taxRateApplied: taxInfo.taxRatePercent,
-      taxNumber: taxInfo.taxNumber,
+      subtotal: taxResult.subtotal,
+      tax: taxResult.tax,
+      total: taxResult.total,
+      exemptSubtotal: taxResult.exemptSubtotal,
+      taxableSubtotal: taxResult.taxableSubtotal,
+      cgstTotal: taxResult.cgstTotal,
+      sgstTotal: taxResult.sgstTotal,
+      igstTotal: taxResult.igstTotal,
+      currency: taxResult.currency,
+      taxName: taxResult.taxName,
+      taxRateApplied: taxResult.taxRateApplied,
+      taxNumber: taxResult.taxNumber,
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       notes: `Treatment Plan: ${plan.title}${
         options?.visitNumber ? ` — Visit ${options.visitNumber}` : ""
       }`,
-      items: { create: lineItems },
+      items: {
+        create: taxResult.lines.map((line) => ({
+          tenantId: ctx.tenantId,
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          total: line.total,
+          procedureCode: line.procedureCode,
+          inventoryItemId: line.inventoryItemId,
+          itemType: line.itemType,
+          hsnSacCode: line.hsnSacCode,
+          gstRate: line.gstRate,
+          cgstAmount: line.cgstAmount,
+          sgstAmount: line.sgstAmount,
+          igstAmount: line.igstAmount,
+        })),
+      },
     },
     include: { items: true },
   });

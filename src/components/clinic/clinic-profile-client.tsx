@@ -26,6 +26,7 @@ import {
   updateClinicProfile,
   upsertClinicCustomField,
 } from "@/app/(dashboard)/features/clinic-profile/actions";
+import { INDIAN_GST_STATES } from "@/lib/countries/india-gst-states";
 
 type Props = {
   profile: ClinicProfileView;
@@ -41,6 +42,11 @@ type Props = {
     toothNumbering: string;
     workingDays: string;
   };
+  indiaGst?: {
+    gstin: string;
+    gstState: string;
+    gstRegistered: boolean;
+  };
 };
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -53,7 +59,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-export function ClinicProfileClient({ profile, canEdit, countryConfig }: Props) {
+export function ClinicProfileClient({ profile, canEdit, countryConfig, indiaGst }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [customFields, setCustomFields] = useState<ClinicCustomField[]>(
@@ -76,7 +82,10 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig }: Props) 
     timezone: profile.timezone,
     locale: profile.locale,
     currency: profile.currency,
-    taxId: profile.metadata.taxId ?? "",
+    taxId: profile.metadata.taxId ?? indiaGst?.gstin ?? "",
+    gstin: indiaGst?.gstin ?? profile.metadata.taxId ?? "",
+    gstState: indiaGst?.gstState ?? "",
+    gstRegistered: indiaGst?.gstRegistered ?? false,
     doctorCount: profile.metadata.doctorCount ?? profile.chairCount,
     expectedMonthlyPatients: profile.metadata.expectedMonthlyPatients ?? "",
     referralSource: profile.metadata.referralSource ?? "",
@@ -346,14 +355,63 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig }: Props) 
                 </div>
 
                 <div className="space-y-2 border-t pt-4">
-                  <Label htmlFor="taxId">
-                    {COUNTRY_OPTIONS.find((c) => c.code === form.country)?.taxLabel ?? "Tax ID"}
-                  </Label>
-                  <Input
-                    id="taxId"
-                    value={form.taxId}
-                    onChange={(e) => setForm({ ...form, taxId: e.target.value })}
-                  />
+                  {form.country === "IN" ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="gstin">GSTIN</Label>
+                        <Input
+                          id="gstin"
+                          value={form.gstin}
+                          onChange={(e) =>
+                            setForm({ ...form, gstin: e.target.value.toUpperCase(), taxId: e.target.value.toUpperCase() })
+                          }
+                          placeholder="27AAPFU0939F1ZV"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Required on tax invoices. Dental services are GST-exempt; retail goods use
+                          per-item HSN/GST rates.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gstState">GST state code</Label>
+                        <select
+                          id="gstState"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          value={form.gstState}
+                          onChange={(e) => setForm({ ...form, gstState: e.target.value })}
+                        >
+                          <option value="">Select state</option>
+                          {INDIAN_GST_STATES.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              {s.code} — {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 pt-8">
+                        <input
+                          id="gstRegistered"
+                          type="checkbox"
+                          checked={form.gstRegistered}
+                          onChange={(e) =>
+                            setForm({ ...form, gstRegistered: e.target.checked })
+                          }
+                        />
+                        <Label htmlFor="gstRegistered">GST registered clinic</Label>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <Label htmlFor="taxId">
+                        {COUNTRY_OPTIONS.find((c) => c.code === form.country)?.taxLabel ?? "Tax ID"}
+                      </Label>
+                      <Input
+                        id="taxId"
+                        value={form.taxId}
+                        onChange={(e) => setForm({ ...form, taxId: e.target.value })}
+                      />
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-2 border-t pt-4">

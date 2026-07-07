@@ -23,6 +23,9 @@ export default async function ClinicProfilePage() {
         regulatoryBody: true,
         toothNumbering: true,
         workingDays: true,
+        gstin: true,
+        gstState: true,
+        gstRegistered: true,
       },
     }),
   ]);
@@ -46,6 +49,15 @@ export default async function ClinicProfilePage() {
         toothNumbering: tenantRecord?.toothNumbering ?? countryProfile.toothNumbering,
         workingDays: tenantRecord?.workingDays ?? countryProfile.workingDays.join(","),
       }}
+      indiaGst={
+        countryProfile.code === "IN"
+          ? {
+              gstin: tenantRecord?.gstin ?? profile.metadata.taxId ?? "",
+              gstState: tenantRecord?.gstState ?? "",
+              gstRegistered: tenantRecord?.gstRegistered ?? false,
+            }
+          : undefined
+      }
     />
   );
 }

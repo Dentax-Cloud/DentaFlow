@@ -14,6 +14,7 @@ import {
   type ClinicCustomField,
 } from "@/lib/tenant/clinic-profile";
 import { getStaffActor } from "@/lib/tenant/context";
+import { gstStateFromGstin } from "@/lib/billing/india-gst";
 
 const updateClinicProfileSchema = z.object({
   name: z.string().min(2, "Clinic name is required"),
@@ -30,6 +31,9 @@ const updateClinicProfileSchema = z.object({
   locale: z.string().min(2).optional(),
   currency: z.string().min(3).optional(),
   taxId: z.string().optional(),
+  gstin: z.string().optional(),
+  gstState: z.string().optional(),
+  gstRegistered: z.boolean().optional(),
   specialties: z.array(z.string()).optional(),
   expectedMonthlyPatients: z.string().optional(),
   referralSource: z.string().optional(),
@@ -71,6 +75,13 @@ export const updateClinicProfile = createAction({
       customFields: existingMeta.customFields,
     });
 
+    const isIndia = (input.country || ctx.tenant.countryCode) === "IN";
+    const gstin = isIndia ? (input.gstin?.trim() || input.taxId?.trim() || null) : null;
+    const gstState =
+      isIndia
+        ? input.gstState?.trim() || gstStateFromGstin(gstin) || existingMeta.state || null
+        : null;
+
     const tenant = await db.tenant.update({
       where: { id: ctx.tenant.id },
       data: {
@@ -83,6 +94,14 @@ export const updateClinicProfile = createAction({
         country: input.country || ctx.tenant.country,
         timezone: input.timezone ?? ctx.tenant.timezone,
         locale: input.locale ?? ctx.tenant.locale,
+        ...(isIndia
+          ? {
+              gstin,
+              gstState,
+              gstRegistered: input.gstRegistered ?? Boolean(gstin),
+              taxNumber: gstin,
+            }
+          : {}),
         metadata: metadata as Prisma.InputJsonValue,
       },
     });
