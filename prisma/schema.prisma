@@ -111,6 +111,9 @@ model Tenant {
   taxName              String                  @default("VAT")
   taxRate              Decimal                 @default(5) @db.Decimal(5, 2)
   taxNumber            String?
+  gstin                String?
+  gstState             String?
+  gstRegistered        Boolean                 @default(false)
   taxOnDental          Boolean                 @default(true)
   regulatoryBody       String?
   toothNumbering       String                  @default("FDI")
@@ -275,6 +278,7 @@ model Patient {
   gender            String?
   address           String?
   city              String?
+  state             String?
   emergencyContact  String?
   emergencyPhone    String?
   medicalHistory    Json?
@@ -918,6 +922,11 @@ model Invoice {
   taxName               String?
   taxRateApplied        Decimal?      @db.Decimal(5, 2)
   taxNumber             String?
+  cgstTotal             Decimal       @default(0) @db.Decimal(12, 2)
+  sgstTotal             Decimal       @default(0) @db.Decimal(12, 2)
+  igstTotal             Decimal       @default(0) @db.Decimal(12, 2)
+  exemptSubtotal        Decimal       @default(0) @db.Decimal(12, 2)
+  taxableSubtotal       Decimal       @default(0) @db.Decimal(12, 2)
   insuranceAmount       Decimal?      @default(0) @db.Decimal(10, 2)
   patientAmount         Decimal?      @db.Decimal(10, 2)
   coPayPercent          Decimal?      @db.Decimal(5, 2)
@@ -937,15 +946,23 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id            String  @id @default(cuid())
-  tenantId      String
-  invoiceId     String
-  description   String
-  quantity      Int     @default(1)
-  unitPrice     Decimal @db.Decimal(12, 2)
-  total         Decimal @db.Decimal(12, 2)
-  procedureCode String?
-  invoice       Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  tenantId        String
+  invoiceId       String
+  description     String
+  quantity        Int            @default(1)
+  unitPrice       Decimal        @db.Decimal(12, 2)
+  total           Decimal        @db.Decimal(12, 2)
+  procedureCode   String?
+  itemType        String         @default("SERVICE")
+  inventoryItemId String?
+  hsnSacCode      String?
+  gstRate         Decimal?       @default(0) @db.Decimal(5, 2)
+  cgstAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  sgstAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  igstAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, invoiceId])
 }
@@ -1215,6 +1232,7 @@ model InventoryItem {
   gtin               String?
   retailPrice        Decimal?            @db.Decimal(10, 2)
   taxRate            Decimal?            @default(5) @db.Decimal(5, 2)
+  hsnCode            String?
   isSellable         Boolean             @default(false)
   trackByBatch       Boolean             @default(false)
   trackByExpiry      Boolean             @default(true)
@@ -1231,6 +1249,7 @@ model InventoryItem {
   batches            InventoryBatch[]
   supplierBarcodes   SupplierBarcode[]
   purchaseOrderItems PurchaseOrderItem[]
+  invoiceItems       InvoiceItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])

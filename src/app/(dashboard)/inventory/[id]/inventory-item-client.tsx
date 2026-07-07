@@ -2,13 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryLabel } from "@/components/inventory/inventory-label";
 import { SupplierBarcodePanel } from "@/components/inventory/supplier-barcode-panel";
+import { updateInventoryRetailGst } from "@/app/(dashboard)/features/inventory/inventory-actions";
 import { ArrowLeft, AlertTriangle, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +60,9 @@ type ItemData = {
   maxStock: number | null;
   cost: number | null;
   retailPrice: number | null;
+  taxRate: number | null;
+  hsnCode: string | null;
+  isSellable: boolean;
   storageLocation: string | null;
   storageConditions: string | null;
   trackByBatch: boolean;
@@ -93,17 +101,28 @@ const STATUS_COLORS: Record<StockStatus, string> = {
 export function InventoryItemClient({
   item,
   currency,
+  countryCode,
   tenantCode,
   totalValue,
   linkedProcedures,
 }: {
   item: ItemData;
   currency: string;
+  countryCode: string;
   tenantCode: string;
   totalValue: number;
   linkedProcedures: ProcedureLink[];
 }) {
+  const router = useRouter();
   const [txFilter, setTxFilter] = useState<string>("ALL");
+  const [retailSaving, setRetailSaving] = useState(false);
+  const [retailForm, setRetailForm] = useState({
+    retailPrice: item.retailPrice?.toString() ?? "",
+    taxRate: item.taxRate?.toString() ?? "",
+    hsnCode: item.hsnCode ?? "",
+    isSellable: item.isSellable,
+  });
+  const isIndia = countryCode === "IN";
   const status = getStockStatus(item);
   const minStock = item.minStockAlert ?? item.reorderLevel;
   const displayRef = item.itemRef ?? item.sku;
@@ -118,6 +137,26 @@ export function InventoryItemClient({
     const days = (new Date(b.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     return days >= 0 && days <= 30;
   });
+
+  async function saveRetailGst(e: React.FormEvent) {
+    e.preventDefault();
+    setRetailSaving(true);
+    try {
+      await updateInventoryRetailGst({
+        inventoryItemId: item.id,
+        retailPrice: retailForm.retailPrice ? Number(retailForm.retailPrice) : null,
+        taxRate: retailForm.taxRate ? Number(retailForm.taxRate) : null,
+        hsnCode: retailForm.hsnCode || null,
+        isSellable: retailForm.isSellable,
+      });
+      toast.success("Retail / GST settings saved");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setRetailSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -193,6 +232,68 @@ export function InventoryItemClient({
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Retail &amp; {isIndia ? "GST" : "tax"} (POS)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => void saveRetailGst(e)} className="grid gap-4 sm:grid-cols-2">
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <input
+                    id="isSellable"
+                    type="checkbox"
+                    checked={retailForm.isSellable}
+                    onChange={(e) =>
+                      setRetailForm((f) => ({ ...f, isSellable: e.target.checked }))
+                    }
+                  />
+                  <Label htmlFor="isSellable">Sellable via POS</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="retailPrice">Retail price</Label>
+                  <Input
+                    id="retailPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={retailForm.retailPrice}
+                    onChange={(e) =>
+                      setRetailForm((f) => ({ ...f, retailPrice: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="taxRate">{isIndia ? "GST rate (%)" : "Tax rate (%)"}</Label>
+                  <Input
+                    id="taxRate"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={retailForm.taxRate}
+                    onChange={(e) => setRetailForm((f) => ({ ...f, taxRate: e.target.value }))}
+                  />
+                </div>
+                {isIndia && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="hsnCode">HSN code</Label>
+                    <Input
+                      id="hsnCode"
+                      value={retailForm.hsnCode}
+                      onChange={(e) => setRetailForm((f) => ({ ...f, hsnCode: e.target.value }))}
+                      placeholder="e.g. 3306 for oral care products"
+                    />
+                  </div>
+                )}
+                <div className="sm:col-span-2">
+                  <Button type="submit" disabled={retailSaving}>
+                    {retailSaving ? "Saving…" : "Save retail settings"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
 
           {expiringBatches.length > 0 && (
             <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

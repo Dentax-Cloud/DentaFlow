@@ -1,0 +1,29 @@
+-- AlterTable
+ALTER TABLE "Tenant" ADD COLUMN "gstin" TEXT,
+ADD COLUMN "gstState" TEXT,
+ADD COLUMN "gstRegistered" BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable
+ALTER TABLE "Patient" ADD COLUMN "state" TEXT;
+
+-- AlterTable
+ALTER TABLE "Invoice" ADD COLUMN "cgstTotal" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "sgstTotal" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "igstTotal" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "exemptSubtotal" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "taxableSubtotal" DECIMAL(12,2) NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "InventoryItem" ADD COLUMN "hsnCode" TEXT;
+
+-- AlterTable
+ALTER TABLE "InvoiceItem" ADD COLUMN "itemType" TEXT NOT NULL DEFAULT 'SERVICE',
+ADD COLUMN "inventoryItemId" TEXT,
+ADD COLUMN "hsnSacCode" TEXT,
+ADD COLUMN "gstRate" DECIMAL(5,2) DEFAULT 0,
+ADD COLUMN "cgstAmount" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "sgstAmount" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN "igstAmount" DECIMAL(12,2) NOT NULL DEFAULT 0;
+
+-- AddForeignKey
+ALTER TABLE "InvoiceItem" ADD CONSTRAINT "InvoiceItem_inventoryItemId_fkey" FOREIGN KEY ("inventoryItemId") REFERENCES "InventoryItem"("id") ON DELETE SET NULL ON UPDATE CASCADE;

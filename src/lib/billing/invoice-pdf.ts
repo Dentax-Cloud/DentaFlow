@@ -28,6 +28,7 @@ async function loadInvoicePdfInput(
           phone: true,
           email: true,
           taxNumber: true,
+          gstin: true,
           countryCode: true,
           currency: true,
         },
@@ -45,12 +46,14 @@ async function loadInvoicePdfInput(
     ? invoice.payments.find((p) => p.id === receipt.paymentId)
     : undefined;
 
+  const isIndiaGst = invoice.tenant.countryCode === "IN";
+
   return {
     clinicName: invoice.tenant.name,
     clinicAddress: invoice.tenant.address,
     clinicPhone: invoice.tenant.phone,
     clinicEmail: invoice.tenant.email,
-    taxNumber: invoice.taxNumber ?? invoice.tenant.taxNumber,
+    taxNumber: invoice.taxNumber ?? invoice.tenant.gstin ?? invoice.tenant.taxNumber,
     invoiceNumber: invoice.invoiceNumber,
     invoiceRef: invoice.invoiceRef,
     invoiceDate: invoice.createdAt,
@@ -61,6 +64,12 @@ async function loadInvoicePdfInput(
       unitPrice: Number(item.unitPrice),
       total: Number(item.total),
       procedureCode: item.procedureCode,
+      itemType: item.itemType,
+      hsnSacCode: item.hsnSacCode,
+      gstRate: item.gstRate != null ? Number(item.gstRate) : null,
+      cgstAmount: Number(item.cgstAmount),
+      sgstAmount: Number(item.sgstAmount),
+      igstAmount: Number(item.igstAmount),
     })),
     subtotal: Number(invoice.subtotal),
     tax: Number(invoice.tax),
@@ -68,6 +77,12 @@ async function loadInvoicePdfInput(
     total,
     currency: invoice.currency,
     countryCode: invoice.tenant.countryCode ?? "AE",
+    isIndiaGst,
+    exemptSubtotal: Number(invoice.exemptSubtotal ?? 0),
+    taxableSubtotal: Number(invoice.taxableSubtotal ?? 0),
+    cgstTotal: Number(invoice.cgstTotal ?? 0),
+    sgstTotal: Number(invoice.sgstTotal ?? 0),
+    igstTotal: Number(invoice.igstTotal ?? 0),
     insuranceAmount: Number(invoice.insuranceAmount ?? 0),
     patientAmount: Number(invoice.patientAmount ?? total),
     providerCode: invoice.providerCode,

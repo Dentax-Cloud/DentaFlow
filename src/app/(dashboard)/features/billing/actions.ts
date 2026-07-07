@@ -11,7 +11,7 @@ import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { getStripeClient } from "@/lib/stripe";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
-import { getTenantInvoiceTax } from "@/lib/billing/tenant-invoice-tax";
+import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
 import { notifyInvoicePaid, sendInvoiceEmailToPatient, sendPaymentReceiptEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { getStaffActor } from "@/lib/tenant/context";
 
@@ -23,6 +23,10 @@ const createInvoiceSchema = z.object({
       quantity: z.number().min(1),
       unitPrice: z.number().min(0),
       procedureCode: z.string().optional(),
+      inventoryItemId: z.string().optional(),
+      itemType: z.enum(["SERVICE", "GOOD"]).optional(),
+      gstRatePercent: z.number().min(0).max(100).optional(),
+      hsnCode: z.string().optional(),
     }),
   ).min(1),
   dueDate: z.string().optional(),
@@ -35,10 +39,20 @@ export const createInvoice = createAction({
   permission: () => requirePermission(PERMISSIONS.billing.write),
   handler: async (input, ctx) => {
     const count = await db.invoice.count({ where: { tenantId: ctx.tenant.id } });
-    const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-    const taxInfo = await getTenantInvoiceTax(ctx.tenant.id);
-    const tax = subtotal * taxInfo.taxRateDecimal;
-    const total = subtotal + tax;
+    const taxResult = await calculateInvoiceTaxAndLines({
+      tenantId: ctx.tenant.id,
+      patientId: input.patientId,
+      items: input.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        procedureCode: item.procedureCode,
+        inventoryItemId: item.inventoryItemId,
+        itemType: item.itemType,
+        gstRatePercent: item.gstRatePercent,
+        hsnCode: item.hsnCode,
+      })),
+    });
 
     const procedureCodes = input.items
       .map((i) => i.procedureCode)
@@ -48,7 +62,7 @@ export const createInvoice = createAction({
       tenantId: ctx.tenant.id,
       patientId: input.patientId,
       procedureCodes,
-      totalAmount: total,
+      totalAmount: taxResult.total,
     });
 
     const invoice = await db.invoice.create({
@@ -58,15 +72,20 @@ export const createInvoice = createAction({
         invoiceNumber: (await import("@/lib/utils")).generateInvoiceNumber(count + 1),
         invoiceRef: await generateInvoiceRef(ctx.tenant.id),
         status: input.sendNow ? InvoiceStatus.SENT : InvoiceStatus.DRAFT,
-        subtotal,
-        tax,
-        total,
-        currency: taxInfo.currency,
-        taxName: taxInfo.taxName,
-        taxRateApplied: taxInfo.taxRatePercent,
-        taxNumber: taxInfo.taxNumber,
+        subtotal: taxResult.subtotal,
+        tax: taxResult.tax,
+        total: taxResult.total,
+        exemptSubtotal: taxResult.exemptSubtotal,
+        taxableSubtotal: taxResult.taxableSubtotal,
+        cgstTotal: taxResult.cgstTotal,
+        sgstTotal: taxResult.sgstTotal,
+        igstTotal: taxResult.igstTotal,
+        currency: taxResult.currency,
+        taxName: taxResult.taxName,
+        taxRateApplied: taxResult.taxRateApplied,
+        taxNumber: taxResult.taxNumber,
         insuranceAmount: insuranceSplit?.insurerAmount ?? 0,
-        patientAmount: insuranceSplit?.patientAmount ?? total,
+        patientAmount: insuranceSplit?.patientAmount ?? taxResult.total,
         coPayPercent: insuranceSplit?.coPayPercent ?? null,
         providerCode: insuranceSplit?.providerName ?? null,
         networkType: insuranceSplit?.networkName ?? null,
@@ -74,13 +93,20 @@ export const createInvoice = createAction({
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         notes: input.notes,
         items: {
-          create: input.items.map((item) => ({
+          create: taxResult.lines.map((line) => ({
             tenantId: ctx.tenant.id,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            total: item.quantity * item.unitPrice,
-            procedureCode: item.procedureCode,
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            total: line.total,
+            procedureCode: line.procedureCode,
+            inventoryItemId: line.inventoryItemId,
+            itemType: line.itemType,
+            hsnSacCode: line.hsnSacCode,
+            gstRate: line.gstRate,
+            cgstAmount: line.cgstAmount,
+            sgstAmount: line.sgstAmount,
+            igstAmount: line.igstAmount,
           })),
         },
       },

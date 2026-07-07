@@ -14,12 +14,13 @@ export const INDIA: CountryProfile = {
 
   taxName: "GST",
   taxRate: 18,
-  taxOnDental: true,
+  taxOnDental: false,
   taxNumberLabel: "GSTIN",
   taxNumberRegexStr: "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$",
   taxNumberExample: "27AAPFU0939F1ZV",
   taxInvoiceRequired: true,
-  taxInvoiceNotes: "GST invoice required for all taxable dental services",
+  taxInvoiceNotes:
+    "Dental/medical services are GST-exempt (SAC 999319). Retail goods sold via POS require GST with HSN codes.",
 
   defaultLanguage: "en",
   secondaryLanguage: "hi",

@@ -438,6 +438,35 @@ export async function getExpiryAlerts(daysAhead = 30) {
   return batches.map((b) => serializeDecimal(b));
 }
 
+export async function updateInventoryRetailGst(input: {
+  inventoryItemId: string;
+  retailPrice?: number | null;
+  taxRate?: number | null;
+  hsnCode?: string | null;
+  isSellable?: boolean;
+}) {
+  const ctx = await requireTenantContext();
+
+  const item = await db.inventoryItem.findFirst({
+    where: { id: input.inventoryItemId, tenantId: ctx.tenantId, deletedAt: null },
+  });
+  if (!item) throw new Error("Inventory item not found");
+
+  await db.inventoryItem.update({
+    where: { id: input.inventoryItemId },
+    data: {
+      ...(input.retailPrice !== undefined ? { retailPrice: input.retailPrice } : {}),
+      ...(input.taxRate !== undefined ? { taxRate: input.taxRate } : {}),
+      ...(input.hsnCode !== undefined ? { hsnCode: input.hsnCode?.trim() || null } : {}),
+      ...(input.isSellable !== undefined ? { isSellable: input.isSellable } : {}),
+    },
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath(`/inventory/${input.inventoryItemId}`);
+  return { ok: true };
+}
+
 export async function initiateRecall(input: {
   lotNumber?: string;
   gtin?: string;
