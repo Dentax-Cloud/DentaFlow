@@ -13,12 +13,19 @@ Production TLS is terminated by **nginx on the VPS host**, which reverse-proxies
 
 2. `.env.production` on the VPS:
    ```bash
+   DATABASE_URL=postgresql://dentaflow:dentaflow@dentaflow-db:5432/dentaflow?schema=public
    NEXTAUTH_URL=https://dentax.cloud
    NEXT_PUBLIC_APP_URL=https://dentax.cloud
    WEB_PORT=3100
    ```
 
-3. Web container bound to localhost only (`docker-compose.prod.yml`):
+3. Dev database must already be running on the shared network:
+   ```bash
+   docker compose -f docker-compose.dev.yml up -d db
+   docker network inspect dentaflow-dev_dentalflow_net --format '{{.Name}}'
+   ```
+
+4. Web container bound to localhost only (`docker-compose.prod.yml`):
    ```yaml
    ports:
      - "127.0.0.1:3100:3000"
