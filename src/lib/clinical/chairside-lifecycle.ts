@@ -323,16 +323,42 @@ export async function expireStaleChairsideSessions(): Promise<number> {
     select: { id: true, tenantId: true, patientId: true, appointmentId: true, startedAt: true },
   });
 
+  let expired = 0;
+
   for (const session of staleSessions) {
-    await abandonChairsideSession({
-      sessionId: session.id,
-      tenantId: session.tenantId,
-      closedReason: CHAIRSIDE_CLOSED_REASON.EXPIRED_STALE,
+    const updated = await db.chairsideSession.updateMany({
+      where: {
+        id: session.id,
+        status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+      },
+      data: {
+        status: CHAIRSIDE_SESSION_STATUS.ABANDONED,
+        finalizedAt: new Date(),
+        closedReason: CHAIRSIDE_CLOSED_REASON.EXPIRED_STALE,
+      },
     });
+    if (updated.count === 0) continue;
+
+    await db.auditLog
+      .create({
+        data: {
+          tenantId: session.tenantId,
+          action: "UPDATE",
+          entity: "ChairsideSession",
+          entityId: session.id,
+          metadata: {
+            abandoned: true,
+            closedReason: CHAIRSIDE_CLOSED_REASON.EXPIRED_STALE,
+          },
+        },
+      })
+      .catch(() => null);
+
     console.log(
       `[chairside] expired stale session ${session.id} (patient ${session.patientId}, started ${session.startedAt.toISOString()})`,
     );
+    expired++;
   }
 
-  return staleSessions.length;
+  return expired;
 }

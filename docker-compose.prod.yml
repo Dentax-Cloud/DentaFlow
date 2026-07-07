@@ -30,3 +30,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dentaflow-worker-prod
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      DB_HOST: dentaflow-db
+    command: ["/bin/sh", "/app/scripts/entrypoint-worker-prod.sh"]
+    networks:
+      - dentalflow_net
