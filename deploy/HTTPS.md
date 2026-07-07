@@ -11,13 +11,25 @@ Production TLS is terminated by **nginx on the VPS host**, which reverse-proxies
    ```
    Both must return your VPS public IP (e.g. `145.223.90.247`).
 
-2. `.env.production` on the VPS:
+2. `.env.production` on the VPS (must include encryption key matching dev when sharing DB):
    ```bash
    DATABASE_URL=postgresql://dentaflow:dentaflow@dentaflow-db:5432/dentaflow?schema=public
    NEXTAUTH_URL=https://dentax.cloud
    NEXT_PUBLIC_APP_URL=https://dentax.cloud
    WEB_PORT=3100
+   AUTH_SECRET=<same as dev if SETTINGS_ENCRYPTION_KEY unset>
+   SETTINGS_ENCRYPTION_KEY=<copy exact value from .env.docker>
    ```
+
+   Sync from dev automatically:
+   ```bash
+   chmod +x scripts/sync-encryption-env.sh
+   ./scripts/sync-encryption-env.sh
+   docker compose -f docker-compose.prod.yml up -d --force-recreate web worker
+   docker compose -f docker-compose.prod.yml exec web pnpm verify:settings
+   ```
+
+   Confirm SMTP: Superadmin → Platform Settings → Email → **Verify SMTP**.
 
 3. Dev database must already be running on the shared network:
    ```bash

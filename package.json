@@ -21,6 +21,7 @@
     "db:studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify:settings": "tsx scripts/verify-platform-settings-decrypt.ts",
     "worker": "tsx src/worker/worker.ts"
   },
   "dependencies": {
