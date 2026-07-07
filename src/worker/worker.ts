@@ -15,7 +15,6 @@ import { sendAppointmentReminder, sendTrialExpiryWarning, sendMail } from "@/lib
 import { parseRecallSettings } from "@/lib/recall/helpers";
 import { expireStaleChairsideSessions } from "@/lib/clinical/chairside-lifecycle";
 import { formatClinicTime, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
-import { isPrismaUniqueViolation, workerClaimLogId } from "@/worker/claim";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -52,36 +51,37 @@ function formatDoctorName(
   return fromProvider || "your dentist";
 }
 
-async function claimOutboundSend(params: {
-  claimId: string;
-  tenantId: string;
-  patientId?: string | null;
-  subject: string;
-}): Promise<boolean> {
-  try {
-    await db.communicationLog.create({
-      data: {
-        id: params.claimId,
-        tenantId: params.tenantId,
-        patientId: params.patientId ?? null,
-        channel: CampaignChannel.EMAIL,
-        subject: params.subject,
-        body: "pending",
-        status: "pending",
-      },
-    });
-    return true;
-  } catch (err) {
-    if (isPrismaUniqueViolation(err)) return false;
-    throw err;
-  }
+async function wasReminderSent(appointmentId: string, kind: "24h" | "1h") {
+  const existing = await db.communicationLog.findFirst({
+    where: { subject: reminderSubject(appointmentId, kind) },
+    select: { id: true },
+  });
+  return Boolean(existing);
 }
 
-async function markOutboundSent(claimId: string, body: string) {
-  await db.communicationLog.update({
-    where: { id: claimId },
-    data: { body, status: "sent" },
+async function recordReminderSent(params: {
+  appointmentId: string;
+  tenantId: string;
+  patientId: string;
+  kind: "24h" | "1h";
+}) {
+  await db.communicationLog.create({
+    data: {
+      tenantId: params.tenantId,
+      patientId: params.patientId,
+      channel: CampaignChannel.EMAIL,
+      subject: reminderSubject(params.appointmentId, params.kind),
+      body: `Appointment ${params.kind} reminder sent`,
+      status: "sent",
+    },
   });
+
+  if (params.kind === "24h") {
+    await db.appointment.update({
+      where: { id: params.appointmentId },
+      data: { reminderSent: true },
+    });
+  }
 }
 
 function trialWarningsSent(metadata: unknown): Record<string, string> {
@@ -175,16 +175,7 @@ async function sendRemindersForWindow(params: {
 
   for (const appt of appointments) {
     if (!appt.patient?.email || !appt.patientId) continue;
-
-    const subject = reminderSubject(appt.id, params.kind);
-    const claimId = workerClaimLogId(`reminder_${params.kind}`, appt.id);
-    const claimed = await claimOutboundSend({
-      claimId,
-      tenantId: appt.tenantId,
-      patientId: appt.patientId,
-      subject,
-    });
-    if (!claimed) continue;
+    if (await wasReminderSent(appt.id, params.kind)) continue;
 
     try {
       await sendAppointmentReminder({
@@ -199,44 +190,17 @@ async function sendRemindersForWindow(params: {
         doctorName: formatDoctorName(appt.doctor, appt.provider),
       });
 
-      await markOutboundSent(claimId, `Appointment ${params.kind} reminder sent`);
-
-      if (params.kind === "24h") {
-        await db.appointment.update({
-          where: { id: appt.id },
-          data: { reminderSent: true },
-        });
-      }
+      await recordReminderSent({
+        appointmentId: appt.id,
+        tenantId: appt.tenantId,
+        patientId: appt.patientId,
+        kind: params.kind,
+      });
 
       sent++;
       console.log(`[worker] ${params.kind} reminder sent for appointment ${appt.id}`);
     } catch (err) {
-      await db.communicationLog.delete({ where: { id: claimId } }).catch(() => null);
       console.error(`[worker] ${params.kind} reminder failed for ${appt.id}:`, err);
-      continue;
-    }
-
-    // Send WhatsApp reminder as additional channel (only after successful email claim)
-    try {
-      const { sendAppointmentReminderWhatsApp } = await import(
-        "@/app/(dashboard)/features/whatsapp/actions"
-      );
-      await sendAppointmentReminderWhatsApp({
-        patientId: appt.patientId,
-        appointmentId: appt.id,
-        patientName: `${appt.patient.firstName} ${appt.patient.lastName}`.trim(),
-        clinicName: appt.tenant.name,
-        appointmentDate: appt.startTime,
-        appointmentTime: formatClinicTime(
-          appt.startTime,
-          resolveClinicTimezone(appt.tenant.timezone),
-        ),
-        doctorName: formatDoctorName(appt.doctor, appt.provider),
-        hoursBefore: params.kind === "24h" ? 24 : 1,
-      });
-      console.log(`[worker] ${params.kind} WhatsApp reminder sent for appointment ${appt.id}`);
-    } catch (err) {
-      console.error(`[worker] ${params.kind} WhatsApp reminder failed for ${appt.id}:`, err);
     }
   }
 
@@ -291,27 +255,18 @@ async function runRecallReminderJob() {
 
       for (const recall of recalls) {
         if (!recall.patient.email) continue;
-
-        const claimed = await db.recall.updateMany({
-          where: { id: recall.id, reminderSentAt: null },
-          data: { reminderSentAt: new Date() },
-        });
-        if (claimed.count === 0) continue;
-
         try {
           await sendMail({
             to: recall.patient.email,
             subject: "Time for your dental checkup",
             text: `Dear ${recall.patient.firstName}, it's time for your routine dental checkup at ${tenant.name}. Please call us to schedule your appointment.`,
           });
+          await db.recall.update({
+            where: { id: recall.id },
+            data: { reminderSentAt: new Date() },
+          });
           sent++;
         } catch (err) {
-          await db.recall
-            .update({
-              where: { id: recall.id },
-              data: { reminderSentAt: null },
-            })
-            .catch(() => null);
           console.error(`[worker] recall reminder failed for ${recall.id}:`, err);
         }
       }
@@ -370,15 +325,6 @@ async function runTrialExpiryJob() {
       const sent = trialWarningsSent(tenant.metadata);
       if (sent[`${daysRemaining}d`]) continue;
 
-      const subject = `dentaflow:trial_warning:${tenant.id}:${daysRemaining}d`;
-      const claimId = workerClaimLogId(`trial_warning_${daysRemaining}d`, tenant.id);
-      const claimed = await claimOutboundSend({
-        claimId,
-        tenantId: tenant.id,
-        subject,
-      });
-      if (!claimed) continue;
-
       try {
         await sendTrialExpiryWarning({
           to: owner.email,
@@ -388,11 +334,9 @@ async function runTrialExpiryJob() {
           daysRemaining,
         });
 
-        await markOutboundSent(claimId, `Trial warning (${daysRemaining}d) sent`);
         await markTrialWarningSent(tenant.id, daysRemaining, tenant.metadata);
         console.log(`[worker] Trial warning (${daysRemaining}d) sent to ${owner.email}`);
       } catch (err) {
-        await db.communicationLog.delete({ where: { id: claimId } }).catch(() => null);
         console.error(`[worker] Trial warning failed for ${tenant.id}:`, err);
       }
     }
@@ -433,46 +377,20 @@ async function runExpiredTrialEnforcementJob() {
     });
 
     for (const tenant of expiredTenants) {
-      const transitioned = await db.tenant.updateMany({
-        where: {
-          id: tenant.id,
-          subscriptionStatus: SubscriptionStatus.TRIALING,
-          trialEndsAt: { lt: new Date() },
-          stripeSubscriptionId: null,
-        },
+      await db.tenant.update({
+        where: { id: tenant.id },
         data: { subscriptionStatus: SubscriptionStatus.EXPIRED },
       });
-      if (transitioned.count === 0) continue;
 
       const to = tenant.email ?? (await getTenantOwnerEmail(tenant.id));
-      if (!to) {
-        console.log(`[worker] trial expired: ${tenant.name}`);
-        continue;
-      }
-
-      const claimId = workerClaimLogId("trial_expired", tenant.id);
-      const claimed = await claimOutboundSend({
-        claimId,
-        tenantId: tenant.id,
-        subject: `dentaflow:trial_expired:${tenant.id}`,
-      });
-      if (!claimed) {
-        console.log(`[worker] trial expired: ${tenant.name}`);
-        continue;
-      }
-
-      try {
+      if (to) {
         await sendMail({
           to,
           subject: `Your DentaFlow trial has ended — ${tenant.name}`,
           text: `Your trial for ${tenant.name} has ended. Your data is safe but access is paused until you upgrade.
 
 Upgrade here: ${APP_BASE_URL}/billing/subscription`,
-        });
-        await markOutboundSent(claimId, "Trial expired notification sent");
-      } catch (err) {
-        await db.communicationLog.delete({ where: { id: claimId } }).catch(() => null);
-        console.error(`[worker] trial expired email failed for ${tenant.id}:`, err);
+        }).catch((err) => console.error(`[worker] trial expired email failed for ${tenant.id}:`, err));
       }
 
       console.log(`[worker] trial expired: ${tenant.name}`);
@@ -503,42 +421,24 @@ async function runPastDueDunningJob() {
       },
     });
 
-    const dayKey = new Date().toISOString().slice(0, 10);
-    let sent = 0;
-
     for (const tenant of pastDueTenants) {
       const to = tenant.email ?? (await getTenantOwnerEmail(tenant.id));
       if (!to) continue;
 
-      const claimId = workerClaimLogId(`past_due_${dayKey}`, tenant.id);
-      const claimed = await claimOutboundSend({
-        claimId,
-        tenantId: tenant.id,
-        subject: `dentaflow:past_due_dunning:${tenant.id}:${dayKey}`,
-      });
-      if (!claimed) continue;
-
-      try {
-        await sendMail({
-          to,
-          subject: `Action required: Payment failed for ${tenant.name}`,
-          text: `We couldn't process payment for your DentaFlow subscription for ${tenant.name}.
+      await sendMail({
+        to,
+        subject: `Action required: Payment failed for ${tenant.name}`,
+        text: `We couldn't process payment for your DentaFlow subscription for ${tenant.name}.
 
 Please update your payment method to avoid service interruption:
 ${APP_BASE_URL}/billing/subscription
 
 If payment is not received within 7 days, your account will be suspended.`,
-        });
-        await markOutboundSent(claimId, `Past due dunning sent (${dayKey})`);
-        sent++;
-      } catch (err) {
-        await db.communicationLog.delete({ where: { id: claimId } }).catch(() => null);
-        console.error(`[worker] past due email failed for ${tenant.id}:`, err);
-      }
+      }).catch((err) => console.error(`[worker] past due email failed for ${tenant.id}:`, err));
     }
 
-    if (sent > 0) {
-      console.log(`[worker] past due dunning sent for ${sent} tenant(s)`);
+    if (pastDueTenants.length > 0) {
+      console.log(`[worker] past due dunning sent for ${pastDueTenants.length} tenant(s)`);
     }
   } catch (err) {
     console.error("[worker] past due dunning job failed:", err);

@@ -46,14 +46,6 @@ sudo CERTBOT_EMAIL=admin@dentax.cloud \
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-**Background jobs:** production includes `dentaflow-worker-prod` (reminders, recalls, trial/dunning, chairside cleanup). While sharing the dev database, **stop the dev worker** to avoid redundant polling — job idempotency claims prevent duplicate patient emails if both run, but only one worker is needed:
-
-```bash
-docker compose -f docker-compose.dev.yml stop worker
-docker compose -f docker-compose.prod.yml up -d --build worker
-docker logs dentaflow-worker-prod --tail 30
-```
-
 Certbot installs a **systemd timer** for renewal. Confirm:
 
 ```bash
