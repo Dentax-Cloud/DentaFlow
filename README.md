@@ -219,13 +219,7 @@ docker compose -f docker-compose.dev.yml stop web   # frees :3100 for prod if ne
 
 1. Copy env: `cp .env.production.example .env.production` and fill values (`DATABASE_URL` host must be `dentaflow-db`, not `db`).
 2. Build and run: `docker compose -f docker-compose.prod.yml up --build -d`
-3. Start production worker (and stop dev worker while sharing the same database):
-   ```bash
-   docker compose -f docker-compose.dev.yml stop worker
-   docker compose -f docker-compose.prod.yml up -d --build worker
-   docker logs dentaflow-worker-prod --tail 30
-   ```
-4. Health check: `curl -fsS http://127.0.0.1:3100/api/health` (on VPS) or `curl -fsS https://dentax.cloud/api/health` after HTTPS setup.
+3. Health check: `curl -fsS http://127.0.0.1:3100/api/health` (on VPS) or `curl -fsS https://dentax.cloud/api/health` after HTTPS setup.
 4. HTTPS + Let's Encrypt: see [deploy/HTTPS.md](./deploy/HTTPS.md)
 5. Backups: see [BACKUP.md](./BACKUP.md)
 
