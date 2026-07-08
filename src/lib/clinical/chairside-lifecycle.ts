@@ -2,6 +2,10 @@ import type { AppointmentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
 import { completeVisit } from "@/lib/clinical/complete-visit";
+import {
+  formatChairsideValidationError,
+  validateChairsideSessionForFinalize,
+} from "@/lib/clinical/chairside-entry-validation";
 import { lockChartRecordsForSession } from "@/lib/clinical/lock-chart-records";
 import { deductProcedureConsumables } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 
@@ -151,6 +155,11 @@ export async function finalizeChairsideSessionRecord(params: {
     throw new Error(
       "Add at least one chart entry or provide a reason no treatment was performed.",
     );
+  }
+
+  const chartValidation = validateChairsideSessionForFinalize(session.entries);
+  if (!chartValidation.valid) {
+    throw new Error(formatChairsideValidationError(chartValidation.issues));
   }
 
   let invoiceId: string | null = null;
