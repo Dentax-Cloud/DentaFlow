@@ -13,6 +13,10 @@ import {
 } from "@/lib/clinical/chairside-lifecycle";
 import { getOrCreateActiveChairsideSession } from "@/lib/clinical/start-chairside-session";
 import { amendLockedChairsideEntry } from "@/lib/clinical/lock-chart-records";
+import {
+  formatChairsideValidationError,
+  getChairsideEntryValidationIssues,
+} from "@/lib/clinical/chairside-entry-validation";
 
 const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
   "You don't have permission to start a chairside session. Contact your administrator if you believe this is incorrect.";
@@ -180,6 +184,19 @@ export async function updateChairsideEntry(
     where: { id: entryId, tenantId: ctx.tenantId },
   });
   if (!entry) throw new Error("Entry not found");
+
+  if (data.includeInInvoice === true) {
+    const merged = {
+      ...entry,
+      notes: data.notes ?? entry.notes,
+      quantity: data.quantity ?? entry.quantity,
+      includeInInvoice: true,
+    };
+    const issues = getChairsideEntryValidationIssues(merged);
+    if (issues.length > 0) {
+      throw new Error(formatChairsideValidationError(issues));
+    }
+  }
 
   if (entry.lockedAt) {
     await amendLockedChairsideEntry({

@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
+import { useState, useCallback, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useProcedureSearch, type ProcedureOption } from "@/lib/clinical/use-procedure-search";
 import { useVoiceDictation } from "@/lib/clinical/use-voice-dictation";
+import {
+  getChairsideEntryValidationIssues,
+  validateChairsideSessionForFinalize,
+  formatChairsideValidationError,
+} from "@/lib/clinical/chairside-entry-validation";
 import {
   addChairsideEntry,
   removeChairsideEntry,
@@ -77,6 +82,16 @@ export function ChairsidePanel({
 
   const billableEntries = entries.filter((e) => e.includeInInvoice);
   const subtotal = billableEntries.reduce((sum, e) => sum + e.unitPrice * e.quantity, 0);
+  const chartValidation = useMemo(
+    () => validateChairsideSessionForFinalize(entries),
+    [entries],
+  );
+  const invalidEntryIds = useMemo(
+    () => new Set(chartValidation.issues.map((issue) => issue.entryId).filter(Boolean)),
+    [chartValidation.issues],
+  );
+  const finalizeLabel =
+    billableEntries.length > 0 ? "Complete & Create Invoice" : "Complete Session";
 
   function mapEntry(entry: Awaited<ReturnType<typeof addChairsideEntry>>): ChairsideEntryRow {
     return {
@@ -149,14 +164,29 @@ export function ChairsidePanel({
   }
 
   function handleToggleBillable(entryId: string, current: boolean) {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+
+    const nextBillable = !current;
+    if (nextBillable) {
+      const issues = getChairsideEntryValidationIssues({
+        ...entry,
+        includeInInvoice: true,
+      });
+      if (issues.length > 0) {
+        toast.error(issues[0]?.message ?? "This entry cannot be marked billable.");
+        return;
+      }
+    }
+
     startTransition(async () => {
       try {
-        await updateChairsideEntry(entryId, { includeInInvoice: !current });
+        await updateChairsideEntry(entryId, { includeInInvoice: nextBillable });
         setEntries((prev) =>
-          prev.map((e) => (e.id === entryId ? { ...e, includeInInvoice: !current } : e)),
+          prev.map((e) => (e.id === entryId ? { ...e, includeInInvoice: nextBillable } : e)),
         );
-      } catch {
-        toast.error("Could not update entry");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not update entry");
       }
     });
   }
@@ -178,22 +208,31 @@ export function ChairsidePanel({
           setInvoiceId(result.invoiceId);
           setIsFinalized(true);
           onFinalized?.(result.invoiceId);
-        } catch {
-          toast.error("Could not finalize session");
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Could not finalize session");
         }
       });
       return;
     }
 
-    if (!confirm(`Finalize session and create invoice for ${patientName}?`)) return;
+    if (!chartValidation.valid) {
+      toast.error(formatChairsideValidationError(chartValidation.issues));
+      return;
+    }
+
+    const confirmMessage =
+      billableEntries.length > 0
+        ? `Finalize session and create invoice for ${patientName}?`
+        : `Finalize session for ${patientName}? No billable procedures will be invoiced.`;
+    if (!confirm(confirmMessage)) return;
     startTransition(async () => {
       try {
         const result = await finalizeChairsideSession(sessionId);
         setInvoiceId(result.invoiceId);
         setIsFinalized(true);
         onFinalized?.(result.invoiceId);
-      } catch {
-        toast.error("Could not finalize session");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not finalize session");
       }
     });
   }
@@ -395,13 +434,17 @@ export function ChairsidePanel({
             </p>
           ) : (
             <div className="max-h-96 space-y-2 overflow-y-auto">
-              {entries.map((entry) => (
+              {entries.map((entry) => {
+                const entryInvalid = invalidEntryIds.has(entry.id);
+                return (
                 <div
                   key={entry.id}
                   className={`rounded-lg border p-2 text-sm ${
-                    entry.includeInInvoice
-                      ? "border-green-200 bg-green-50"
-                      : "border-gray-200 bg-gray-50"
+                    entryInvalid
+                      ? "border-amber-300 bg-amber-50"
+                      : entry.includeInInvoice
+                        ? "border-green-200 bg-green-50"
+                        : "border-gray-200 bg-gray-50"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -422,6 +465,11 @@ export function ChairsidePanel({
                       {entry.notes && (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {entry.notes}
+                        </p>
+                      )}
+                      {entryInvalid && (
+                        <p className="mt-1 text-xs text-amber-800">
+                          {getChairsideEntryValidationIssues(entry)[0]?.message}
                         </p>
                       )}
                     </div>
@@ -453,7 +501,8 @@ export function ChairsidePanel({
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </Card>
@@ -482,12 +531,19 @@ export function ChairsidePanel({
         <Button
           type="button"
           onClick={handleFinalize}
-          disabled={isPending || entries.length === 0}
+          disabled={isPending || entries.length === 0 || !chartValidation.valid}
           className="w-full"
           size="lg"
         >
-          {isPending ? "Finalizing..." : "Complete & Create Invoice"}
+          {isPending ? "Finalizing..." : finalizeLabel}
         </Button>
+        )}
+
+        {canWrite && entries.length > 0 && !chartValidation.valid && (
+          <p className="text-center text-xs text-amber-800">
+            Fix highlighted entries before finalizing — billable lines need a procedure and price,
+            or mark findings as non-billable.
+          </p>
         )}
 
         {canWrite && entries.length === 0 && (
