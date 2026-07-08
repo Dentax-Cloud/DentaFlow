@@ -33,6 +33,7 @@ type Presentation = {
 };
 
 type Props = {
+  canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string }[];
   selectedPatientId: string | null;
   appointmentId: string | null;
@@ -42,6 +43,7 @@ type Props = {
 };
 
 export default function PhotoPageClient({
+  canWriteClinical = true,
   patients,
   selectedPatientId,
   appointmentId,
@@ -99,7 +101,7 @@ export default function PhotoPageClient({
             Capture, organize and present clinical photos
           </p>
         </div>
-        {selectedPatientId && (
+        {selectedPatientId && canWriteClinical && (
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
@@ -158,7 +160,7 @@ export default function PhotoPageClient({
         </div>
       ) : (
         <>
-          {showCamera && (
+          {canWriteClinical && showCamera && (
             <Card className="p-4">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-medium">Camera capture</h3>
@@ -193,7 +195,7 @@ export default function PhotoPageClient({
             </Card>
           )}
 
-          {showUpload && (
+          {canWriteClinical && showUpload && (
             <ImageUploadForm
               patientId={selectedPatientId}
               appointmentId={appointmentId ?? undefined}
@@ -206,7 +208,7 @@ export default function PhotoPageClient({
             />
           )}
 
-          {showPresBuilder && (
+          {canWriteClinical && showPresBuilder && (
             <Card className="p-4">
               <CasePresentationBuilder
                 patientId={selectedPatientId}
@@ -232,7 +234,7 @@ export default function PhotoPageClient({
             </TabsList>
 
             <TabsContent value="gallery">
-              <ImageGallery images={photos} />
+              <ImageGallery images={photos} canDelete={canWriteClinical} />
             </TabsContent>
 
             <TabsContent value="before-after">
@@ -289,6 +291,8 @@ export default function PhotoPageClient({
                           </p>
                         </div>
                         <div className="flex gap-2">
+                          {canWriteClinical ? (
+                          <>
                           <Button
                             size="sm"
                             variant="outline"
@@ -306,6 +310,8 @@ export default function PhotoPageClient({
                           >
                             Delete
                           </Button>
+                          </>
+                          ) : null}
                         </div>
                       </div>
 

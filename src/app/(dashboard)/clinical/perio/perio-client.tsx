@@ -34,12 +34,14 @@ import Link from "next/link";
 type PatientOption = { id: string; firstName: string; lastName: string };
 
 export function PerioPageClient({
+  canWriteClinical = true,
   patients,
   selectedPatientId,
   chartHistory,
   currentStaffId,
   currentStaffName,
 }: {
+  canWriteClinical?: boolean;
   patients: PatientOption[];
   selectedPatientId: string | null;
   chartHistory: PerioChartRecord[];
@@ -161,15 +163,18 @@ export function PerioPageClient({
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue="new">
+        <Tabs defaultValue={canWriteClinical ? "new" : "history"}>
           <TabsList>
-            <TabsTrigger value="new">New chart</TabsTrigger>
+            {canWriteClinical ? (
+              <TabsTrigger value="new">New chart</TabsTrigger>
+            ) : null}
             <TabsTrigger value="history">History ({chartHistory.length})</TabsTrigger>
             <TabsTrigger value="compare" disabled={chartHistory.length < 2}>
               Compare
             </TabsTrigger>
           </TabsList>
 
+          {canWriteClinical ? (
           <TabsContent value="new" className="mt-4 space-y-4">
             <Card>
               <CardHeader className="pb-2">
@@ -206,9 +211,14 @@ export function PerioPageClient({
               </CardContent>
             </Card>
           </TabsContent>
+          ) : null}
 
           <TabsContent value="history" className="mt-4">
-            <PerioChartHistory charts={chartHistory} onDeleted={() => router.refresh()} />
+            <PerioChartHistory
+              charts={chartHistory}
+              canDelete={canWriteClinical}
+              onDeleted={() => router.refresh()}
+            />
           </TabsContent>
 
           <TabsContent value="compare" className="mt-4 space-y-4">

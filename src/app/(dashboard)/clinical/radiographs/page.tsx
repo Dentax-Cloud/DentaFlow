@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { parseAnnotations } from "@/lib/clinical/image-types";
 import RadiographPageClient from "./radiograph-client";
@@ -12,6 +13,10 @@ export default async function RadiographPage({
 }) {
   const { patientId, upload } = await searchParams;
   const ctx = await requireRouteAccess("clinical_chart", "read");
+  const canWriteClinical = Boolean(
+    ctx.staffMember?.role &&
+      hasPermission(ctx.staffMember.role, PERMISSIONS.clinical_chart.write),
+  );
 
   const patients = await db.patient.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },
@@ -29,6 +34,7 @@ export default async function RadiographPage({
 
   return (
     <RadiographPageClient
+      canWriteClinical={canWriteClinical}
       patients={patients}
       selectedPatientId={patientId ?? null}
       openUpload={upload === "1" || upload === "true"}

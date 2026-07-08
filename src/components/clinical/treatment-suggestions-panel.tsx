@@ -10,7 +10,7 @@ type Props = {
   suggestion: TreatmentSuggestion | null;
   loading: boolean;
   savingTier: "basic" | "premium" | null;
-  onSaveTier: (tier: "basic" | "premium") => void;
+  onSaveTier?: (tier: "basic" | "premium") => void;
   onDismiss: () => void;
 };
 
@@ -46,13 +46,13 @@ export function TreatmentSuggestionsPanel({
                 title="Basic plan"
                 items={suggestion.basic}
                 saving={savingTier === "basic"}
-                onSave={() => onSaveTier("basic")}
+                onSave={onSaveTier ? () => onSaveTier("basic") : undefined}
               />
               <TierBlock
                 title="Premium plan"
                 items={suggestion.premium}
                 saving={savingTier === "premium"}
-                onSave={() => onSaveTier("premium")}
+                onSave={onSaveTier ? () => onSaveTier("premium") : undefined}
               />
             </div>
           </>
@@ -71,7 +71,7 @@ function TierBlock({
   title: string;
   items: TreatmentSuggestion["basic"];
   saving: boolean;
-  onSave: () => void;
+  onSave?: () => void;
 }) {
   const total = items.reduce((s, i) => s + i.estimatedCost, 0);
   return (
@@ -92,9 +92,11 @@ function TierBlock({
           </li>
         ))}
       </ul>
+      {onSave ? (
       <Button type="button" size="sm" className="w-full" disabled={saving} onClick={onSave}>
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as proposed plan"}
       </Button>
+      ) : null}
     </div>
   );
 }

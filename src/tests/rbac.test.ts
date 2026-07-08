@@ -20,6 +20,26 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.RECEPTIONIST, "delete", "patients")).toBe(false);
   });
 
+  it("nurse has clinical chart read-only, not write", () => {
+    expect(normalizeDashboardRole(UserRole.NURSE)).toBe("NURSE");
+    expect(can(UserRole.NURSE, "read", "clinical_chart")).toBe(true);
+    expect(can(UserRole.NURSE, "write", "clinical_chart")).toBe(false);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_chart.read)).toBe(true);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_chart.write)).toBe(false);
+    expect(can(UserRole.NURSE, "read", "clinical_schedule")).toBe(true);
+    expect(can(UserRole.NURSE, "write", "patients")).toBe(true);
+  });
+
+  it("hygienist retains clinical chart write access", () => {
+    expect(can(UserRole.HYGIENIST, "write", "clinical_chart")).toBe(true);
+    expect(can(UserRole.HYGIENIST, "read", "clinical_chart")).toBe(true);
+  });
+
+  it("admin and owner retain clinical chart write access", () => {
+    expect(can(UserRole.ADMIN, "write", "clinical_chart")).toBe(true);
+    expect(can(UserRole.OWNER, "write", "clinical_chart")).toBe(true);
+  });
+
   it("doctor can write clinical chart and patients but not appointments", () => {
     expect(can(UserRole.DOCTOR, "write", "clinical_chart")).toBe(true);
     expect(can(UserRole.DOCTOR, "write", "patients")).toBe(true);
@@ -59,6 +79,7 @@ describe("RBAC routes and navigation", () => {
   it("returns role-specific home paths", () => {
     expect(getRoleHomePath(UserRole.ADMIN)).toBe("/dashboard");
     expect(getRoleHomePath(UserRole.DOCTOR)).toBe("/clinical");
+    expect(getRoleHomePath(UserRole.NURSE)).toBe("/clinical");
     expect(getRoleHomePath(UserRole.RECEPTIONIST)).toBe("/appointments");
     expect(getRoleHomePath(UserRole.FINANCE)).toBe("/billing");
     expect(getRoleHomePath(UserRole.STORE)).toBe("/inventory");
@@ -67,6 +88,13 @@ describe("RBAC routes and navigation", () => {
   it("blocks doctor from admin routes", () => {
     expect(canAccessPath(UserRole.DOCTOR, "/admin")).toBe(false);
     expect(canAccessPath(UserRole.DOCTOR, "/clinical")).toBe(true);
+  });
+
+  it("allows nurse clinical chart read routes including chair setup", () => {
+    expect(canAccessPath(UserRole.NURSE, "/clinical")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/clinical/chair-setup")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/clinical/radiographs")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/clinical/chairside")).toBe(true);
   });
 
   it("blocks receptionist from clinical chart routes but allows treatment plans", () => {
@@ -91,5 +119,10 @@ describe("RBAC routes and navigation", () => {
     expect(financeNav.some((item) => item.href === "/billing")).toBe(true);
     expect(financeNav.some((item) => item.href === "/clinical/chairside")).toBe(false);
     expect(financeNav.some((item) => item.href === "/admin")).toBe(false);
+
+    const nurseNav = getNavItemsForRole(UserRole.NURSE);
+    expect(nurseNav.some((item) => item.href === "/clinical")).toBe(true);
+    expect(nurseNav.some((item) => item.href === "/clinical/chair-setup")).toBe(true);
+    expect(nurseNav.some((item) => item.href === "/clinical/radiographs")).toBe(true);
   });
 });

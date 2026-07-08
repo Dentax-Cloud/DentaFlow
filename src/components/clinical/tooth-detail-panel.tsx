@@ -41,6 +41,7 @@ type Props = {
   onSurfacesChange?: (surfaces: ToothSurface[]) => void;
   treatmentLoading?: boolean;
   saving?: boolean;
+  readOnly?: boolean;
 };
 
 function todayIsoDate() {
@@ -61,6 +62,7 @@ export function ToothDetailPanel({
   onSurfacesChange,
   treatmentLoading,
   saving,
+  readOnly = false,
 }: Props) {
   const [notes, setNotes] = useState("");
   const [findingDate, setFindingDate] = useState(todayIsoDate());
@@ -114,6 +116,12 @@ export function ToothDetailPanel({
           </p>
         )}
 
+        {readOnly ? (
+          conditions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No findings recorded for this tooth.</p>
+          ) : null
+        ) : (
+          <>
         <div>
           <Label className="text-xs text-muted-foreground">Surfaces (optional)</Label>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -243,6 +251,8 @@ export function ToothDetailPanel({
             </Button>
           )}
         </div>
+          </>
+        )}
 
         {conditions.length > 0 && (
           <ul className="max-h-64 space-y-2 overflow-y-auto border-t pt-3">
@@ -269,6 +279,7 @@ export function ToothDetailPanel({
                     {c.recordedByName ? ` · ${c.recordedByName}` : ""}
                   </p>
                 </div>
+                {!readOnly && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -280,11 +291,13 @@ export function ToothDetailPanel({
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                )}
               </li>
             ))}
           </ul>
         )}
 
+        {!readOnly && (
         <Button
           type="button"
           variant="secondary"
@@ -301,6 +314,7 @@ export function ToothDetailPanel({
             "Suggest treatment from chart"
           )}
         </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -46,6 +46,8 @@ type Props = {
   initialEntries: ChairsideEntryRow[];
   procedures: ProcedureOption[];
   onFinalized?: (invoiceId: string | null) => void;
+  /** When false, session is view-only (e.g. nurse assisting chairside). */
+  canWrite?: boolean;
 };
 
 export function ChairsidePanel({
@@ -58,6 +60,7 @@ export function ChairsidePanel({
   initialEntries,
   procedures,
   onFinalized,
+  canWrite = true,
 }: Props) {
   const [entries, setEntries] = useState<ChairsideEntryRow[]>(initialEntries);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
@@ -229,9 +232,14 @@ export function ChairsidePanel({
               </p>
             </div>
             <Badge variant={isPending ? "secondary" : "outline"}>
-              {isPending ? "Saving..." : "Auto-saved"}
+              {isPending ? "Saving..." : canWrite ? "Auto-saved" : "View only"}
             </Badge>
           </div>
+          {!canWrite && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Read-only view — clinical chart edits require a doctor or hygienist.
+            </p>
+          )}
           {(patientAllergies.length > 0 || patientBloodGroup || patientMedicalHistory) && (
             <div className="mt-3 space-y-2">
               {patientAllergies.length > 0 && (
@@ -253,6 +261,8 @@ export function ChairsidePanel({
           )}
         </Card>
 
+        {canWrite && (
+          <>
         <Card className="p-4">
           <h3 className="mb-3 text-sm font-medium">Selected tooth</h3>
           <div className="flex items-center gap-3">
@@ -366,6 +376,8 @@ export function ChairsidePanel({
             }`}
           />
         </Card>
+          </>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -419,6 +431,8 @@ export function ChairsidePanel({
                           AED {(entry.unitPrice * entry.quantity).toFixed(0)}
                         </span>
                       )}
+                      {canWrite && (
+                        <>
                       <button
                         type="button"
                         onClick={() => handleToggleBillable(entry.id, entry.includeInInvoice)}
@@ -434,6 +448,8 @@ export function ChairsidePanel({
                       >
                         ✕
                       </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -462,6 +478,7 @@ export function ChairsidePanel({
           </Card>
         )}
 
+        {canWrite && (
         <Button
           type="button"
           onClick={handleFinalize}
@@ -471,8 +488,9 @@ export function ChairsidePanel({
         >
           {isPending ? "Finalizing..." : "Complete & Create Invoice"}
         </Button>
+        )}
 
-        {entries.length === 0 && (
+        {canWrite && entries.length === 0 && (
           <p className="text-center text-xs text-muted-foreground">
             Add at least one entry to finalize
           </p>

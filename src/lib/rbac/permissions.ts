@@ -75,7 +75,13 @@ export type Action = "read" | "write" | "delete" | "export" | "refund" | "use";
 export type AccessLevel = "none" | "read" | "limited" | "write" | "full";
 
 /** Primary dashboard roles shown in the product matrix. */
-export type DashboardRole = "ADMIN" | "DOCTOR" | "RECEPTIONIST" | "FINANCE" | "STORE";
+export type DashboardRole =
+  | "ADMIN"
+  | "DOCTOR"
+  | "NURSE"
+  | "RECEPTIONIST"
+  | "FINANCE"
+  | "STORE";
 
 /**
  * Maps stored UserRole values (including legacy aliases) to dashboard roles.
@@ -89,8 +95,9 @@ export function normalizeDashboardRole(role: UserRole): DashboardRole {
     case UserRole.DOCTOR:
     case UserRole.DENTIST:
     case UserRole.HYGIENIST:
-    case UserRole.NURSE:
       return "DOCTOR";
+    case UserRole.NURSE:
+      return "NURSE";
     case UserRole.RECEPTIONIST:
       return "RECEPTIONIST";
     case UserRole.FINANCE:
@@ -128,6 +135,19 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "read",
     clinical_chart: "full",
+    billing: "read",
+    inventory: "read",
+    reports: "limited",
+    team: "none",
+    admin: "none",
+    crm: "none",
+    ai: "full",
+  },
+  NURSE: {
+    patients: "write",
+    appointments: "read",
+    clinical_schedule: "read",
+    clinical_chart: "read",
     billing: "read",
     inventory: "read",
     reports: "limited",

@@ -42,10 +42,11 @@ type IntakeRecord = {
 
 type Props = {
   intakes: IntakeRecord[];
+  canWrite?: boolean;
   selectedIntakeId?: string | null;
 };
 
-export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
+export function EmergencyQueue({ intakes, canWrite = true, selectedIntakeId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<string | null>(selectedIntakeId ?? null);
@@ -162,6 +163,7 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
               <p className="text-sm text-muted-foreground">📞 {intake.patient.phone}</p>
             )}
 
+            {canWrite ? (
             <div>
               <p className="mb-2 text-xs font-medium">Change triage level:</p>
               <div className="flex flex-wrap gap-2">
@@ -189,10 +191,12 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
                 )}
               </div>
             </div>
+            ) : null}
 
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-medium">Clinical note</p>
+                {canWrite ? (
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -214,7 +218,9 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
                     Save
                   </Button>
                 </div>
+                ) : null}
               </div>
+              {canWrite ? (
               <textarea
                 value={notes[intake.id] ?? intake.clinicalNote ?? ""}
                 onChange={(e) =>
@@ -227,10 +233,17 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
                 className="w-full resize-none rounded-md border px-3 py-2 text-sm"
                 placeholder="Clinical notes..."
               />
+              ) : intake.clinicalNote ? (
+                <p className="whitespace-pre-wrap rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {intake.clinicalNote}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No clinical note recorded.</p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {statusCfg?.nextStatus && (
+              {canWrite && statusCfg?.nextStatus && (
                 <Button
                   size="sm"
                   onClick={() => handleStatusChange(intake.id, statusCfg.nextStatus!)}
@@ -241,7 +254,7 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
                 </Button>
               )}
 
-              {["IN_CHAIR", "IN_TRIAGE"].includes(intake.status) && (
+              {canWrite && ["IN_CHAIR", "IN_TRIAGE"].includes(intake.status) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -262,7 +275,7 @@ export function EmergencyQueue({ intakes, selectedIntakeId }: Props) {
                 👤 Patient 360
               </Button>
 
-              {!["COMPLETED", "REFERRED"].includes(intake.status) && (
+              {!canWrite ? null : !["COMPLETED", "REFERRED"].includes(intake.status) && (
                 <Button
                   size="sm"
                   variant="ghost"
