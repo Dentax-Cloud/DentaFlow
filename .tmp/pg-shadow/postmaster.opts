@@ -1,0 +1,1 @@
+C:/Program Files/PostgreSQL/17/bin/postgres.exe "-D" "D:/ai_projects/dentaflow/.tmp/pg-shadow" "-p" "5433"

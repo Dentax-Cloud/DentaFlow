@@ -9,7 +9,9 @@ import {
   getChairsideSession,
   startChairsideSession,
 } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { checkConsentForVisit } from "@/lib/clinical/consent-gate";
 import { ChairsidePermissionDenied } from "@/components/clinical/chairside-permission-denied";
+import { ChairsideSessionBlocked } from "@/components/clinical/chairside-session-blocked";
 import ChairsidePageClient from "./chairside-client";
 
 export default async function ChairsidePage({
@@ -44,6 +46,17 @@ export default async function ChairsidePage({
   });
   if (!patient) redirect("/clinical");
 
+  const consent = await checkConsentForVisit(ctx.tenant.id, patientId);
+  if (!consent.ok) {
+    return (
+      <ChairsideSessionBlocked
+        title="Patient consent required"
+        message={consent.message}
+        missingPlans={consent.missingPlans}
+      />
+    );
+  }
+
   const medicalHistoryText =
     patient.medicalHistory && typeof patient.medicalHistory === "object"
       ? JSON.stringify(patient.medicalHistory)
@@ -65,10 +78,16 @@ export default async function ChairsidePage({
   }
 
   if (!chairsideSession) {
-    chairsideSession = await startChairsideSession({
-      patientId,
-      appointmentId,
-    });
+    try {
+      chairsideSession = await startChairsideSession({
+        patientId,
+        appointmentId,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to start chairside session.";
+      return <ChairsideSessionBlocked title="Cannot open chairside" message={message} />;
+    }
   }
 
   const procedures = await db.procedureCatalog.findMany({

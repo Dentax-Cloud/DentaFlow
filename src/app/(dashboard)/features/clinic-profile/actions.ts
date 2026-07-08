@@ -15,6 +15,7 @@ import {
 } from "@/lib/tenant/clinic-profile";
 import { getStaffActor } from "@/lib/tenant/context";
 import { gstStateFromGstin } from "@/lib/billing/india-gst";
+import { GSTIN_FORMAT_ERROR, isValidGstin } from "@/lib/billing/gstin";
 
 const updateClinicProfileSchema = z.object({
   name: z.string().min(2, "Clinic name is required"),
@@ -38,6 +39,20 @@ const updateClinicProfileSchema = z.object({
   expectedMonthlyPatients: z.string().optional(),
   referralSource: z.string().optional(),
   doctorCount: z.coerce.number().int().min(1).max(100).optional(),
+}).superRefine((data, ctx) => {
+  const isIndia = data.country === "IN";
+  if (!isIndia) return;
+
+  const gstin = (data.gstin?.trim() || data.taxId?.trim() || "");
+  if (!gstin) return;
+
+  if (!isValidGstin(gstin)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: GSTIN_FORMAT_ERROR,
+      path: ["gstin"],
+    });
+  }
 });
 
 export const updateClinicProfile = createAction({
