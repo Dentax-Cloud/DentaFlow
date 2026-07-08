@@ -17,6 +17,8 @@ export type CompleteVisitParams = {
   /** When true, do not auto-close other active chairside sessions (e.g. during finalize). */
   skipChairsideAutoClose?: boolean;
   allowInvoice?: boolean;
+  /** When set, COMPLETED notification reflects whether an invoice was created. */
+  invoiceId?: string | null;
 };
 
 /**
@@ -50,6 +52,7 @@ export async function completeVisit(params: CompleteVisitParams) {
       params.tenantId,
       "COMPLETED",
       patientName,
+      { invoiceId: params.invoiceId },
     ).catch(() => null);
 
     await db.patient.update({

@@ -107,11 +107,39 @@ export async function notifyMultiple(
   );
 }
 
+export type NotifyAppointmentStatusOptions = {
+  /** When status is COMPLETED, whether an invoice was actually created. */
+  invoiceId?: string | null;
+};
+
+async function resolveAppointmentProcedureLabel(params: {
+  tenantId: string;
+  procedureId: string | null;
+  title: string;
+  type: string | null;
+}): Promise<string | null> {
+  if (params.procedureId) {
+    const procedure = await db.procedureCatalog.findFirst({
+      where: { id: params.procedureId, tenantId: params.tenantId },
+      select: { code: true, name: true },
+    });
+    if (procedure) {
+      return `${procedure.code} · ${procedure.name}`;
+    }
+  }
+  if (params.type?.trim()) return params.type.trim();
+  if (params.title?.trim() && params.title.trim().toLowerCase() !== "appointment") {
+    return params.title.trim();
+  }
+  return null;
+}
+
 export async function notifyAppointmentStatus(
   appointmentId: string,
   tenantId: string,
   status: string,
   patientName: string,
+  options?: NotifyAppointmentStatusOptions,
 ): Promise<void> {
   const appointment = await db.appointment.findFirst({
     where: { id: appointmentId, tenantId },
@@ -127,7 +155,7 @@ export async function notifyAppointmentStatus(
         select: { id: true, firstName: true, lastName: true, email: true },
       },
       patient: {
-        select: { firstName: true, lastName: true, patientId: true },
+        select: { id: true, firstName: true, lastName: true, patientId: true },
       },
       chair: { select: { name: true } },
     },
@@ -146,34 +174,76 @@ export async function notifyAppointmentStatus(
     month: "short",
   });
 
+  const chairLabel = appointment.chair?.name ?? "Unassigned";
+  const procedureLabel = await resolveAppointmentProcedureLabel({
+    tenantId,
+    procedureId: appointment.procedureId,
+    title: appointment.title,
+    type: appointment.type,
+  });
+
+  let completedInvoiceId: string | null | undefined = options?.invoiceId;
+  if (status === "COMPLETED" && completedInvoiceId === undefined) {
+    const session = await db.chairsideSession.findFirst({
+      where: {
+        tenantId,
+        appointmentId,
+        invoiceId: { not: null },
+      },
+      orderBy: { finalizedAt: "desc" },
+      select: { invoiceId: true },
+    });
+    completedInvoiceId = session?.invoiceId ?? null;
+  }
+
+  const inChairBodyLines = [
+    `${patientName} is now in chair.`,
+    `Chair: ${chairLabel}`,
+    procedureLabel ? `Procedure: ${procedureLabel}` : null,
+    `Time: ${appointmentTime}`,
+  ].filter(Boolean) as string[];
+
+  const completedBody = completedInvoiceId
+    ? `Visit for ${patientName} is complete. Invoice is ready in Billing.`
+    : `Visit for ${patientName} is complete. No invoice was created for this visit.`;
+
   const notifications: Record<
     string,
-    { title: string; body: string; type: NotificationType }
+    { title: string; body: string; type: NotificationType; link: string }
   > = {
     CONFIRMED: {
       type: "APPOINTMENT_CONFIRMED",
       title: "Appointment Confirmed",
       body: `${patientName} confirmed for ${appointmentDate} at ${appointmentTime}${appointment.chair ? ` · ${appointment.chair.name}` : ""}`,
+      link: `/appointments?appointmentId=${appointmentId}`,
     },
     ARRIVED: {
       type: "PATIENT_ARRIVED",
       title: "Patient Arrived",
-      body: `${patientName} has checked in and is waiting.\nChair: ${appointment.chair?.name ?? "Unassigned"}\nTime: ${appointmentTime}`,
+      body: `${patientName} has checked in and is waiting.\nChair: ${chairLabel}\nTime: ${appointmentTime}`,
+      link: `/appointments?appointmentId=${appointmentId}`,
     },
     IN_CHAIR: {
       type: "PATIENT_IN_CHAIR",
-      title: "Treatment Started",
-      body: `Treatment session started for ${patientName}`,
+      title: "Patient In Chair",
+      body: inChairBodyLines.join("\n"),
+      link: appointment.patientId
+        ? `/clinical/chairside?patientId=${appointment.patientId}&appointmentId=${appointmentId}`
+        : `/appointments?appointmentId=${appointmentId}`,
     },
     COMPLETED: {
       type: "APPOINTMENT_COMPLETED",
       title: "Appointment Completed",
-      body: `Appointment for ${patientName} has been completed. Invoice is ready.`,
+      body: completedBody,
+      link: completedInvoiceId
+        ? `/billing?invoiceId=${completedInvoiceId}`
+        : `/appointments?appointmentId=${appointmentId}`,
     },
     CANCELED: {
       type: "APPOINTMENT_CANCELLED",
       title: "Appointment Cancelled",
       body: `${patientName}'s appointment on ${appointmentDate} at ${appointmentTime} has been cancelled.`,
+      link: `/appointments?appointmentId=${appointmentId}`,
     },
   };
 
@@ -186,7 +256,7 @@ export async function notifyAppointmentStatus(
     type: notif.type,
     title: notif.title,
     body: notif.body,
-    link: `/appointments?appointmentId=${appointmentId}`,
+    link: notif.link,
     entityType: "Appointment",
     entityId: appointmentId,
     channel: "BOTH",

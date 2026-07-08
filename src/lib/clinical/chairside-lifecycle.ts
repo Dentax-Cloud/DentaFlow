@@ -221,6 +221,7 @@ export async function finalizeChairsideSessionRecord(params: {
       staffMemberId: params.staffMemberId,
       skipChairsideAutoClose: true,
       allowInvoice: params.allowInvoice,
+      invoiceId,
     });
   }
 
