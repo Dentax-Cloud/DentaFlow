@@ -5,6 +5,7 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { sendMail } from "@/lib/mail";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
+import { clinicLocalToUtc, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 
 export async function getBookingRequests() {
   const ctx = await requireRouteAccess("appointments", "read");
@@ -34,7 +35,12 @@ export async function confirmBookingRequest(bookingId: string) {
 
   if (!booking) throw new Error("Booking not found");
 
-  const startTime = new Date(`${booking.requestedDate}T${booking.requestedTime}:00`);
+  const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+  const startTime = clinicLocalToUtc(
+    booking.requestedDate,
+    booking.requestedTime,
+    clinicTz,
+  );
   const endTime = new Date(startTime.getTime() + booking.durationMins * 60 * 1000);
 
   const appointment = await db.appointment.create({

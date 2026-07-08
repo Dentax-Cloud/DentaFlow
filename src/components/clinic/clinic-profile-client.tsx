@@ -27,6 +27,7 @@ import {
   upsertClinicCustomField,
 } from "@/app/(dashboard)/features/clinic-profile/actions";
 import { INDIAN_GST_STATES } from "@/lib/countries/india-gst-states";
+import { GSTIN_FORMAT_ERROR, isValidGstin } from "@/lib/billing/gstin";
 
 type Props = {
   profile: ClinicProfileView;
@@ -67,6 +68,7 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig, indiaGst 
   );
   const [newField, setNewField] = useState({ label: "", value: "" });
   const [fieldSaving, setFieldSaving] = useState<string | null>(null);
+  const [gstinError, setGstinError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: profile.name,
@@ -104,6 +106,16 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig, indiaGst 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!canEdit) return;
+
+    if (form.country === "IN") {
+      const gstin = form.gstin.trim();
+      if (gstin && !isValidGstin(gstin)) {
+        setGstinError(GSTIN_FORMAT_ERROR);
+        return;
+      }
+    }
+    setGstinError(null);
+
     setSaving(true);
     const result = await updateClinicProfile({
       ...form,
@@ -111,6 +123,9 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig, indiaGst 
     });
     setSaving(false);
     if (!result.success) {
+      if (form.country === "IN" && result.error.includes("GSTIN")) {
+        setGstinError(result.error);
+      }
       toast.error(result.error);
       return;
     }
@@ -362,11 +377,20 @@ export function ClinicProfileClient({ profile, canEdit, countryConfig, indiaGst 
                         <Input
                           id="gstin"
                           value={form.gstin}
-                          onChange={(e) =>
-                            setForm({ ...form, gstin: e.target.value.toUpperCase(), taxId: e.target.value.toUpperCase() })
-                          }
+                          onChange={(e) => {
+                            setGstinError(null);
+                            setForm({
+                              ...form,
+                              gstin: e.target.value.toUpperCase(),
+                              taxId: e.target.value.toUpperCase(),
+                            });
+                          }}
                           placeholder="27AAPFU0939F1ZV"
+                          aria-invalid={Boolean(gstinError)}
                         />
+                        {gstinError ? (
+                          <p className="text-xs text-destructive">{gstinError}</p>
+                        ) : null}
                         <p className="text-xs text-muted-foreground">
                           Required on tax invoices. Dental services are GST-exempt; retail goods use
                           per-item HSN/GST rates.

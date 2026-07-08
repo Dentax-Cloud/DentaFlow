@@ -11,6 +11,7 @@ import { generateInvoiceNumber } from "@/lib/utils";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
 import { getVisitNumber, normalizeItemStatus } from "@/lib/clinical/treatment-plan-types";
 import { assertCanStartTreatment } from "@/lib/insurance/pre-auth-gate";
+import { clinicLocalToUtc, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 
 async function recalculatePlanTotal(planId: string) {
   const items = await db.treatmentItem.findMany({ where: { treatmentPlanId: planId } });
@@ -314,7 +315,8 @@ export async function scheduleVisitAppointment(
   });
   if (!plan) throw new Error("Plan not found");
 
-  const startTime = new Date(`${data.date}T${data.time}`);
+  const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+  const startTime = clinicLocalToUtc(data.date, data.time, clinicTz);
   const endTime = new Date(startTime.getTime() + data.duration * 60 * 1000);
 
   const chair = await db.chair.findFirst({
