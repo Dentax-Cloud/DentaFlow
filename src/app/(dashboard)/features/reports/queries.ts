@@ -65,30 +65,89 @@ export async function getDoctorProductivityReport(
     byDoctor.set(id, row);
   }
 
-  const invoices = await db.invoice.findMany({
+  /** Prefer chairside session → invoiceId → appointment.doctorId (accurate attribution). */
+  const sessions = await db.chairsideSession.findMany({
+    where: {
+      tenantId,
+      invoiceId: { not: null },
+      status: "FINALIZED",
+      finalizedAt: { gte: start, lte: end },
+      appointmentId: { not: null },
+    },
+    select: {
+      invoiceId: true,
+      appointmentId: true,
+    },
+  });
+
+  const appointmentIds = [
+    ...new Set(sessions.map((s) => s.appointmentId).filter(Boolean) as string[]),
+  ];
+  const linkedAppointments = await db.appointment.findMany({
+    where: { tenantId, id: { in: appointmentIds }, doctorId: { not: null } },
+    select: { id: true, doctorId: true },
+  });
+  const doctorByAppointment = new Map(
+    linkedAppointments.map((a) => [a.id, a.doctorId!] as const),
+  );
+
+  const invoiceIds = [...new Set(sessions.map((s) => s.invoiceId).filter(Boolean) as string[])];
+  const linkedInvoices = await db.invoice.findMany({
+    where: {
+      tenantId,
+      id: { in: invoiceIds },
+      deletedAt: null,
+      status: { not: "VOID" },
+    },
+    select: {
+      id: true,
+      total: true,
+      tax: true,
+      cgstTotal: true,
+      sgstTotal: true,
+      igstTotal: true,
+    },
+  });
+  const invoiceById = new Map(linkedInvoices.map((inv) => [inv.id, inv]));
+
+  const revenueByDoctor = new Map<string, number>();
+  const attributedInvoiceIds = new Set<string>();
+
+  for (const session of sessions) {
+    if (!session.invoiceId || !session.appointmentId) continue;
+    const doctorId = doctorByAppointment.get(session.appointmentId);
+    const invoice = invoiceById.get(session.invoiceId);
+    if (!doctorId || !invoice || attributedInvoiceIds.has(invoice.id)) continue;
+    attributedInvoiceIds.add(invoice.id);
+    revenueByDoctor.set(
+      doctorId,
+      (revenueByDoctor.get(doctorId) ?? 0) + Number(invoice.total),
+    );
+  }
+
+  /** Fallback for invoices without a chairside session link (same patient + clinic day). */
+  const fallbackInvoices = await db.invoice.findMany({
     where: {
       tenantId,
       deletedAt: null,
       createdAt: { gte: start, lte: end },
       status: { in: ["PAID", "PARTIAL", "SENT"] },
+      id: { notIn: [...attributedInvoiceIds] },
     },
     select: { id: true, total: true, patientId: true, createdAt: true },
   });
 
-  const revenueByDoctor = new Map<string, number>();
-  const usedInvoiceIds = new Set<string>();
-
   for (const appt of appointments) {
     const doctorId = appt.doctorId!;
     const apptDay = appt.startTime.toDateString();
-    const match = invoices.find(
+    const match = fallbackInvoices.find(
       (inv) =>
         inv.patientId === appt.patientId &&
-        !usedInvoiceIds.has(inv.id) &&
+        !attributedInvoiceIds.has(inv.id) &&
         inv.createdAt.toDateString() === apptDay,
     );
     if (match) {
-      usedInvoiceIds.add(match.id);
+      attributedInvoiceIds.add(match.id);
       revenueByDoctor.set(
         doctorId,
         (revenueByDoctor.get(doctorId) ?? 0) + Number(match.total),
@@ -102,6 +161,74 @@ export async function getDoctorProductivityReport(
   }
 
   return doctors.sort((a, b) => b.appointmentsCompleted - a.appointmentsCompleted);
+}
+
+export async function getRevenueTaxSummaryReport(
+  tenantId: string,
+  range: ReportDateRange = "month",
+) {
+  const { start, end } = rangeBounds(range);
+
+  const invoices = await db.invoice.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      createdAt: { gte: start, lte: end },
+      status: { not: "VOID" },
+    },
+    select: {
+      total: true,
+      subtotal: true,
+      tax: true,
+      taxName: true,
+      cgstTotal: true,
+      sgstTotal: true,
+      igstTotal: true,
+      exemptSubtotal: true,
+      taxableSubtotal: true,
+      currency: true,
+    },
+  });
+
+  const totals = {
+    invoiceCount: invoices.length,
+    currency: invoices[0]?.currency ?? "AED",
+    taxName: invoices.find((i) => i.taxName)?.taxName ?? null,
+    subtotal: 0,
+    tax: 0,
+    total: 0,
+    cgst: 0,
+    sgst: 0,
+    igst: 0,
+    exemptSubtotal: 0,
+    taxableSubtotal: 0,
+  };
+
+  for (const inv of invoices) {
+    totals.subtotal += Number(inv.subtotal);
+    totals.tax += Number(inv.tax);
+    totals.total += Number(inv.total);
+    totals.cgst += Number(inv.cgstTotal);
+    totals.sgst += Number(inv.sgstTotal);
+    totals.igst += Number(inv.igstTotal);
+    totals.exemptSubtotal += Number(inv.exemptSubtotal);
+    totals.taxableSubtotal += Number(inv.taxableSubtotal);
+  }
+
+  const hasGstBreakdown = totals.cgst > 0 || totals.sgst > 0 || totals.igst > 0;
+
+  return {
+    ...totals,
+    subtotal: Math.round(totals.subtotal * 100) / 100,
+    tax: Math.round(totals.tax * 100) / 100,
+    total: Math.round(totals.total * 100) / 100,
+    cgst: Math.round(totals.cgst * 100) / 100,
+    sgst: Math.round(totals.sgst * 100) / 100,
+    igst: Math.round(totals.igst * 100) / 100,
+    exemptSubtotal: Math.round(totals.exemptSubtotal * 100) / 100,
+    taxableSubtotal: Math.round(totals.taxableSubtotal * 100) / 100,
+    hasGstBreakdown,
+  };
 }
 
 export async function getRevenueByProcedureReport(
@@ -124,12 +251,21 @@ export async function getRevenueByProcedureReport(
       quantity: true,
       total: true,
       procedureCode: true,
+      cgstAmount: true,
+      sgstAmount: true,
+      igstAmount: true,
+      itemType: true,
     },
   });
 
   const byProcedure = new Map<
     string,
-    { name: string; count: number; totalRevenue: number }
+    {
+      name: string;
+      count: number;
+      totalRevenue: number;
+      taxCollected: number;
+    }
   >();
 
   for (const item of items) {
@@ -138,9 +274,14 @@ export async function getRevenueByProcedureReport(
       name: item.description,
       count: 0,
       totalRevenue: 0,
+      taxCollected: 0,
     };
     row.count += item.quantity;
     row.totalRevenue += Number(item.total);
+    row.taxCollected +=
+      Number(item.cgstAmount ?? 0) +
+      Number(item.sgstAmount ?? 0) +
+      Number(item.igstAmount ?? 0);
     byProcedure.set(key, row);
   }
 
