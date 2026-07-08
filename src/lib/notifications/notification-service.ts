@@ -1,5 +1,10 @@
 import { db } from "@/lib/db";
 import { sendMail } from "@/lib/mail";
+import {
+  formatClinicDate,
+  formatClinicTime,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
 
 export type NotificationType =
   | "APPOINTMENT_CONFIRMED"
@@ -165,14 +170,18 @@ export async function notifyAppointmentStatus(
   const recipient = appointment?.doctor?.user ?? appointment?.provider;
   if (!appointment || !recipient) return;
 
-  const appointmentTime = new Date(appointment.startTime).toLocaleTimeString("en-AE", {
-    hour: "2-digit",
-    minute: "2-digit",
+  const tenant = await db.tenant.findFirst({
+    where: { id: tenantId },
+    select: { timezone: true },
   });
-  const appointmentDate = new Date(appointment.startTime).toLocaleDateString("en-AE", {
+  const timezone = resolveClinicTimezone(tenant?.timezone);
+
+  const appointmentTime = formatClinicTime(appointment.startTime, timezone);
+  const appointmentDate = formatClinicDate(appointment.startTime, timezone, {
     weekday: "short",
     day: "numeric",
     month: "short",
+    year: undefined,
   });
 
   const chairLabel = appointment.chair?.name ?? "Unassigned";

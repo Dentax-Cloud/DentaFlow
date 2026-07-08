@@ -11,6 +11,7 @@ import type {
   getDoctorProductivityReport,
   getPatientRetentionReport,
   getRevenueByProcedureReport,
+  getRevenueTaxSummaryReport,
 } from "@/app/(dashboard)/features/reports/queries";
 
 type KPIs = Awaited<ReturnType<typeof import("@/app/(dashboard)/features/dashboard/queries").getDashboardKPIs>>;
@@ -18,11 +19,13 @@ type DoctorRow = Awaited<ReturnType<typeof getDoctorProductivityReport>>[number]
 type ProcedureRow = Awaited<ReturnType<typeof getRevenueByProcedureReport>>[number];
 type Retention = Awaited<ReturnType<typeof getPatientRetentionReport>>;
 type ChairUtil = Awaited<ReturnType<typeof getChairUtilizationReport>>;
+type TaxSummary = Awaited<ReturnType<typeof getRevenueTaxSummaryReport>>;
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "doctors", label: "Doctor productivity" },
   { id: "procedures", label: "Revenue by procedure" },
+  { id: "tax", label: "Tax / GST" },
   { id: "retention", label: "Patient retention" },
   { id: "chairs", label: "Chair utilization" },
 ] as const;
@@ -38,6 +41,7 @@ export function ReportsClient({
   revenueByProcedure,
   retention,
   chairUtil,
+  taxSummary,
 }: {
   kpis: KPIs;
   tenantId: string;
@@ -45,6 +49,7 @@ export function ReportsClient({
   revenueByProcedure: ProcedureRow[];
   retention: Retention;
   chairUtil: ChairUtil;
+  taxSummary: TaxSummary;
 }) {
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -83,13 +88,29 @@ export function ReportsClient({
 
   function exportProcedures() {
     exportCsv(`revenue-procedures-${tenantId.slice(0, 8)}.csv`, [
-      ["Procedure", "Count", "Total Revenue", "Average"],
+      ["Procedure", "Count", "Total Revenue", "Tax", "Average"],
       ...revenueByProcedure.map((p) => [
         p.name,
         String(p.count),
         String(p.totalRevenue),
+        String(p.taxCollected ?? 0),
         String(Math.round(p.averagePerVisit)),
       ]),
+    ]);
+  }
+
+  function exportTax() {
+    exportCsv(`tax-summary-${tenantId.slice(0, 8)}.csv`, [
+      ["Metric", "Value"],
+      ["Invoices", String(taxSummary.invoiceCount)],
+      ["Subtotal", String(taxSummary.subtotal)],
+      ["Tax", String(taxSummary.tax)],
+      ["Total", String(taxSummary.total)],
+      ["CGST", String(taxSummary.cgst)],
+      ["SGST", String(taxSummary.sgst)],
+      ["IGST", String(taxSummary.igst)],
+      ["Exempt subtotal", String(taxSummary.exemptSubtotal)],
+      ["Taxable subtotal", String(taxSummary.taxableSubtotal)],
     ]);
   }
 
@@ -107,6 +128,7 @@ export function ReportsClient({
           onClick={() => {
             if (tab === "doctors") exportDoctors();
             else if (tab === "procedures") exportProcedures();
+            else if (tab === "tax") exportTax();
             else exportOverview();
           }}
         >
@@ -163,7 +185,7 @@ export function ReportsClient({
               <div key={d.doctorId} className="flex justify-between border-b pb-2 text-sm">
                 <span className="font-medium">{d.doctorName}</span>
                 <span>
-                  {d.appointmentsCompleted} appts · {formatCurrency(d.revenue)} est.
+                  {d.appointmentsCompleted} appts · {formatCurrency(d.revenue)} invoiced
                 </span>
               </div>
             ))}
@@ -188,13 +210,96 @@ export function ReportsClient({
               <div key={p.name} className="flex justify-between border-b pb-2 text-sm">
                 <span>{p.name}</span>
                 <span>
-                  ×{p.count} · {formatCurrency(p.totalRevenue)} · avg{" "}
+                  ×{p.count} · {formatCurrency(p.totalRevenue)}
+                  {(p.taxCollected ?? 0) > 0 ? ` · tax ${formatCurrency(p.taxCollected)}` : ""} · avg{" "}
                   {formatCurrency(p.averagePerVisit)}
                 </span>
               </div>
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {tab === "tax" && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Invoices (MTD)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{taxSummary.invoiceCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Revenue total</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{formatCurrency(taxSummary.total)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">
+                {taxSummary.taxName ? `${taxSummary.taxName} collected` : "Tax collected"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{formatCurrency(taxSummary.tax)}</p>
+            </CardContent>
+          </Card>
+          {taxSummary.hasGstBreakdown ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">CGST</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.cgst)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">SGST</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.sgst)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">IGST</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.igst)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Exempt services</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.exemptSubtotal)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Taxable goods</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.taxableSubtotal)}</p>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card className="sm:col-span-2 lg:col-span-3">
+              <CardContent className="py-6 text-sm text-muted-foreground">
+                No GST breakdown for this period (VAT / no India GST line items). Tax total above uses
+                invoice.tax.
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {tab === "retention" && (
