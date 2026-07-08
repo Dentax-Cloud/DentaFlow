@@ -26,6 +26,7 @@ import {
   Globe,
   CalendarPlus,
   Settings2,
+  MessageSquare,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { can, type Action, type Resource } from "./permissions";
@@ -234,6 +235,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "write",
   },
   crmItem,
+  {
+    href: "/whatsapp/inbox",
+    label: "WhatsApp",
+    icon: MessageSquare,
+    resource: "patients",
+    action: "read",
+  },
   reportsItem,
   aiItem,
   {

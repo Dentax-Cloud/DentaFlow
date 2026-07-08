@@ -116,6 +116,18 @@ export async function bookAppointment(input: {
     await getPatientName(ctx.tenantId, input.patientId),
   ).catch(() => null);
 
+  // Send WhatsApp confirmation as additional channel (non-blocking)
+  const { sendAppointmentConfirmationWhatsApp } = await import("@/app/(dashboard)/features/whatsapp/actions");
+  sendAppointmentConfirmationWhatsApp({
+    patientId: input.patientId,
+    appointmentId,
+    patientName: await getPatientName(ctx.tenantId, input.patientId),
+    clinicName: ctx.tenant.name,
+    appointmentDate: start,
+    appointmentTime: input.startTime,
+    doctorName: await getDoctorName(ctx.tenantId, doctorRecordId),
+  }).catch(() => null);
+
   revalidatePath("/appointments");
   return { success: true, appointmentId };
 }
@@ -325,4 +337,21 @@ async function getPatientName(
   return patient
     ? `${patient.firstName} ${patient.lastName}`
     : "Patient";
+}
+
+async function getDoctorName(
+  tenantId: string,
+  doctorId: string,
+): Promise<string> {
+  const doctor = await db.doctor.findFirst({
+    where: { id: doctorId, tenantId },
+    include: {
+      user: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+  });
+  return doctor?.user
+    ? `${doctor.user.firstName} ${doctor.user.lastName}`
+    : "Doctor";
 }

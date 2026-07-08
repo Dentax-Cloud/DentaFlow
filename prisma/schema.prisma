@@ -98,6 +98,8 @@ model Tenant {
   bookingRequests      BookingRequest[]
   doctorSchedules      DoctorSchedule[]
   scheduleExceptions   DoctorScheduleException[]
+  whatsappConfig       TenantWhatsAppConfig?
+  whatsappMessages     WhatsAppMessage[]
   portalEnabled        Boolean                 @default(false)
   bookingEnabled       Boolean                 @default(false)
   autoConfirmBooking   Boolean                 @default(false)
@@ -298,6 +300,7 @@ model Patient {
   attachments       Attachment[]
   clinicalNotes     ClinicalNote[]
   communicationLogs CommunicationLog[]
+  whatsappMessages  WhatsAppMessage[]
   feedbacks         Feedback[]
   patientInsurancePolicies PatientInsurancePolicy[]
   invoices                 Invoice[]
@@ -2281,7 +2284,41 @@ model ClinicalComplianceRecord {
   retentionUntil DateTime?
   createdAt      DateTime  @default(now())
   tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  
+
   @@index([tenantId, patientId])
   @@index([performedAt])
+}
+
+model TenantWhatsAppConfig {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  phoneNumberId   String
+  accessToken     String
+  businessName    String?
+  isEnabled       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model WhatsAppMessage {
+  id                String   @id @default(cuid())
+  tenantId          String
+  patientId         String
+  appointmentId     String?
+  direction         String
+  templateName      String?
+  content           String
+  status            String   @default("SENT")
+  externalMessageId String?
+  createdAt         DateTime @default(now())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([createdAt])
 }
