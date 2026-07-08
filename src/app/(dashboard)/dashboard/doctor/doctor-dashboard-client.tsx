@@ -5,6 +5,7 @@ import type { UserRole } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { Calendar, ChevronRight } from "lucide-react";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
+import { APPOINTMENT_STATUS_COLORS, getAppointmentStatusLabel } from "@/lib/appointments/status-colors";
 
 type Appointment = {
   id: string;
@@ -38,14 +39,10 @@ const STATUS_STYLES: Record<string, string> = {
   INVOICED: "border-l-emerald-400 bg-emerald-50",
 };
 
-const STATUS_BADGES: Record<string, string> = {
-  SCHEDULED: "bg-gray-100 text-gray-600",
-  CONFIRMED: "bg-blue-100 text-blue-700",
-  ARRIVED: "bg-yellow-100 text-yellow-700",
-  IN_CHAIR: "bg-purple-100 text-purple-700",
-  COMPLETED: "bg-green-100 text-green-700",
-  INVOICED: "bg-emerald-100 text-emerald-700",
-};
+function statusBadgeBg(status: string): React.CSSProperties {
+  const color = APPOINTMENT_STATUS_COLORS[status] ?? "#9ca3af";
+  return { backgroundColor: color };
+}
 
 export default function DoctorDashboardClient({
   doctorName,
@@ -233,12 +230,10 @@ export default function DoctorDashboardClient({
 
                   <div className="flex flex-shrink-0 flex-col items-end gap-2">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        STATUS_BADGES[appt.status] ??
-                        "bg-gray-100 text-gray-600"
-                      }`}
+                      className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                      style={statusBadgeBg(appt.status)}
                     >
-                      {appt.status.replace("_", " ")}
+                      {getAppointmentStatusLabel(appt.status)}
                     </span>
 
                     <div className="flex gap-1">

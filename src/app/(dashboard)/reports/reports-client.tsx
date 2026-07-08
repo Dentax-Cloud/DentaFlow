@@ -6,10 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { Download } from "lucide-react";
+import {
+  DoctorProductivityChart,
+  GstBreakdownChart,
+  PayerMixChart,
+  ProcedureVolumeTrendChart,
+  RevenueByProcedureChart,
+} from "./reports-charts";
 import type {
   getChairUtilizationReport,
   getDoctorProductivityReport,
   getPatientRetentionReport,
+  getPayerMixReport,
+  getProcedureVolumeTrend,
   getRevenueByProcedureReport,
   getRevenueTaxSummaryReport,
 } from "@/app/(dashboard)/features/reports/queries";
@@ -20,6 +29,8 @@ type ProcedureRow = Awaited<ReturnType<typeof getRevenueByProcedureReport>>[numb
 type Retention = Awaited<ReturnType<typeof getPatientRetentionReport>>;
 type ChairUtil = Awaited<ReturnType<typeof getChairUtilizationReport>>;
 type TaxSummary = Awaited<ReturnType<typeof getRevenueTaxSummaryReport>>;
+type VolumePoint = Awaited<ReturnType<typeof getProcedureVolumeTrend>>;
+type PayerRow = Awaited<ReturnType<typeof getPayerMixReport>>[number];
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -42,6 +53,8 @@ export function ReportsClient({
   retention,
   chairUtil,
   taxSummary,
+  procedureVolume,
+  payerMix,
 }: {
   kpis: KPIs;
   tenantId: string;
@@ -50,6 +63,8 @@ export function ReportsClient({
   retention: Retention;
   chairUtil: ChairUtil;
   taxSummary: TaxSummary;
+  procedureVolume: VolumePoint[];
+  payerMix: PayerRow[];
 }) {
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -151,77 +166,56 @@ export function ReportsClient({
       </div>
 
       {tab === "overview" && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { label: "Revenue (MTD)", value: formatCurrency(kpis.revenueThisMonth) },
-            { label: "Patients", value: kpis.patientCount },
-            { label: "Chair utilization", value: `${kpis.chairUtilization}%` },
-            { label: "Appointments today", value: kpis.todayAppointments },
-            { label: "Completed today", value: kpis.completedToday },
-            { label: "Pending invoices", value: kpis.pendingInvoices },
-          ].map((item) => (
-            <Card key={item.label}>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">{item.label}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{item.value}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: "Revenue (MTD)", value: formatCurrency(kpis.revenueThisMonth) },
+              { label: "Patients", value: kpis.patientCount },
+              { label: "Chair utilization", value: `${kpis.chairUtilization}%` },
+              { label: "Appointments today", value: kpis.todayAppointments },
+              { label: "Completed today", value: kpis.completedToday },
+              { label: "Pending invoices", value: kpis.pendingInvoices },
+            ].map((item) => (
+              <Card key={item.label}>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">{item.label}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{item.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <PayerMixChart data={payerMix} />
+            <ProcedureVolumeTrendChart data={procedureVolume} />
+          </div>
         </div>
       )}
 
       {tab === "doctors" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Doctor productivity (this month)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {doctorProductivity.length === 0 && (
-              <p className="text-sm text-muted-foreground">No completed appointments this period.</p>
-            )}
-            {doctorProductivity.map((d) => (
-              <div key={d.doctorId} className="flex justify-between border-b pb-2 text-sm">
-                <span className="font-medium">{d.doctorName}</span>
-                <span>
-                  {d.appointmentsCompleted} appts · {formatCurrency(d.revenue)} invoiced
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <DoctorProductivityChart data={doctorProductivity} />
+        </div>
       )}
 
       {tab === "procedures" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue by procedure</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {topProcedure && (
-              <p className="mb-4 text-sm text-muted-foreground">
-                Most profitable:{" "}
-                <Badge variant="success">{topProcedure.name}</Badge> —{" "}
-                {formatCurrency(topProcedure.totalRevenue)}
-              </p>
-            )}
-            {revenueByProcedure.map((p) => (
-              <div key={p.name} className="flex justify-between border-b pb-2 text-sm">
-                <span>{p.name}</span>
-                <span>
-                  ×{p.count} · {formatCurrency(p.totalRevenue)}
-                  {(p.taxCollected ?? 0) > 0 ? ` · tax ${formatCurrency(p.taxCollected)}` : ""} · avg{" "}
-                  {formatCurrency(p.averagePerVisit)}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <RevenueByProcedureChart data={revenueByProcedure} />
+          <ProcedureVolumeTrendChart data={procedureVolume} />
+          {topProcedure && (
+            <p className="text-sm text-muted-foreground">
+              Most profitable:{" "}
+              <Badge variant="success">{topProcedure.name}</Badge> —{" "}
+              {formatCurrency(topProcedure.totalRevenue)}
+            </p>
+          )}
+        </div>
       )}
 
       {tab === "tax" && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Invoices (MTD)</CardTitle>
@@ -299,6 +293,7 @@ export function ReportsClient({
               </CardContent>
             </Card>
           )}
+          <GstBreakdownChart taxSummary={taxSummary} />
         </div>
       )}
 

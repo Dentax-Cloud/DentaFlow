@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
 export type ReportDateRange = "week" | "month" | "custom";
 
@@ -402,4 +403,108 @@ export async function getChairUtilizationReport(tenantId: string, range: ReportD
   }
 
   return { byChair, heatmap, slotMins };
+}
+
+export async function getProcedureVolumeTrend(
+  tenantId: string,
+  months = 6,
+) {
+  const end = endOfMonth(new Date());
+  const start = startOfMonth(subMonths(end, months - 1));
+
+  const items = await db.invoiceItem.findMany({
+    where: {
+      tenantId,
+      invoice: {
+        deletedAt: null,
+        createdAt: { gte: start, lte: end },
+        status: { not: "VOID" },
+      },
+    },
+    select: {
+      quantity: true,
+      invoice: { select: { createdAt: true } },
+    },
+  });
+
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < months; i++) {
+    const d = subMonths(end, months - 1 - i);
+    buckets.set(format(d, "yyyy-MM"), 0);
+  }
+
+  for (const item of items) {
+    const key = format(item.invoice.createdAt, "yyyy-MM");
+    if (buckets.has(key)) {
+      buckets.set(key, (buckets.get(key) ?? 0) + item.quantity);
+    }
+  }
+
+  return Array.from(buckets.entries()).map(([month, volume]) => ({
+    month,
+    label: format(new Date(`${month}-01T12:00:00`), "MMM yyyy"),
+    volume,
+  }));
+}
+
+export async function getPayerMixReport(
+  tenantId: string,
+  range: ReportDateRange = "month",
+) {
+  const { start, end } = rangeBounds(range);
+
+  const invoices = await db.invoice.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      createdAt: { gte: start, lte: end },
+      status: { not: "VOID" },
+    },
+    select: {
+      total: true,
+      insuranceAmount: true,
+      insurancePortion: true,
+      providerCode: true,
+      patient: { select: { insuranceProvider: true } },
+    },
+  });
+
+  const byPayer = new Map<string, { name: string; revenue: number }>();
+
+  for (const inv of invoices) {
+    const insuranceAmt = Number(inv.insuranceAmount ?? inv.insurancePortion ?? 0);
+    const total = Number(inv.total);
+    const patientAmt = Math.max(0, total - insuranceAmt);
+
+    const provider =
+      inv.providerCode && inv.providerCode !== "SELF_PAY"
+        ? inv.providerCode
+        : inv.patient?.insuranceProvider &&
+            inv.patient.insuranceProvider !== "SELF_PAY"
+          ? inv.patient.insuranceProvider
+          : null;
+
+    if (insuranceAmt > 0 && provider) {
+      const row = byPayer.get(provider) ?? { name: provider, revenue: 0 };
+      row.revenue += insuranceAmt;
+      byPayer.set(provider, row);
+    }
+
+    if (patientAmt > 0) {
+      const row = byPayer.get("SELF_PAY") ?? { name: "Self-pay", revenue: 0 };
+      row.revenue += patientAmt;
+      byPayer.set("SELF_PAY", row);
+    } else if (!provider && total > 0) {
+      const row = byPayer.get("SELF_PAY") ?? { name: "Self-pay", revenue: 0 };
+      row.revenue += total;
+      byPayer.set("SELF_PAY", row);
+    }
+  }
+
+  return Array.from(byPayer.values())
+    .map((r) => ({
+      ...r,
+      revenue: Math.round(r.revenue * 100) / 100,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 }

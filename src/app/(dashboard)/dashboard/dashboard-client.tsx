@@ -22,6 +22,7 @@ import {
 import type { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import type { UserRole } from "@prisma/client";
 import { normalizeDashboardRole } from "@/lib/rbac/permissions";
+import { getAppointmentStatusLabel } from "@/lib/appointments/status-colors";
 import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments/actions";
 import { toast } from "sonner";
 
@@ -51,14 +52,12 @@ type Extras = {
   pendingTreatmentPlans: number;
 };
 
-const statusLabel: Record<string, string> = {
-  SCHEDULED: "Scheduled",
-  CONFIRMED: "Confirmed",
-  ARRIVED: "Checked in",
-  IN_CHAIR: "In chair",
-  COMPLETED: "Completed",
-  INVOICED: "Invoiced",
-};
+const statusLabel: Record<string, string> = new Proxy(
+  {},
+  {
+    get: (_target, prop: string) => getAppointmentStatusLabel(prop),
+  },
+);
 
 export function DashboardClient({
   kpis,

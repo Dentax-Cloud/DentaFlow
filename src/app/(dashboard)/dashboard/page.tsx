@@ -7,9 +7,13 @@ import { isClinicalRole } from "@/lib/rbac/permissions";
 import {
   getDashboardKPIs,
   getRoleDashboardExtras,
+  getRevenueTrend,
+  getTodayAppointmentStatusBreakdown,
+  getTodayChairUtilizationByChair,
 } from "@/app/(dashboard)/features/dashboard/queries";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { DashboardClient } from "./dashboard-client";
+import { DashboardCharts } from "./dashboard-charts";
 import {
   getOnboardingChecklist,
   markOnboardingComplete,
@@ -17,7 +21,7 @@ import {
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
-import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { hasPermission, PERMISSIONS, normalizeDashboardRole } from "@/lib/rbac/permissions";
 import {
   redirectIfStaffMemberMissing,
   requireStaffMemberRole,
@@ -39,10 +43,14 @@ export default async function DashboardPage() {
 
   const staffMemberId = ctx.staffMember?.id ?? null;
 
-  const [kpis, extras, checklist] = await Promise.all([
+  const [kpis, extras, checklist, revenueTrend, chairUtilization, statusBreakdown] =
+    await Promise.all([
     getDashboardKPIs(ctx.tenant.id),
     getRoleDashboardExtras(ctx.tenant.id, userRole, staffMemberId),
     getOnboardingChecklist(ctx.tenant),
+    getRevenueTrend(ctx.tenant.id, 30),
+    getTodayChairUtilizationByChair(ctx.tenant.id),
+    getTodayAppointmentStatusBreakdown(ctx.tenant.id),
   ]);
 
   if (checklist.allComplete && !ctx.tenant.onboardingCompleted) {
@@ -82,6 +90,14 @@ export default async function DashboardPage() {
         userRole={userRole}
         staffMemberId={staffMemberId}
       />
+      {normalizeDashboardRole(userRole) === "ADMIN" && (
+        <DashboardCharts
+          revenueTrend={serializeDecimal(revenueTrend)}
+          chairUtilization={chairUtilization}
+          statusBreakdown={statusBreakdown}
+          revenueThisMonth={Number(serializeDecimal(kpis).revenueThisMonth)}
+        />
+      )}
     </div>
   );
 }

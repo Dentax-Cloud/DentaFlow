@@ -3,6 +3,8 @@ import {
   getChairUtilizationReport,
   getDoctorProductivityReport,
   getPatientRetentionReport,
+  getPayerMixReport,
+  getProcedureVolumeTrend,
   getRevenueByProcedureReport,
   getRevenueTaxSummaryReport,
 } from "@/app/(dashboard)/features/reports/queries";
@@ -13,14 +15,24 @@ import { ReportsClient } from "./reports-client";
 export default async function ReportsPage() {
   const ctx = await requireRouteAccess("reports", "read");
 
-  const [kpis, doctorProductivity, revenueByProcedure, retention, chairUtil, taxSummary] =
-    await Promise.all([
+  const [
+    kpis,
+    doctorProductivity,
+    revenueByProcedure,
+    retention,
+    chairUtil,
+    taxSummary,
+    procedureVolume,
+    payerMix,
+  ] = await Promise.all([
       getDashboardKPIs(ctx.tenant.id),
       getDoctorProductivityReport(ctx.tenant.id, "month"),
       getRevenueByProcedureReport(ctx.tenant.id, "month"),
       getPatientRetentionReport(ctx.tenant.id, "month"),
       getChairUtilizationReport(ctx.tenant.id, "week"),
       getRevenueTaxSummaryReport(ctx.tenant.id, "month"),
+      getProcedureVolumeTrend(ctx.tenant.id, 6),
+      getPayerMixReport(ctx.tenant.id, "month"),
     ]);
 
   return (
@@ -31,6 +43,8 @@ export default async function ReportsPage() {
       revenueByProcedure={revenueByProcedure.map(serializeDecimal)}
       retention={serializeDecimal(retention)}
       taxSummary={serializeDecimal(taxSummary)}
+      procedureVolume={procedureVolume}
+      payerMix={payerMix.map(serializeDecimal)}
       chairUtil={{
         ...chairUtil,
         byChair: chairUtil.byChair.map(serializeDecimal),
