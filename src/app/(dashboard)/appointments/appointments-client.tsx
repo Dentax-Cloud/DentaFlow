@@ -38,6 +38,10 @@ import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-ba
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
+import {
+  getAppointmentStatusColor,
+  getAppointmentStatusLabel,
+} from "@/lib/appointments/status-colors";
 
 type AppointmentWithRelations = Appointment & {
   patient: Patient | null;
@@ -59,16 +63,11 @@ function isVisibleOnCalendar(status: string) {
   return !CALENDAR_HIDDEN_STATUSES.has(status);
 }
 
-const statusLabel: Record<string, string> = {
-  SCHEDULED: "Scheduled",
-  CONFIRMED: "Confirmed",
-  ARRIVED: "Checked in",
-  IN_CHAIR: "In chair",
-  COMPLETED: "Completed",
-  INVOICED: "Invoiced",
-  CANCELED: "Canceled",
-  NO_SHOW: "No show",
-};
+const statusLabel: Record<string, string> = Object.fromEntries(
+  ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_CHAIR", "COMPLETED", "INVOICED", "CANCELED", "NO_SHOW"].map(
+    (s) => [s, getAppointmentStatusLabel(s)],
+  ),
+);
 
 const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   SCHEDULED: "secondary",
@@ -425,6 +424,17 @@ export function AppointmentsClient({
                         borderColor: "#4b5563",
                         color: "#f9fafb",
                         opacity: 0.92,
+                      },
+                    };
+                  }
+                  if (apt) {
+                    const bg = getAppointmentStatusColor(apt.status);
+                    return {
+                      style: {
+                        backgroundColor: bg,
+                        borderColor: bg,
+                        color: "#ffffff",
+                        opacity: 0.95,
                       },
                     };
                   }
