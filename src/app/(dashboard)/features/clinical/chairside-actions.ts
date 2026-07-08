@@ -6,14 +6,12 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac/guard";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { ToothConditionType } from "@prisma/client";
-import { broadcastAppointmentUpdate } from "@/lib/pusher";
-import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import {
   CHAIRSIDE_CLOSED_REASON,
   CHAIRSIDE_SESSION_STATUS,
   finalizeChairsideSessionRecord,
 } from "@/lib/clinical/chairside-lifecycle";
-import { assertConsentForVisit } from "@/lib/clinical/consent-gate";
+import { getOrCreateActiveChairsideSession } from "@/lib/clinical/start-chairside-session";
 import { amendLockedChairsideEntry } from "@/lib/clinical/lock-chart-records";
 
 const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
@@ -49,74 +47,17 @@ function parseConditionType(value: string): ToothConditionType | null {
   return null;
 }
 
-/** Transition ARRIVED → IN_CHAIR when a clinician begins charting (no appointments.write required). */
-async function ensureAppointmentInChair(tenantId: string, appointmentId: string): Promise<boolean> {
-  const appointment = await db.appointment.findFirst({
-    where: { id: appointmentId, tenantId, deletedAt: null },
-    include: { patient: true, chair: true },
-  });
-  if (!appointment || appointment.status !== "ARRIVED") return false;
-
-  const updated = await db.appointment.update({
-    where: { id: appointmentId },
-    data: { status: "IN_CHAIR" },
-    include: { patient: true, chair: true },
-  });
-
-  const patientName = updated.patient
-    ? `${updated.patient.firstName} ${updated.patient.lastName}`
-    : "Patient";
-  await notifyAppointmentStatus(appointmentId, tenantId, "IN_CHAIR", patientName).catch(
-    () => null,
-  );
-  await broadcastAppointmentUpdate(tenantId, updated).catch(() => null);
-  return true;
-}
-
 export async function startChairsideSession(input: {
   patientId: string;
   appointmentId?: string;
 }) {
   const ctx = await requireChairsideWrite();
 
-  const patient = await db.patient.findFirst({
-    where: { id: input.patientId, tenantId: ctx.tenantId, deletedAt: null },
-  });
-  if (!patient) throw new Error("Patient not found");
-
-  await assertConsentForVisit(ctx.tenantId, input.patientId);
-
-  if (input.appointmentId) {
-    const apt = await db.appointment.findFirst({
-      where: { id: input.appointmentId, tenantId: ctx.tenantId, deletedAt: null },
-      select: { isBlock: true },
-    });
-    if (apt?.isBlock) {
-      throw new Error("Blocked time cannot be opened as a chairside visit");
-    }
-
-    await ensureAppointmentInChair(ctx.tenantId, input.appointmentId);
-
-    const existing = await db.chairsideSession.findFirst({
-      where: {
-        tenantId: ctx.tenantId,
-        appointmentId: input.appointmentId,
-        status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
-      },
-      include: { entries: { orderBy: { createdAt: "asc" } } },
-    });
-    if (existing) return existing;
-  }
-
-  const session = await db.chairsideSession.create({
-    data: {
-      tenantId: ctx.tenantId,
-      patientId: input.patientId,
-      appointmentId: input.appointmentId ?? null,
-      staffId: ctx.staffMember?.id ?? null,
-      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
-    },
-    include: { entries: { orderBy: { createdAt: "asc" } } },
+  const session = await getOrCreateActiveChairsideSession({
+    tenantId: ctx.tenantId,
+    staffMemberId: ctx.staffMember?.id ?? null,
+    patientId: input.patientId,
+    appointmentId: input.appointmentId,
   });
 
   if (input.appointmentId) {
