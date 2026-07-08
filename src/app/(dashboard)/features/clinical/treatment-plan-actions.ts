@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
+import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import { getVisitNumber, normalizeItemStatus } from "@/lib/clinical/treatment-plan-types";
 import { assertCanStartTreatment } from "@/lib/insurance/pre-auth-gate";
 import { clinicLocalToUtc, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
@@ -445,7 +446,13 @@ export async function generateInvoiceFromPlan(
     data: { status: "completed", completedAt: new Date() },
   });
 
+  await maybeCreateDraftClaimForInvoice({
+    tenantId: ctx.tenantId,
+    invoiceId: invoice.id,
+  }).catch(() => null);
+
   revalidatePath("/billing");
+  revalidatePath("/billing/claims");
   revalidatePath(`/clinical/treatment-plans/${planId}`);
   return invoice;
 }

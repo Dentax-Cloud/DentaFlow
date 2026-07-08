@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -116,12 +116,20 @@ function ProcedureTable({ lines }: { lines: ClaimProcedureSnapshotLine[] }) {
 
 export function ClaimsClient({ claims, claimableInvoices }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<SerializedClaim | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState("");
   const [approvedAmount, setApprovedAmount] = useState("");
   const [denialReason, setDenialReason] = useState("");
+
+  useEffect(() => {
+    const claimId = searchParams.get("claimId");
+    if (!claimId) return;
+    const match = claims.find((c) => c.id === claimId);
+    if (match) setSelected(match);
+  }, [claims, searchParams]);
   const [paidAmount, setPaidAmount] = useState("");
 
   const columns = useMemo(() => {

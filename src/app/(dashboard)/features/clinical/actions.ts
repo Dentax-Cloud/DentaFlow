@@ -18,6 +18,7 @@ import { getStaffActor } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
+import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
 
@@ -797,7 +798,13 @@ export const generateInvoiceFromTreatmentPlan = createAction({
       data: { status: "completed" },
     });
 
+    await maybeCreateDraftClaimForInvoice({
+      tenantId: ctx.tenant.id,
+      invoiceId: invoice.id,
+    }).catch(() => null);
+
     revalidatePath("/billing");
+    revalidatePath("/billing/claims");
     revalidatePath(`/clinical/treatment-plans/${plan.id}`);
     return invoice;
   },

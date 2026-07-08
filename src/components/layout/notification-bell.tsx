@@ -28,6 +28,7 @@ const TYPE_ICONS: Record<string, string> = {
   BOOKING_DECLINED: "❌",
   LAB_RESULT_READY: "🔬",
   INVOICE_PAID: "💰",
+  CLAIM_SUGGESTED: "📑",
   RECALL_DUE: "📞",
 };
 
