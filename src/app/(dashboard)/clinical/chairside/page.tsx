@@ -5,11 +5,11 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
-import {
-  getChairsideSession,
-  startChairsideSession,
-} from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { checkConsentForVisit } from "@/lib/clinical/consent-gate";
+import {
+  findActiveChairsideSession,
+  getOrCreateActiveChairsideSession,
+} from "@/lib/clinical/start-chairside-session";
 import { ChairsidePermissionDenied } from "@/components/clinical/chairside-permission-denied";
 import { ChairsideSessionBlocked } from "@/components/clinical/chairside-session-blocked";
 import ChairsidePageClient from "./chairside-client";
@@ -67,21 +67,24 @@ export default async function ChairsidePage({
   let chairsideSession = null;
 
   if (sessionId) {
-    const existing = await getChairsideSession(sessionId);
-    if (
-      existing &&
-      existing.status === "ACTIVE" &&
-      existing.patientId === patientId
-    ) {
+    const existing = await findActiveChairsideSession({
+      tenantId: ctx.tenant.id,
+      sessionId,
+      patientId,
+    });
+    if (existing) {
       chairsideSession = existing;
     }
   }
 
   if (!chairsideSession) {
     try {
-      chairsideSession = await startChairsideSession({
+      chairsideSession = await getOrCreateActiveChairsideSession({
+        tenantId: ctx.tenant.id,
+        staffMemberId: ctx.staffMember?.id ?? null,
         patientId,
         appointmentId,
+        skipConsentCheck: true,
       });
     } catch (error) {
       const message =
