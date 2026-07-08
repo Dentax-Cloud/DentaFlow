@@ -40,9 +40,11 @@ export type PerioChartRecord = {
 
 export function PerioChartHistory({
   charts,
+  canDelete = true,
   onDeleted,
 }: {
   charts: PerioChartRecord[];
+  canDelete?: boolean;
   onDeleted?: () => void;
 }) {
   const [viewChart, setViewChart] = useState<PerioChartRecord | null>(null);
@@ -129,6 +131,7 @@ export function PerioChartHistory({
                   <Eye className="mr-1 h-4 w-4" />
                   View
                 </Button>
+                {canDelete ? (
                 <Button
                   type="button"
                   size="sm"
@@ -138,6 +141,7 @@ export function PerioChartHistory({
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                ) : null}
               </div>
             </div>
           );

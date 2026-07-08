@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { startOfDay, endOfDay } from "date-fns";
 import EmergencyPageClient from "./emergency-client";
@@ -12,6 +13,12 @@ export default async function EmergencyPage({
 }) {
   const { intakeId, tab, date } = await searchParams;
   const ctx = await requireRouteAccess("clinical_chart", "read");
+  const role = ctx.staffMember?.role;
+  const canWriteEmergency = Boolean(
+    role &&
+      (hasPermission(role, PERMISSIONS.clinical_chart.write) ||
+        hasPermission(role, PERMISSIONS.appointments.write)),
+  );
 
   const patients = await db.patient.findMany({
     where: { tenantId: ctx.tenant.id, deletedAt: null },
@@ -51,6 +58,7 @@ export default async function EmergencyPage({
 
   return (
     <EmergencyPageClient
+      canWriteEmergency={canWriteEmergency}
       patients={patients.map((p) => ({
         ...p,
         dateOfBirth: p.dateOfBirth?.toISOString() ?? null,

@@ -42,6 +42,7 @@ function updateClinicalUrl(patientId: string, appointmentId?: string) {
 }
 
 export function ClinicalPageClient({
+  canWriteClinical = true,
   patients,
   selectedPatientId,
   appointmentId,
@@ -51,6 +52,7 @@ export function ClinicalPageClient({
   clinicName,
   templates,
 }: {
+  canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
   selectedPatientId?: string;
   appointmentId?: string;
@@ -348,7 +350,7 @@ export function ClinicalPageClient({
             {patientId && (
               <Button variant="outline" size="sm" asChild>
                 <a href={`/clinical/chairside?patientId=${patientId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}`}>
-                  Start chairside session
+                  {canWriteClinical ? "Start chairside session" : "View chairside session"}
                 </a>
               </Button>
             )}
@@ -452,7 +454,9 @@ export function ClinicalPageClient({
               suggestion={treatmentSuggestion}
               loading={treatmentLoading}
               savingTier={savingTier}
-              onSaveTier={(tier) => void handleSaveTreatmentTier(tier)}
+              onSaveTier={
+                canWriteClinical ? (tier) => void handleSaveTreatmentTier(tier) : undefined
+              }
               onDismiss={() => setTreatmentSuggestion(null)}
             />
 
@@ -469,12 +473,12 @@ export function ClinicalPageClient({
               onSoapChange={setSoap}
               onGenerate={handleGenerateSoap}
               generating={soapLoading}
-              disabled={chartLoading}
+              disabled={chartLoading || !canWriteClinical}
               autoFromChart={autoFromChart}
               onAutoFromChartChange={setAutoFromChart}
             />
 
-            {patientId && (
+            {patientId && canWriteClinical && (
               <ProcedureVisitPanel
                 patientId={patientId}
                 appointmentId={appointmentId}
@@ -490,6 +494,7 @@ export function ClinicalPageClient({
                 notation={notation}
                 conditions={selectedConditions}
                 providerName={providerName}
+                readOnly={!canWriteClinical}
                 onClose={() => {
                   setSelectedTooth(undefined);
                   setHighlightSurfaces([]);

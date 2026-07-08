@@ -8,6 +8,7 @@ import { EmergencyIntakeForm } from "@/components/clinical/emergency-intake-form
 import { EmergencyQueue } from "@/components/clinical/emergency-queue";
 
 type Props = {
+  canWriteEmergency?: boolean;
   patients: {
     id: string;
     firstName: string;
@@ -38,6 +39,7 @@ type Props = {
 };
 
 export default function EmergencyPageClient({
+  canWriteEmergency = true,
   patients,
   intakes,
   selectedIntakeId,
@@ -96,13 +98,18 @@ export default function EmergencyPageClient({
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="new">+ New intake</TabsTrigger>
+          {canWriteEmergency ? <TabsTrigger value="new">+ New intake</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="queue" className="mt-6">
-          <EmergencyQueue intakes={intakes} selectedIntakeId={selectedIntakeId} />
+          <EmergencyQueue
+            intakes={intakes}
+            canWrite={canWriteEmergency}
+            selectedIntakeId={selectedIntakeId}
+          />
         </TabsContent>
 
+        {canWriteEmergency ? (
         <TabsContent value="new" className="mt-6">
           <EmergencyIntakeForm
             patients={patients}
@@ -113,6 +120,7 @@ export default function EmergencyPageClient({
             }}
           />
         </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

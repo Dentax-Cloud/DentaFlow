@@ -47,6 +47,35 @@ export async function findActiveChairsideSession(params: {
   });
 }
 
+export async function findActiveChairsideSessionForPatient(params: {
+  tenantId: string;
+  patientId: string;
+  appointmentId?: string;
+}) {
+  if (params.appointmentId) {
+    return db.chairsideSession.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        patientId: params.patientId,
+        appointmentId: params.appointmentId,
+        status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+      },
+      include: { entries: { orderBy: { createdAt: "asc" } } },
+      orderBy: { startedAt: "desc" },
+    });
+  }
+
+  return db.chairsideSession.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      patientId: params.patientId,
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+    },
+    include: { entries: { orderBy: { createdAt: "asc" } } },
+    orderBy: { startedAt: "desc" },
+  });
+}
+
 /**
  * Core chairside session start/resume — safe to call from RSC page render.
  * Does not call revalidatePath (caller must revalidate after user mutations).

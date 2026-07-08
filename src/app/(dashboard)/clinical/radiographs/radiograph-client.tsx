@@ -7,6 +7,7 @@ import { ImageUploadForm } from "@/components/clinical/image-upload-form";
 import { Button } from "@/components/ui/button";
 
 type Props = {
+  canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string }[];
   selectedPatientId: string | null;
   openUpload?: boolean;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function RadiographPageClient({
+  canWriteClinical = true,
   patients,
   selectedPatientId,
   openUpload = false,
@@ -39,7 +41,7 @@ export default function RadiographPageClient({
             Upload, view, and annotate clinical images
           </p>
         </div>
-        {selectedPatientId && (
+        {selectedPatientId && canWriteClinical && (
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -52,6 +54,15 @@ export default function RadiographPageClient({
               + Upload image
             </Button>
           </div>
+        )}
+        {selectedPatientId && !canWriteClinical && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCompareMode(!compareMode)}
+          >
+            {compareMode ? "Exit compare" : "Compare"}
+          </Button>
         )}
       </div>
 
@@ -71,7 +82,7 @@ export default function RadiographPageClient({
         </select>
       </div>
 
-      {showUpload && selectedPatientId && (
+      {showUpload && selectedPatientId && canWriteClinical && (
         <ImageUploadForm
           patientId={selectedPatientId}
           onUploaded={() => {
@@ -90,7 +101,11 @@ export default function RadiographPageClient({
               <span className="ml-2 text-xs">· {images.length} total</span>
             </p>
           )}
-          <ImageGallery images={images} compareMode={compareMode} />
+          <ImageGallery
+            images={images}
+            compareMode={compareMode}
+            canDelete={canWriteClinical}
+          />
         </div>
       ) : (
         <div className="py-16 text-center text-muted-foreground">

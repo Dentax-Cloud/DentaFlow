@@ -168,7 +168,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     label: "Chair setup",
     icon: Wrench,
     resource: "clinical_chart",
-    action: "write",
+    action: "read",
   },
   {
     href: "/billing",

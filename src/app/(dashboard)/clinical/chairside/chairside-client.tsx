@@ -5,6 +5,7 @@ import { ChairsidePanel, type ChairsideEntryRow } from "@/components/clinical/ch
 import type { ProcedureOption } from "@/lib/clinical/use-procedure-search";
 
 type Props = {
+  canWrite?: boolean;
   session: {
     id: string;
     patientId: string;
@@ -22,7 +23,12 @@ type Props = {
   procedures: ProcedureOption[];
 };
 
-export default function ChairsidePageClient({ session, patient, procedures }: Props) {
+export default function ChairsidePageClient({
+  canWrite = true,
+  session,
+  patient,
+  procedures,
+}: Props) {
   const router = useRouter();
 
   function handleFinalized(invoiceId: string | null) {
@@ -34,6 +40,7 @@ export default function ChairsidePageClient({ session, patient, procedures }: Pr
 
   return (
     <ChairsidePanel
+      canWrite={canWrite}
       sessionId={session.id}
       patientName={`${patient.firstName} ${patient.lastName}`}
       patientAllergies={patient.allergies}

@@ -31,6 +31,7 @@ export const ROUTE_RULES: RouteRule[] = [
 const ROLE_HOME: Record<ReturnType<typeof normalizeDashboardRole>, string> = {
   ADMIN: "/dashboard",
   DOCTOR: "/clinical",
+  NURSE: "/clinical",
   RECEPTIONIST: "/appointments",
   FINANCE: "/billing",
   STORE: "/inventory",

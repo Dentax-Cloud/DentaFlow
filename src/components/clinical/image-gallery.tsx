@@ -28,9 +28,10 @@ export type ImageRecord = {
 type Props = {
   images: ImageRecord[];
   compareMode?: boolean;
+  canDelete?: boolean;
 };
 
-export function ImageGallery({ images, compareMode }: Props) {
+export function ImageGallery({ images, compareMode, canDelete = true }: Props) {
   const router = useRouter();
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -82,6 +83,7 @@ export function ImageGallery({ images, compareMode }: Props) {
             url={viewing.url}
             initialAnnotations={parseAnnotations(viewing.annotations)}
             onClose={() => setViewingId(null)}
+            readOnly={!canDelete}
           />
         </div>
       </div>
@@ -206,6 +208,7 @@ export function ImageGallery({ images, compareMode }: Props) {
                     <p className="text-xs text-zinc-400">Tooth {img.toothNumbers}</p>
                   )}
                 </div>
+                {canDelete ? (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -216,6 +219,7 @@ export function ImageGallery({ images, compareMode }: Props) {
                 >
                   ✕
                 </button>
+                ) : null}
                 {annCount > 0 && (
                   <div className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs text-white">
                     {annCount}
