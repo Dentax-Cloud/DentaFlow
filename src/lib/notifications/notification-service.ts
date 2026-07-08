@@ -15,6 +15,7 @@ export type NotificationType =
   | "BOOKING_DECLINED"
   | "LAB_RESULT_READY"
   | "INVOICE_PAID"
+  | "CLAIM_SUGGESTED"
   | "RECALL_DUE";
 
 export type NotificationChannel = "IN_APP" | "EMAIL" | "BOTH";

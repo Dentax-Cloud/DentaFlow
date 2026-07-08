@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import {
   getClaims,
@@ -12,5 +13,9 @@ export default async function ClaimsPage() {
     getClaimableInvoices(ctx.tenant.id),
   ]);
 
-  return <ClaimsClient claims={claims} claimableInvoices={claimableInvoices} />;
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading claims…</div>}>
+      <ClaimsClient claims={claims} claimableInvoices={claimableInvoices} />
+    </Suspense>
+  );
 }

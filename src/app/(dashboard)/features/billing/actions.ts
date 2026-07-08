@@ -13,6 +13,7 @@ import { getStripeClient } from "@/lib/stripe";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
 import { notifyInvoicePaid, sendInvoiceEmailToPatient, sendPaymentReceiptEmailToPatient } from "@/lib/notifications/invoice-notifications";
+import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import { getStaffActor } from "@/lib/tenant/context";
 
 const createInvoiceSchema = z.object({
@@ -128,6 +129,11 @@ export const createInvoice = createAction({
         invoiceId: invoice.id,
       }).catch(() => null);
     }
+
+    await maybeCreateDraftClaimForInvoice({
+      tenantId: ctx.tenant.id,
+      invoiceId: invoice.id,
+    }).catch(() => null);
 
     return invoice;
   },
