@@ -2,14 +2,16 @@
 
 import { db } from "@/lib/db";
 import { requireTenantContext } from "@/lib/tenant/context";
-import { 
-  getWhatsAppConfig, 
-  sendWhatsAppMessage, 
+import {
+  formatClinicDate,
+  formatClinicTime,
+  resolveClinicTimezone,
+} from "@/lib/datetime/clinic-timezone";
+import {
+  getWhatsAppConfig,
+  sendWhatsAppMessage,
   recordWhatsAppMessage,
-  type WhatsAppDirection,
-  type WhatsAppStatus 
 } from "@/lib/whatsapp/client";
-import { CampaignChannel } from "@prisma/client";
 
 /**
  * Send a WhatsApp message to a patient
@@ -84,8 +86,11 @@ export async function sendAppointmentConfirmationWhatsApp(params: {
   appointmentDate: Date;
   appointmentTime: string;
   doctorName: string;
+  clinicTimezone?: string;
 }): Promise<void> {
-  const content = `Hi ${params.patientName}, your appointment at ${params.clinicName} is confirmed for ${params.appointmentDate.toDateString()} at ${params.appointmentTime} with Dr. ${params.doctorName}. Please arrive 10 minutes early.`;
+  const tz = resolveClinicTimezone(params.clinicTimezone);
+  const dateLabel = formatClinicDate(params.appointmentDate, tz);
+  const content = `Hi ${params.patientName}, your appointment at ${params.clinicName} is confirmed for ${dateLabel} at ${params.appointmentTime} with Dr. ${params.doctorName}. Please arrive 10 minutes early.`;
 
   await sendPatientWhatsApp({
     patientId: params.patientId,
@@ -143,7 +148,10 @@ export async function saveTenantWhatsAppConfig(params: {
     return { success: true };
   } catch (error) {
     console.error("[WhatsApp] saveTenantWhatsAppConfig error:", error);
-    return { success: true, error: error instanceof Error ? error.message : "Failed to save config" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to save config",
+    };
   }
 }
 
@@ -200,6 +208,51 @@ export async function testWhatsAppConfig(params: {
   } catch (error) {
     console.error("[WhatsApp] testWhatsAppConfig error:", error);
     return { success: false, error: error instanceof Error ? error.message : "Test failed" };
+  }
+}
+
+export async function getWhatsAppInboxPatients() {
+  try {
+    const ctx = await requireTenantContext();
+
+    const patients = await db.patient.findMany({
+      where: {
+        tenantId: ctx.tenant.id,
+        deletedAt: null,
+        phone: { not: null },
+        OR: [
+          { whatsappMessages: { some: {} } },
+          { phone: { not: "" } },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        whatsappMessages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { createdAt: true, content: true, direction: true },
+        },
+      },
+      orderBy: { lastName: "asc" },
+      take: 100,
+    });
+
+    return {
+      success: true,
+      patients: patients.map((p) => ({
+        id: p.id,
+        name: `${p.firstName} ${p.lastName}`.trim(),
+        phone: p.phone ?? "",
+        lastMessage: p.whatsappMessages[0]?.content ?? null,
+        lastMessageAt: p.whatsappMessages[0]?.createdAt ?? null,
+      })),
+    };
+  } catch (error) {
+    console.error("[WhatsApp] getWhatsAppInboxPatients error:", error);
+    return { success: false, patients: [] };
   }
 }
 

@@ -126,6 +126,7 @@ export async function bookAppointment(input: {
     appointmentDate: start,
     appointmentTime: input.startTime,
     doctorName: await getDoctorName(ctx.tenantId, doctorRecordId),
+    clinicTimezone: ctx.tenant.timezone ?? undefined,
   }).catch(() => null);
 
   revalidatePath("/appointments");

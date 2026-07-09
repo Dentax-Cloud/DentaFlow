@@ -16,6 +16,32 @@ export const WHATSAPP_STATUS = {
 export type WhatsAppDirection = typeof WHATSAPP_DIRECTION[keyof typeof WHATSAPP_DIRECTION];
 export type WhatsAppStatus = typeof WHATSAPP_STATUS[keyof typeof WHATSAPP_STATUS];
 
+export type WhatsAppMessageRecord = {
+  id: string;
+  direction: WhatsAppDirection;
+  content: string;
+  status: WhatsAppStatus;
+  createdAt: Date;
+  templateName?: string;
+};
+
+function parseDirection(value: string): WhatsAppDirection {
+  return value === WHATSAPP_DIRECTION.IN || value === WHATSAPP_DIRECTION.OUT
+    ? value
+    : WHATSAPP_DIRECTION.OUT;
+}
+
+function parseStatus(value: string): WhatsAppStatus {
+  switch (value) {
+    case WHATSAPP_STATUS.DELIVERED:
+    case WHATSAPP_STATUS.READ:
+    case WHATSAPP_STATUS.FAILED:
+      return value;
+    default:
+      return WHATSAPP_STATUS.SENT;
+  }
+}
+
 export interface SendWhatsAppParams {
   tenantId: string;
   patientId: string;
@@ -218,14 +244,7 @@ export async function recordWhatsAppMessage(params: {
 export async function getPatientWhatsAppMessages(
   tenantId: string,
   patientId: string,
-): Promise<Array<{
-  id: string;
-  direction: "IN" | "OUT";
-  content: string;
-  status: "SENT" | "DELIVERED" | "READ" | "FAILED";
-  createdAt: Date;
-  templateName?: string;
-}>> {
+): Promise<WhatsAppMessageRecord[]> {
   const messages = await db.whatsAppMessage.findMany({
     where: {
       tenantId,
@@ -236,15 +255,22 @@ export async function getPatientWhatsAppMessages(
     },
     select: {
       id: true,
-      direction: WhatsAppDirection,
+      direction: true,
       content: true,
-      status: WhatsAppStatus,
+      status: true,
       createdAt: true,
       templateName: true,
     },
   });
 
-  return messages;
+  return messages.map((message) => ({
+    id: message.id,
+    direction: parseDirection(message.direction),
+    content: message.content,
+    status: parseStatus(message.status),
+    createdAt: message.createdAt,
+    ...(message.templateName ? { templateName: message.templateName } : {}),
+  }));
 }
 
 /**

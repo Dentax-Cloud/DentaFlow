@@ -2,13 +2,17 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Send, MessageSquare, Search, User, Clock } from "lucide-react";
+import { Send, MessageSquare, Search, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
-import { getPatientWhatsAppMessages, replyToPatientWhatsApp } from "../actions";
+import {
+  getPatientWhatsAppMessages,
+  getWhatsAppInboxPatients,
+  replyToPatientWhatsApp,
+} from "../actions";
 
 type Message = {
   id: string;
@@ -19,19 +23,31 @@ type Message = {
   templateName?: string;
 };
 
+type InboxPatient = {
+  id: string;
+  name: string;
+  phone: string;
+  lastMessage: string | null;
+  lastMessageAt: Date | null;
+};
+
 export function WhatsAppInbox() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [patients, setPatients] = useState<InboxPatient[]>([]);
+  const [search, setSearch] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyText, setReplyText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Mock patient list - in production, this would come from the database
-  const [patients] = useState([
-    { id: "1", name: "Ahmed Al-Farsi", phone: "+971501234567" },
-    { id: "2", name: "Priya Sharma", phone: "+919876543210" },
-    { id: "3", name: "John Smith", phone: "+971559876543" },
-  ]);
+  useEffect(() => {
+    startTransition(async () => {
+      const result = await getWhatsAppInboxPatients();
+      if (result.success) {
+        setPatients(result.patients);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (selectedPatientId) {
@@ -57,7 +73,6 @@ export function WhatsAppInbox() {
       if (result.success) {
         toast.success("Reply sent successfully");
         setReplyText("");
-        // Refresh messages
         const updated = await getPatientWhatsAppMessages(selectedPatientId);
         if (updated.success) {
           setMessages(updated.messages);
@@ -69,85 +84,116 @@ export function WhatsAppInbox() {
     });
   }
 
-  const selectedPatient = patients.find(p => p.id === selectedPatientId);
+  const filteredPatients = patients.filter((p) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return p.name.toLowerCase().includes(q) || p.phone.includes(q);
+  });
+
+  const selectedPatient = patients.find((p) => p.id === selectedPatientId);
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] gap-4">
-      {/* Patient List */}
-      <Card className="w-80 flex flex-col">
+    <div className="flex h-[calc(100vh-2rem)] flex-col gap-4 lg:flex-row">
+      <Card className="flex w-full flex-col lg:w-80">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             WhatsApp Inbox
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden">
+        <CardContent className="flex flex-1 flex-col overflow-hidden">
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search patients..."
                 className="pl-8"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="h-[calc(100vh-12rem)] overflow-y-auto">
+            <div className="max-h-[calc(100vh-14rem)] overflow-y-auto">
               <div className="space-y-1">
-                {patients.map((patient) => (
-                  <button
-                    key={patient.id}
-                    onClick={() => setSelectedPatientId(patient.id)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      selectedPatientId === patient.id
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
-                          {patient.name.split(" ").map(n => n[0]).join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{patient.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{patient.phone}</p>
+                {filteredPatients.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No patients with phone numbers found
+                  </p>
+                ) : (
+                  filteredPatients.map((patient) => (
+                    <button
+                      key={patient.id}
+                      type="button"
+                      onClick={() => setSelectedPatientId(patient.id)}
+                      className={`w-full rounded-lg p-3 text-left transition-colors ${
+                        selectedPatientId === patient.id
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>
+                            {patient.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{patient.name}</p>
+                          <p
+                            className={`truncate text-xs ${
+                              selectedPatientId === patient.id
+                                ? "text-primary-foreground/80"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {patient.phone}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Message Thread */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="flex flex-1 flex-col">
         {selectedPatient ? (
           <>
             <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>
-                    {selectedPatient.name.split(" ").map(n => n[0]).join("")}
+                    {selectedPatient.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <p>{selectedPatient.name}</p>
-                  <p className="text-sm font-normal text-muted-foreground">{selectedPatient.phone}</p>
+                  <p className="text-sm font-normal text-muted-foreground">
+                    {selectedPatient.phone}
+                  </p>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col overflow-hidden">
+            <CardContent className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto pr-4">
                 <div className="space-y-4 py-4">
                   {messages.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-8">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <div className="py-8 text-center text-muted-foreground">
+                      <MessageSquare className="mx-auto mb-4 h-12 w-12 opacity-50" />
                       <p>No messages yet</p>
                     </div>
                   ) : (
-                    messages.map((message) => (
+                    [...messages].reverse().map((message) => (
                       <div
                         key={message.id}
                         className={`flex ${
@@ -155,14 +201,14 @@ export function WhatsAppInbox() {
                         }`}
                       >
                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
+                          className={`max-w-[85%] rounded-lg p-3 sm:max-w-[70%] ${
                             message.direction === "OUT"
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted"
                           }`}
                         >
                           <p className="text-sm">{message.content}</p>
-                          <div className="flex items-center gap-2 mt-1 text-xs opacity-70">
+                          <div className="mt-1 flex items-center gap-2 text-xs opacity-70">
                             <Clock className="h-3 w-3" />
                             {new Date(message.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
@@ -178,8 +224,8 @@ export function WhatsAppInbox() {
                   )}
                 </div>
               </div>
-              <div className="border-t pt-4 mt-4">
-                <div className="flex gap-2">
+              <div className="mt-4 border-t pt-4">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Textarea
                     placeholder="Type your message..."
                     value={replyText}
@@ -187,16 +233,16 @@ export function WhatsAppInbox() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendReply();
+                        void handleSendReply();
                       }
                     }}
-                    className="flex-1 min-h-[60px] resize-none"
+                    className="min-h-[60px] flex-1 resize-none"
                   />
                   <Button
-                    onClick={handleSendReply}
-                    disabled={isSending || !replyText.trim()}
+                    onClick={() => void handleSendReply()}
+                    disabled={isSending || isPending || !replyText.trim()}
                     size="icon"
-                    className="h-[60px] w-[60px]"
+                    className="h-[60px] w-full sm:w-[60px]"
                   >
                     {isSending ? (
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -209,9 +255,9 @@ export function WhatsAppInbox() {
             </CardContent>
           </>
         ) : (
-          <CardContent className="flex-1 flex items-center justify-center">
+          <CardContent className="flex flex-1 items-center justify-center">
             <div className="text-center text-muted-foreground">
-              <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <MessageSquare className="mx-auto mb-4 h-16 w-16 opacity-50" />
               <p className="text-lg">Select a patient to view messages</p>
               <p className="text-sm">Choose from the patient list on the left</p>
             </div>

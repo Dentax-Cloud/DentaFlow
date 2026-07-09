@@ -160,7 +160,7 @@ async function sendRemindersForWindow(params: {
       status: { in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED] },
     },
     include: {
-      patient: { select: { firstName: true, lastName: true, email: true } },
+      patient: { select: { firstName: true, lastName: true, email: true, phone: true } },
       doctor: {
         include: {
           user: { select: { firstName: true, lastName: true } },
@@ -174,7 +174,10 @@ async function sendRemindersForWindow(params: {
   let sent = 0;
 
   for (const appt of appointments) {
-    if (!appt.patient?.email || !appt.patientId) continue;
+    if (!appt.patientId || !appt.patient) continue;
+    const hasEmail = Boolean(appt.patient.email?.trim());
+    const hasPhone = Boolean(appt.patient.phone?.trim());
+    if (!hasEmail && !hasPhone) continue;
 
     const subject = reminderSubject(appt.id, params.kind);
     const claimId = workerClaimLogId(`reminder_${params.kind}`, appt.id);
@@ -186,18 +189,40 @@ async function sendRemindersForWindow(params: {
     });
     if (!claimed) continue;
 
+    const patientName = `${appt.patient.firstName} ${appt.patient.lastName}`.trim();
+    const appointmentTime = formatClinicTime(
+      appt.startTime,
+      resolveClinicTimezone(appt.tenant.timezone),
+    );
+    const doctorName = formatDoctorName(appt.doctor, appt.provider);
+
     try {
-      await sendAppointmentReminder({
-        to: appt.patient.email,
-        patientName: `${appt.patient.firstName} ${appt.patient.lastName}`.trim(),
-        clinicName: appt.tenant.name,
-        appointmentDate: appt.startTime,
-        appointmentTime: formatClinicTime(
-          appt.startTime,
-          resolveClinicTimezone(appt.tenant.timezone),
-        ),
-        doctorName: formatDoctorName(appt.doctor, appt.provider),
-      });
+      if (hasEmail) {
+        await sendAppointmentReminder({
+          to: appt.patient.email!,
+          patientName,
+          clinicName: appt.tenant.name,
+          appointmentDate: appt.startTime,
+          appointmentTime,
+          doctorName,
+        });
+      }
+
+      if (hasPhone) {
+        const { sendAppointmentReminderWhatsApp } = await import(
+          "@/app/(dashboard)/features/whatsapp/actions"
+        );
+        await sendAppointmentReminderWhatsApp({
+          patientId: appt.patientId,
+          appointmentId: appt.id,
+          patientName,
+          clinicName: appt.tenant.name,
+          appointmentDate: appt.startTime,
+          appointmentTime,
+          doctorName,
+          hoursBefore: params.kind === "24h" ? 24 : 1,
+        }).catch(() => null);
+      }
 
       await markOutboundSent(claimId, `Appointment ${params.kind} reminder sent`);
 
