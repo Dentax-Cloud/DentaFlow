@@ -9,6 +9,7 @@ import { createAuditLog } from "@/lib/actions/safe-action";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { applyDerivedAppointmentCompletion } from "@/lib/appointments/derive-completion-status";
 import { updateTreatmentPlanItem } from "@/app/(dashboard)/features/clinical/treatment-plan-actions";
+import { evaluateProcedureLinePreAuthClose } from "@/lib/insurance/pre-auth-gate";
 
 async function requireClinicalChartWrite() {
   const ctx = await requireTenantContext();
@@ -86,6 +87,36 @@ async function completeLinkedTreatmentItem(
 
   const allComplete = plan.items.every((i) => isTreatmentItemComplete(i.status));
   return { planCompletedTitle: allComplete ? plan.title : null };
+}
+
+async function resolveClosePreAuthFields(
+  tenantId: string,
+  appointmentId: string,
+  procedureCode: string | null,
+) {
+  const appointment = await db.appointment.findFirst({
+    where: { id: appointmentId, tenantId },
+    select: { patientId: true },
+  });
+  if (!appointment?.patientId) {
+    return {
+      requiresPreAuth: false,
+      preAuthStatus: null as string | null,
+      preAuthWarning: null as string | null,
+    };
+  }
+
+  const evaluation = await evaluateProcedureLinePreAuthClose({
+    tenantId,
+    patientId: appointment.patientId,
+    procedureCode,
+  });
+
+  return {
+    requiresPreAuth: evaluation.requiresPreAuth,
+    preAuthStatus: evaluation.preAuthStatus,
+    preAuthWarning: evaluation.showWarning ? evaluation.warningMessage : null,
+  };
 }
 
 export type ProcedureLineRow = {
@@ -230,12 +261,20 @@ export async function closeProcedureLine(lineId: string) {
     action: "close",
   });
 
+  const preAuthFields = await resolveClosePreAuthFields(
+    ctx.tenantId,
+    line.appointmentId,
+    line.procedureCode,
+  );
+
   await db.procedureLine.update({
     where: { id: lineId },
     data: {
       status: "CLOSED",
       closedAt: new Date(),
       closedById: ctx.staffMember?.id ?? null,
+      requiresPreAuth: preAuthFields.requiresPreAuth,
+      preAuthStatus: preAuthFields.preAuthStatus,
     },
   });
 
@@ -252,6 +291,7 @@ export async function closeProcedureLine(lineId: string) {
   return {
     completionApplied: completion.applied,
     planCompletedTitle: treatmentSync.planCompletedTitle,
+    preAuthWarning: preAuthFields.preAuthWarning,
   };
 }
 
@@ -313,12 +353,20 @@ export async function forceCloseProcedureLine(lineId: string, reason: string) {
     throw new Error("Only in-progress procedure lines can be force-closed.");
   }
 
+  const preAuthFields = await resolveClosePreAuthFields(
+    ctx.tenantId,
+    line.appointmentId,
+    line.procedureCode,
+  );
+
   await db.procedureLine.update({
     where: { id: lineId },
     data: {
       status: "CLOSED",
       closedAt: new Date(),
       closedById: ctx.staffMember.id,
+      requiresPreAuth: preAuthFields.requiresPreAuth,
+      preAuthStatus: preAuthFields.preAuthStatus,
     },
   });
 
@@ -350,5 +398,6 @@ export async function forceCloseProcedureLine(lineId: string, reason: string) {
   return {
     completionApplied: completion.applied,
     planCompletedTitle: treatmentSync.planCompletedTitle,
+    preAuthWarning: preAuthFields.preAuthWarning,
   };
 }

@@ -125,6 +125,16 @@ function QueueEntryCard({
                   <span className="ml-2">
                     ×{line.quantity} · {money(line.unitPrice * line.quantity)}
                   </span>
+                  {line.requiresPreAuth && line.preAuthStatus === "MISSING" ? (
+                    <Badge variant="destructive" className="ml-2 text-xs">
+                      Pre-auth missing
+                    </Badge>
+                  ) : null}
+                  {line.preAuthStatus === "APPROVED" ? (
+                    <Badge variant="outline" className="ml-2 text-xs">
+                      Pre-auth OK
+                    </Badge>
+                  ) : null}
                 </li>
               ))}
             </ul>

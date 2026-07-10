@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { runPostDerivedVisitIntelligence } from "@/lib/encounter/post-visit-intelligence";
 
 export type AppointmentCompletionDerivation =
   | { kind: "no-op" }
@@ -32,7 +33,8 @@ export async function computeAppointmentCompletionStatus(
 
 /**
  * Isolated status transition when all ProcedureLines are terminal.
- * Does NOT call completeVisit() — patient follow-up side effects are Phase 6.
+ * Does NOT call completeVisit() — uses encounter intelligence (estimate + plan
+ * suggestions) instead of chairside finalize / recall side effects from Phase 6.
  */
 export async function applyDerivedAppointmentCompletion(
   tenantId: string,
@@ -45,7 +47,15 @@ export async function applyDerivedAppointmentCompletion(
 
   const appointment = await db.appointment.findFirst({
     where: { id: appointmentId, tenantId, deletedAt: null, isBlock: false },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      patientId: true,
+      patient: {
+        select: { id: true, firstName: true, lastName: true },
+      },
+      tenant: { select: { countryCode: true } },
+    },
   });
   if (!appointment || appointment.status === "COMPLETED") {
     return { applied: false, derivation };
@@ -55,6 +65,16 @@ export async function applyDerivedAppointmentCompletion(
     where: { id: appointmentId },
     data: { status: "COMPLETED" },
   });
+
+  if (appointment.patientId && appointment.patient) {
+    await runPostDerivedVisitIntelligence({
+      tenantId,
+      appointmentId,
+      patientId: appointment.patientId,
+      patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim(),
+      countryCode: appointment.tenant.countryCode,
+    }).catch(() => null);
+  }
 
   return { applied: true, derivation };
 }

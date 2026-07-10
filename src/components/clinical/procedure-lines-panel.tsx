@@ -131,6 +131,9 @@ export function ProcedureLinesPanel({
     startTransition(async () => {
       try {
         const result = await closeProcedureLine(lineId);
+        if (result.preAuthWarning) {
+          toast.warning(result.preAuthWarning);
+        }
         if (result.planCompletedTitle) {
           toast.info(`This completes the patient's treatment plan: ${result.planCompletedTitle}`);
         }
