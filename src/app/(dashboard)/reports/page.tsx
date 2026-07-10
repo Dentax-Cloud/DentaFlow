@@ -27,6 +27,7 @@ export default async function ReportsPage() {
     <ReportsClient
       kpis={serializeDecimal(kpis)}
       tenantId={ctx.tenant.id}
+      countryCode={ctx.tenant.countryCode}
       doctorProductivity={doctorProductivity.map(serializeDecimal)}
       revenueByProcedure={revenueByProcedure.map(serializeDecimal)}
       retention={serializeDecimal(retention)}

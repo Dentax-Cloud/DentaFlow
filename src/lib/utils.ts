@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * @deprecated Use `formatCurrency` from `@/lib/countries` instead — it is
+ * tenant-currency-aware (country profile symbols, decimals, locale).
+ */
 export function formatCurrency(amount: number | string, currency = "USD") {
   const value = typeof amount === "string" ? parseFloat(amount) : amount;
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
