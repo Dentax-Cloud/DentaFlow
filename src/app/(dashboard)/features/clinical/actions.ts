@@ -610,32 +610,6 @@ export const generateInvoiceFromProcedures = createAction({
   },
 });
 
-const createTreatmentPlanSchema = z.object({
-  patientId: z.string(),
-  title: z.string().min(1),
-  notes: z.string().optional(),
-});
-
-export const createTreatmentPlan = createAction({
-  schema: createTreatmentPlanSchema,
-  permission: () => requirePermission(PERMISSIONS.clinical_chart.write),
-  handler: async (input, ctx) => {
-    await requirePatientInTenant(ctx.tenant.id, input.patientId);
-    const plan = await db.treatmentPlan.create({
-      data: {
-        tenantId: ctx.tenant.id,
-        patientId: input.patientId,
-        title: input.title,
-        description: input.notes,
-        status: "DRAFT",
-      },
-    });
-    revalidatePath("/clinical");
-    revalidatePath("/clinical/treatment-plans");
-    return plan;
-  },
-});
-
 const addTreatmentItemSchema = z.object({
   planId: z.string(),
   procedureCatalogId: z.string().optional(),

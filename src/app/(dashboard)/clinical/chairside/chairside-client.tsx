@@ -2,7 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { ChairsidePanel, type ChairsideEntryRow } from "@/components/clinical/chairside-panel";
-import { ProcedureLinesPanel } from "@/components/clinical/procedure-lines-panel";
+import { ProcedureLinesPanel, type OutstandingPlanItem } from "@/components/clinical/procedure-lines-panel";
+import {
+  TreatmentPlanInlinePanel,
+  type ChairsideTreatmentPlan,
+} from "@/components/clinical/treatment-plan-inline-panel";
 import type { ProcedureLineRow } from "@/app/(dashboard)/features/procedure-lines/actions";
 import type { ProcedureOption } from "@/lib/clinical/use-procedure-search";
 
@@ -11,6 +15,8 @@ type Props = {
   countryCode: string;
   currentStaffMemberId: string | null;
   procedureLines: ProcedureLineRow[];
+  treatmentPlans: ChairsideTreatmentPlan[];
+  outstandingPlanItems: OutstandingPlanItem[];
   session: {
     id: string;
     patientId: string;
@@ -33,6 +39,8 @@ export default function ChairsidePageClient({
   countryCode,
   currentStaffMemberId,
   procedureLines,
+  treatmentPlans,
+  outstandingPlanItems,
   session,
   patient,
   procedures,
@@ -48,6 +56,14 @@ export default function ChairsidePageClient({
 
   return (
     <div className="space-y-0">
+      <TreatmentPlanInlinePanel
+        patientId={patient.id}
+        appointmentId={session.appointmentId}
+        canWrite={canWrite}
+        countryCode={countryCode}
+        procedures={procedures}
+        treatmentPlans={treatmentPlans}
+      />
       {session.appointmentId ? (
         <ProcedureLinesPanel
           appointmentId={session.appointmentId}
@@ -56,6 +72,7 @@ export default function ChairsidePageClient({
           canWrite={canWrite}
           initialLines={procedureLines}
           procedures={procedures}
+          outstandingPlanItems={outstandingPlanItems}
         />
       ) : null}
       <ChairsidePanel
