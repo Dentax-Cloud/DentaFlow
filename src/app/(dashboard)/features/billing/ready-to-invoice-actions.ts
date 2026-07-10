@@ -26,6 +26,8 @@ export type BillingQueueLineRow = {
   quantity: number;
   status: string;
   lockedAt: string | null;
+  requiresPreAuth: boolean;
+  preAuthStatus: string | null;
 };
 
 export type BillingQueueEntry = {
@@ -61,6 +63,8 @@ function serializeLine(
     quantity: number;
     unitPrice: unknown;
     lockedAt: Date | null;
+    requiresPreAuth: boolean;
+    preAuthStatus: string | null;
   },
   ownerNameById: Map<string, string>,
 ): BillingQueueLineRow {
@@ -75,6 +79,8 @@ function serializeLine(
     quantity: line.quantity,
     status: line.status,
     lockedAt: line.lockedAt?.toISOString() ?? null,
+    requiresPreAuth: line.requiresPreAuth,
+    preAuthStatus: line.preAuthStatus,
   };
 }
 
