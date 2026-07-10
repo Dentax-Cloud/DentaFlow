@@ -14,11 +14,12 @@ export default async function AppointmentsPage({ searchParams }: Props) {
   const ctx = await requireRouteAccess("appointments", "read");
   const { appointmentId } = await searchParams;
   const now = new Date();
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
 
   const [appointments, chairs, doctors, emergencyStats, insuranceStatusMap] = await Promise.all([
     getAppointments(ctx.tenant.id, {
-      start: startOfWeek(now),
-      end: endOfWeek(now),
+      start: weekStart,
+      end: endOfWeek(now, { weekStartsOn: 1 }),
     }),
     getChairs(ctx.tenant.id),
     getDoctors(ctx.tenant.id),
@@ -58,6 +59,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       emergencyImmediate={emergencyStats.filter((e) => e.triageLevel === "IMMEDIATE").length}
       insuranceStatusMap={insuranceStatusMap}
       staffRole={ctx.staffMember?.role}
+      loadedWeekStart={weekStart.toISOString()}
     />
   );
 }

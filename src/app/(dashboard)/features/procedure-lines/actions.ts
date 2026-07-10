@@ -8,6 +8,7 @@ import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { createAuditLog } from "@/lib/actions/safe-action";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { applyDerivedAppointmentCompletion } from "@/lib/appointments/derive-completion-status";
+import { updateTreatmentPlanItem } from "@/app/(dashboard)/features/clinical/treatment-plan-actions";
 
 async function requireClinicalChartWrite() {
   const ctx = await requireTenantContext();
@@ -53,6 +54,38 @@ async function assertCanCloseLine(params: {
       },
     });
   }
+}
+
+function isTreatmentItemComplete(status: string): boolean {
+  return status === "completed" || status === "COMPLETED";
+}
+
+async function completeLinkedTreatmentItem(
+  treatmentItemId: string | null,
+): Promise<{ planCompletedTitle: string | null }> {
+  if (!treatmentItemId) return { planCompletedTitle: null };
+
+  const item = await db.treatmentItem.findFirst({
+    where: { id: treatmentItemId },
+    select: { id: true, status: true, treatmentPlanId: true },
+  });
+  if (!item) return { planCompletedTitle: null };
+
+  if (!isTreatmentItemComplete(item.status)) {
+    await updateTreatmentPlanItem(treatmentItemId, { status: "COMPLETED" });
+  }
+
+  const plan = await db.treatmentPlan.findFirst({
+    where: { id: item.treatmentPlanId },
+    select: {
+      title: true,
+      items: { select: { status: true } },
+    },
+  });
+  if (!plan) return { planCompletedTitle: null };
+
+  const allComplete = plan.items.every((i) => isTreatmentItemComplete(i.status));
+  return { planCompletedTitle: allComplete ? plan.title : null };
 }
 
 export type ProcedureLineRow = {
@@ -203,12 +236,19 @@ export async function closeProcedureLine(lineId: string) {
   });
 
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
+  const treatmentSync = await completeLinkedTreatmentItem(line.treatmentItemId);
 
   revalidatePath("/clinical/chairside");
   revalidatePath("/clinical/visit-board");
   revalidatePath("/appointments");
+  if (line.treatmentItemId) {
+    revalidatePath("/clinical/treatment-plans");
+  }
 
-  return { completionApplied: completion.applied };
+  return {
+    completionApplied: completion.applied,
+    planCompletedTitle: treatmentSync.planCompletedTitle,
+  };
 }
 
 export async function voidProcedureLine(lineId: string, reason: string) {
@@ -290,10 +330,17 @@ export async function forceCloseProcedureLine(lineId: string, reason: string) {
   });
 
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
+  const treatmentSync = await completeLinkedTreatmentItem(line.treatmentItemId);
 
   revalidatePath("/clinical/chairside");
   revalidatePath("/clinical/visit-board");
   revalidatePath("/appointments");
+  if (line.treatmentItemId) {
+    revalidatePath("/clinical/treatment-plans");
+  }
 
-  return { completionApplied: completion.applied };
+  return {
+    completionApplied: completion.applied,
+    planCompletedTitle: treatmentSync.planCompletedTitle,
+  };
 }

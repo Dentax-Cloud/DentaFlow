@@ -16,6 +16,15 @@ import {
   createProcedureLine,
 } from "@/app/(dashboard)/features/procedure-lines/actions";
 
+export type OutstandingPlanItem = {
+  id: string;
+  description: string;
+  planTitle: string;
+  procedureCode: string | null;
+  unitCost: number;
+  linkedAppointmentId: string | null;
+};
+
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "destructive"> = {
   IN_PROGRESS: "default",
   CLOSED: "success",
@@ -30,6 +39,7 @@ type Props = {
   canWrite: boolean;
   initialLines: ProcedureLineRow[];
   procedures: ProcedureOption[];
+  outstandingPlanItems?: OutstandingPlanItem[];
 };
 
 export function ProcedureLinesPanel({
@@ -39,12 +49,14 @@ export function ProcedureLinesPanel({
   canWrite,
   initialLines,
   procedures,
+  outstandingPlanItems = [],
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [procedureCode, setProcedureCode] = useState(procedures[0]?.code ?? "");
   const [unitPrice, setUnitPrice] = useState(String(procedures[0]?.sellingPrice ?? 0));
   const [quantity, setQuantity] = useState("1");
+  const [selectedPlanItemId, setSelectedPlanItemId] = useState("");
 
   const money = (amount: number) => formatCurrency(amount, countryCode);
 
@@ -72,18 +84,26 @@ export function ProcedureLinesPanel({
       return;
     }
 
+    const linkedItem = selectedPlanItemId
+      ? outstandingPlanItems.find((item) => item.id === selectedPlanItemId)
+      : undefined;
+
     startTransition(async () => {
       try {
         await createProcedureLine({
           appointmentId,
           ownerType: "DOCTOR",
           ownerId: currentStaffMemberId,
-          procedureCode: proc.code,
-          procedureName: proc.name,
-          unitPrice: price,
+          procedureCode: linkedItem?.procedureCode ?? proc.code,
+          procedureName: linkedItem?.description ?? proc.name,
+          unitPrice: linkedItem?.unitCost ?? price,
           quantity: qty,
+          treatmentItemId: linkedItem?.id ?? null,
         });
-        toast.success("Procedure line added.");
+        toast.success(
+          linkedItem ? "Procedure line added and linked to treatment plan." : "Procedure line added.",
+        );
+        setSelectedPlanItemId("");
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not add procedure line.");
@@ -91,10 +111,29 @@ export function ProcedureLinesPanel({
     });
   }
 
+  function handlePlanItemSelect(itemId: string) {
+    setSelectedPlanItemId(itemId);
+    if (!itemId) return;
+    const item = outstandingPlanItems.find((planItem) => planItem.id === itemId);
+    if (!item) return;
+    if (item.procedureCode) {
+      const proc = procedures.find((p) => p.code === item.procedureCode);
+      if (proc) {
+        setProcedureCode(proc.code);
+        setUnitPrice(String(item.unitCost || proc.sellingPrice));
+        return;
+      }
+    }
+    setUnitPrice(String(item.unitCost));
+  }
+
   function handleCloseMine(lineId: string) {
     startTransition(async () => {
       try {
         const result = await closeProcedureLine(lineId);
+        if (result.planCompletedTitle) {
+          toast.info(`This completes the patient's treatment plan: ${result.planCompletedTitle}`);
+        }
         toast.success(
           result.completionApplied
             ? "Your portion closed — appointment marked completed."
@@ -177,6 +216,27 @@ export function ProcedureLinesPanel({
         {canWrite ? (
           <div className="rounded-md border border-dashed p-3">
             <p className="mb-3 text-sm font-medium">Add my procedure</p>
+            {outstandingPlanItems.length > 0 ? (
+              <div className="mb-3">
+                <Label htmlFor="procedure-line-plan-item">
+                  From treatment plan? <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <select
+                  id="procedure-line-plan-item"
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={selectedPlanItemId}
+                  onChange={(e) => handlePlanItemSelect(e.target.value)}
+                >
+                  <option value="">One-off procedure (default)</option>
+                  {outstandingPlanItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.planTitle}: {item.description}
+                      {item.linkedAppointmentId === appointmentId ? " (this visit)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="sm:col-span-2">
                 <Label htmlFor="procedure-line-code">Procedure</Label>

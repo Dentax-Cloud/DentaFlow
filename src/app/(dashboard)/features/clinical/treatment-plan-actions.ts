@@ -176,6 +176,7 @@ export async function addTreatmentPlanItem(
     notes?: string;
     procedureCatalogId?: string;
     estimatedDuration?: number;
+    linkedAppointmentId?: string | null;
   },
 ) {
   const ctx = await requireTenantContext();
@@ -220,11 +221,13 @@ export async function addTreatmentPlanItem(
       procedureCatalogId: data.procedureCatalogId ?? null,
       procedureCode,
       estimatedDuration: duration,
+      linkedAppointmentId: data.linkedAppointmentId ?? null,
     },
   });
 
   await recalculatePlanTotal(planId);
   revalidatePath(`/clinical/treatment-plans/${planId}`);
+  revalidatePath("/clinical/chairside");
   return item;
 }
 
@@ -278,6 +281,7 @@ export async function updateTreatmentPlanItem(
 
   await recalculatePlanTotal(item.treatmentPlan.id);
   revalidatePath(`/clinical/treatment-plans/${item.treatmentPlan.id}`);
+  revalidatePath("/clinical/chairside");
   return updated;
 }
 
@@ -507,11 +511,16 @@ export async function getPatientTreatmentPlans(patientId: string) {
       items: {
         select: {
           id: true,
+          description: true,
           status: true,
           totalCost: true,
+          unitCost: true,
           visitNumber: true,
           phase: true,
           priority: true,
+          linkedAppointmentId: true,
+          procedureCode: true,
+          procedureCatalogId: true,
         },
       },
     },
@@ -543,5 +552,6 @@ export async function createTreatmentPlanRecord(input: {
   });
 
   revalidatePath("/clinical/treatment-plans");
+  revalidatePath("/clinical/chairside");
   return plan;
 }
