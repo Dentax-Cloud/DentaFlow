@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { sendAppointmentReminder, sendTrialExpiryWarning, sendMail } from "@/lib/mail";
 import { parseRecallSettings } from "@/lib/recall/helpers";
 import { expireStaleChairsideSessions } from "@/lib/clinical/chairside-lifecycle";
+import { processStalledProcedureLineEscalation } from "@/lib/procedure-lines/run-stalled-line-escalation";
 import { formatClinicTime, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 import { isPrismaUniqueViolation, workerClaimLogId } from "@/worker/claim";
 
@@ -22,6 +23,7 @@ const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const RECALL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DAILY_BILLING_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const CHAIRSIDE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const STALLED_LINE_ESCALATION_INTERVAL_MS = 60 * 60 * 1000;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 const TRIAL_WARNING_DAYS = [7, 3, 1] as const;
@@ -132,6 +134,7 @@ async function run() {
   setInterval(runExpiredTrialEnforcementJob, DAILY_BILLING_INTERVAL_MS);
   setInterval(runPastDueDunningJob, DAILY_BILLING_INTERVAL_MS);
   setInterval(runChairsideStaleSessionJob, CHAIRSIDE_CLEANUP_INTERVAL_MS);
+  setInterval(runStalledProcedureLineEscalationJob, STALLED_LINE_ESCALATION_INTERVAL_MS);
 
   console.log("[worker] Jobs scheduled. Running…");
 }
@@ -144,6 +147,7 @@ async function runAllJobs() {
     runExpiredTrialEnforcementJob(),
     runPastDueDunningJob(),
     runChairsideStaleSessionJob(),
+    runStalledProcedureLineEscalationJob(),
   ]);
 }
 
@@ -466,6 +470,19 @@ async function runChairsideStaleSessionJob() {
     }
   } catch (err) {
     console.error("[worker] chairside stale session job failed:", err);
+  }
+}
+
+async function runStalledProcedureLineEscalationJob() {
+  try {
+    const { warned, escalated } = await processStalledProcedureLineEscalation();
+    if (warned > 0 || escalated > 0) {
+      console.log(
+        `[worker] Stalled procedure lines — warned: ${warned}, escalated: ${escalated}`,
+      );
+    }
+  } catch (err) {
+    console.error("[worker] stalled procedure line escalation job failed:", err);
   }
 }
 

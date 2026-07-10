@@ -171,6 +171,7 @@ export async function createProcedureLine(input: {
   });
 
   revalidatePath("/clinical/chairside");
+  revalidatePath("/clinical/visit-board");
   revalidatePath("/appointments");
 
   return { id: line.id };
@@ -204,6 +205,7 @@ export async function closeProcedureLine(lineId: string) {
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
 
   revalidatePath("/clinical/chairside");
+  revalidatePath("/clinical/visit-board");
   revalidatePath("/appointments");
 
   return { completionApplied: completion.applied };
@@ -240,6 +242,57 @@ export async function voidProcedureLine(lineId: string, reason: string) {
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
 
   revalidatePath("/clinical/chairside");
+  revalidatePath("/clinical/visit-board");
+  revalidatePath("/appointments");
+
+  return { completionApplied: completion.applied };
+}
+
+export async function forceCloseProcedureLine(lineId: string, reason: string) {
+  const ctx = await requireTenantContext();
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error("A reason is required for force-close.");
+
+  if (!ctx.staffMember || !isAdminOverride(ctx.staffMember.role)) {
+    throw new Error("Only administrators can force-close procedure lines.");
+  }
+
+  const line = await db.procedureLine.findFirst({
+    where: { id: lineId, tenantId: ctx.tenantId },
+  });
+  if (!line) throw new Error("Procedure line not found.");
+  if (line.status !== "IN_PROGRESS") {
+    throw new Error("Only in-progress procedure lines can be force-closed.");
+  }
+
+  await db.procedureLine.update({
+    where: { id: lineId },
+    data: {
+      status: "CLOSED",
+      closedAt: new Date(),
+      closedById: ctx.staffMember.id,
+    },
+  });
+
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember.id,
+    action: "UPDATE",
+    entity: "ProcedureLine",
+    entityId: line.id,
+    metadata: {
+      action: "force_close",
+      forced: true,
+      reason: trimmedReason,
+      previousOwnerId: line.ownerId,
+      appointmentId: line.appointmentId,
+    },
+  });
+
+  const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
+
+  revalidatePath("/clinical/chairside");
+  revalidatePath("/clinical/visit-board");
   revalidatePath("/appointments");
 
   return { completionApplied: completion.applied };
