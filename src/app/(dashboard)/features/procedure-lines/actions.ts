@@ -218,6 +218,10 @@ export async function closeProcedureLine(lineId: string) {
   });
   if (!line) throw new Error("Procedure line not found.");
 
+  if (line.status === "LOCKED" || line.lockedAt) {
+    throw new Error("This procedure line is locked after billing and cannot be modified.");
+  }
+
   await assertCanCloseLine({
     tenantId: ctx.tenantId,
     line,
@@ -260,6 +264,10 @@ export async function voidProcedureLine(lineId: string, reason: string) {
     where: { id: lineId, tenantId: ctx.tenantId },
   });
   if (!line) throw new Error("Procedure line not found.");
+
+  if (line.status === "LOCKED" || line.lockedAt) {
+    throw new Error("This procedure line is locked after billing and cannot be modified.");
+  }
 
   await assertCanCloseLine({
     tenantId: ctx.tenantId,

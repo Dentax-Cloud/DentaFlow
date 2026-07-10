@@ -185,6 +185,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/billing/ready-to-invoice",
+    label: "Ready to invoice",
+    icon: Receipt,
+    resource: "billing",
+    action: "read",
+  },
+  {
     href: "/billing/claims",
     label: "Insurance claims",
     icon: Receipt,
