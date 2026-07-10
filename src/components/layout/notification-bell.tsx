@@ -30,6 +30,8 @@ const TYPE_ICONS: Record<string, string> = {
   INVOICE_PAID: "💰",
   CLAIM_SUGGESTED: "📑",
   RECALL_DUE: "📞",
+  STALLED_PROCEDURE_LINE_WARN: "⏱️",
+  STALLED_PROCEDURE_LINE_ESCALATED: "🚨",
 };
 
 function timeAgo(dateStr: string): string {

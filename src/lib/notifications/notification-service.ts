@@ -21,7 +21,9 @@ export type NotificationType =
   | "LAB_RESULT_READY"
   | "INVOICE_PAID"
   | "CLAIM_SUGGESTED"
-  | "RECALL_DUE";
+  | "RECALL_DUE"
+  | "STALLED_PROCEDURE_LINE_WARN"
+  | "STALLED_PROCEDURE_LINE_ESCALATED";
 
 export type NotificationChannel = "IN_APP" | "EMAIL" | "BOTH";
 

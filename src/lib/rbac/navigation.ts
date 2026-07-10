@@ -136,6 +136,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/clinical/visit-board",
+    label: "Visit board",
+    icon: Timer,
+    resource: "clinical_schedule",
+    action: "read",
+  },
+  {
     href: "/clinical/perio",
     label: "Periodontal",
     icon: Activity,
