@@ -17,6 +17,7 @@ import {
   formatChairsideValidationError,
   getChairsideEntryValidationIssues,
 } from "@/lib/clinical/chairside-entry-validation";
+import { serializeDecimal } from "@/lib/utils/serialize";
 
 const CHAIRSIDE_WRITE_FORBIDDEN_MESSAGE =
   "You don't have permission to start a chairside session. Contact your administrator if you believe this is incorrect.";
@@ -49,6 +50,57 @@ function parseConditionType(value: string): ToothConditionType | null {
     return value as ToothConditionType;
   }
   return null;
+}
+
+function revalidateChairsidePaths(appointmentId?: string | null) {
+  revalidatePath("/clinical/chairside");
+  revalidatePath("/clinical");
+  if (appointmentId) {
+    revalidatePath(`/clinical/encounter/${appointmentId}`);
+  }
+}
+
+export type SerializedChairsideEntry = {
+  id: string;
+  sessionId: string;
+  toothNumber: number | null;
+  surface: string | null;
+  procedureCode: string | null;
+  procedureName: string | null;
+  conditionType: string | null;
+  notes: string | null;
+  unitPrice: number;
+  quantity: number;
+  includeInInvoice: boolean;
+};
+
+function serializeChairsideEntry(entry: {
+  id: string;
+  sessionId: string;
+  toothNumber: number | null;
+  surface: string | null;
+  procedureCode: string | null;
+  procedureName: string | null;
+  conditionType: string | null;
+  notes: string | null;
+  unitPrice: unknown;
+  quantity: number;
+  includeInInvoice: boolean;
+}): SerializedChairsideEntry {
+  const serialized = serializeDecimal(entry);
+  return {
+    id: entry.id,
+    sessionId: entry.sessionId,
+    toothNumber: entry.toothNumber,
+    surface: entry.surface,
+    procedureCode: entry.procedureCode,
+    procedureName: entry.procedureName,
+    conditionType: entry.conditionType,
+    notes: entry.notes,
+    unitPrice: Number(serialized.unitPrice ?? 0),
+    quantity: entry.quantity,
+    includeInInvoice: entry.includeInInvoice,
+  };
 }
 
 export async function startChairsideSession(input: {
@@ -98,7 +150,7 @@ export async function addChairsideEntry(input: {
   unitPrice?: number;
   quantity?: number;
   includeInInvoice?: boolean;
-}) {
+}): Promise<SerializedChairsideEntry> {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.clinical_chart.write);
 
@@ -128,7 +180,7 @@ export async function addChairsideEntry(input: {
             recordedBy: ctx.staffMember?.id ?? ctx.authUserId,
           },
         });
-        revalidatePath("/clinical");
+        revalidateChairsidePaths(session.appointmentId);
       } catch {
         // Don't fail if condition already exists
       }
@@ -151,8 +203,30 @@ export async function addChairsideEntry(input: {
     },
   });
 
-  revalidatePath("/clinical/chairside");
-  return entry;
+  revalidateChairsidePaths(session.appointmentId);
+  return serializeChairsideEntry(entry);
+}
+
+export async function updateChairsideSessionNotes(sessionId: string, notes: string) {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.clinical_chart.write);
+
+  const session = await db.chairsideSession.findFirst({
+    where: {
+      id: sessionId,
+      tenantId: ctx.tenantId,
+      status: CHAIRSIDE_SESSION_STATUS.ACTIVE,
+    },
+    select: { appointmentId: true },
+  });
+  if (!session) throw new Error("Session not found or not active");
+
+  await db.chairsideSession.updateMany({
+    where: { id: sessionId, tenantId: ctx.tenantId },
+    data: { notes: notes.trim() || null },
+  });
+
+  revalidateChairsidePaths(session.appointmentId);
 }
 
 export async function removeChairsideEntry(entryId: string) {
@@ -161,7 +235,7 @@ export async function removeChairsideEntry(entryId: string) {
 
   const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
-    include: { session: { select: { status: true } } },
+    include: { session: { select: { status: true, appointmentId: true } } },
   });
   if (!entry) throw new Error("Entry not found");
   if (entry.lockedAt || entry.session.status !== CHAIRSIDE_SESSION_STATUS.ACTIVE) {
@@ -169,7 +243,7 @@ export async function removeChairsideEntry(entryId: string) {
   }
 
   await db.chairsideEntry.delete({ where: { id: entryId } });
-  revalidatePath("/clinical/chairside");
+  revalidateChairsidePaths(entry.session.appointmentId);
 }
 
 export async function updateChairsideEntry(
@@ -182,6 +256,7 @@ export async function updateChairsideEntry(
 
   const entry = await db.chairsideEntry.findFirst({
     where: { id: entryId, tenantId: ctx.tenantId },
+    include: { session: { select: { appointmentId: true } } },
   });
   if (!entry) throw new Error("Entry not found");
 
@@ -215,7 +290,7 @@ export async function updateChairsideEntry(
       data,
     });
   }
-  revalidatePath("/clinical/chairside");
+  revalidateChairsidePaths(entry.session.appointmentId);
 }
 
 export async function getChairsideSession(sessionId: string) {
@@ -281,10 +356,9 @@ export async function finalizeChairsideSession(
     noTreatmentReason: options?.noTreatmentReason,
   });
 
-  revalidatePath("/clinical/chairside");
+  revalidateChairsidePaths(session.appointmentId);
   revalidatePath("/appointments");
   revalidatePath("/billing");
-  revalidatePath("/clinical");
 
   return result;
 }
