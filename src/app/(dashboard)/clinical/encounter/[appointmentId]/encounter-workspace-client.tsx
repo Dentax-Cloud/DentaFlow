@@ -59,6 +59,7 @@ type Props = {
     patientId: string;
     appointmentId: string;
     entries: ChairsideEntryRow[];
+    notes?: string | null;
   } | null;
   procedureLines: ProcedureLineRow[];
   treatmentPlans: ChairsideTreatmentPlan[];
@@ -218,6 +219,7 @@ export function EncounterWorkspaceClient(props: Props) {
                   patientMedicalHistory={props.patient.medicalHistory}
                   appointmentId={props.appointment.id}
                   initialEntries={props.session.entries}
+                  initialSessionNotes={props.session.notes}
                   procedures={props.procedures}
                   onFinalized={handleFinalized}
                 />

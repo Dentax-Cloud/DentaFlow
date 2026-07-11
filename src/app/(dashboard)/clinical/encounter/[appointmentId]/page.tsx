@@ -212,6 +212,7 @@ export default async function EncounterWorkspacePage({
                   includeInInvoice: e.includeInInvoice,
                 };
               }),
+              notes: chairsideSession.notes,
             }
           : null
       }

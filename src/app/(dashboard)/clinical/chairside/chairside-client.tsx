@@ -22,6 +22,7 @@ type Props = {
     patientId: string;
     appointmentId: string | null;
     entries: ChairsideEntryRow[];
+    notes?: string | null;
   };
   patient: {
     id: string;
@@ -84,6 +85,7 @@ export default function ChairsidePageClient({
         patientMedicalHistory={patient.medicalHistory}
         appointmentId={session.appointmentId ?? undefined}
         initialEntries={session.entries}
+        initialSessionNotes={session.notes}
         procedures={procedures}
         onFinalized={handleFinalized}
       />

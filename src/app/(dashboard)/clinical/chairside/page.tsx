@@ -329,6 +329,8 @@ export default async function ChairsidePage({
 
           }),
 
+          notes: chairsideSession.notes,
+
         }}
 
         patient={{

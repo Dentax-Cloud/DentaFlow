@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useTransition, useMemo } from "react";
+import { useState, useCallback, useTransition, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { useProcedureSearch, type ProcedureOption } from "@/lib/clinical/use-procedure-search";
 import { useVoiceDictation } from "@/lib/clinical/use-voice-dictation";
 import {
@@ -14,7 +15,9 @@ import {
   addChairsideEntry,
   removeChairsideEntry,
   updateChairsideEntry,
+  updateChairsideSessionNotes,
   finalizeChairsideSession,
+  type SerializedChairsideEntry,
 } from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +52,7 @@ type Props = {
   patientMedicalHistory?: string | null;
   appointmentId?: string;
   initialEntries: ChairsideEntryRow[];
+  initialSessionNotes?: string | null;
   procedures: ProcedureOption[];
   onFinalized?: (invoiceId: string | null) => void;
   /** When false, session is view-only (e.g. nurse assisting chairside). */
@@ -63,13 +67,19 @@ export function ChairsidePanel({
   patientMedicalHistory,
   appointmentId,
   initialEntries,
+  initialSessionNotes = "",
   procedures,
   onFinalized,
   canWrite = true,
 }: Props) {
   const [entries, setEntries] = useState<ChairsideEntryRow[]>(initialEntries);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(initialSessionNotes ?? "");
+  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const savedNotesRef = useRef(initialSessionNotes ?? "");
+  const notesSaveRequestRef = useRef(0);
   const [isPending, startTransition] = useTransition();
   const [isFinalized, setIsFinalized] = useState(false);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
@@ -79,6 +89,39 @@ export function ChairsidePanel({
   const { isListening, isSupported, toggle: toggleDictation } = useVoiceDictation(
     useCallback((text: string) => setNotes(text), []),
   );
+
+  useEffect(() => {
+    setNotes(initialSessionNotes ?? "");
+    savedNotesRef.current = initialSessionNotes ?? "";
+    setNotesSaveStatus("idle");
+  }, [initialSessionNotes, sessionId]);
+
+  useEffect(() => {
+    if (!canWrite) return;
+    if (notes === savedNotesRef.current) {
+      setNotesSaveStatus("idle");
+      return;
+    }
+
+    setNotesSaveStatus("saving");
+    const requestId = ++notesSaveRequestRef.current;
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        try {
+          await updateChairsideSessionNotes(sessionId, notes);
+          if (requestId !== notesSaveRequestRef.current) return;
+          savedNotesRef.current = notes;
+          setNotesSaveStatus("saved");
+        } catch {
+          if (requestId !== notesSaveRequestRef.current) return;
+          setNotesSaveStatus("error");
+          toast.error("Could not save session notes.");
+        }
+      });
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [canWrite, notes, sessionId]);
 
   const billableEntries = entries.filter((e) => e.includeInInvoice);
   const subtotal = billableEntries.reduce((sum, e) => sum + e.unitPrice * e.quantity, 0);
@@ -93,7 +136,7 @@ export function ChairsidePanel({
   const finalizeLabel =
     billableEntries.length > 0 ? "Complete & Create Invoice" : "Complete Session";
 
-  function mapEntry(entry: Awaited<ReturnType<typeof addChairsideEntry>>): ChairsideEntryRow {
+  function mapEntry(entry: SerializedChairsideEntry): ChairsideEntryRow {
     return {
       id: entry.id,
       toothNumber: entry.toothNumber,
@@ -102,7 +145,7 @@ export function ChairsidePanel({
       procedureName: entry.procedureName,
       conditionType: entry.conditionType,
       notes: entry.notes,
-      unitPrice: Number(entry.unitPrice ?? 0),
+      unitPrice: entry.unitPrice,
       quantity: entry.quantity,
       includeInInvoice: entry.includeInInvoice,
     };
@@ -123,7 +166,6 @@ export function ChairsidePanel({
         });
         setEntries((prev) => [...prev, mapEntry(entry)]);
         setQuery("");
-        setNotes("");
       } catch {
         toast.error("Could not add procedure");
       }
@@ -145,7 +187,6 @@ export function ChairsidePanel({
           includeInInvoice: false,
         });
         setEntries((prev) => [...prev, mapEntry(entry)]);
-        setNotes("");
       } catch {
         toast.error("Could not record finding");
       }
@@ -271,7 +312,7 @@ export function ChairsidePanel({
               </p>
             </div>
             <Badge variant={isPending ? "secondary" : "outline"}>
-              {isPending ? "Saving..." : canWrite ? "Auto-saved" : "View only"}
+              {isPending ? "Saving entry..." : canWrite ? "Entries auto-saved" : "View only"}
             </Badge>
           </div>
           {!canWrite && (
@@ -390,18 +431,43 @@ export function ChairsidePanel({
         </Card>
 
         <Card className="p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium">Notes / dictation</h3>
-            {isSupported && (
-              <Button
-                type="button"
-                variant={isListening ? "destructive" : "outline"}
-                size="sm"
-                onClick={toggleDictation}
-              >
-                {isListening ? "Stop" : "Dictate"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {canWrite && notesSaveStatus !== "idle" ? (
+                <Badge
+                  variant={
+                    notesSaveStatus === "error"
+                      ? "destructive"
+                      : notesSaveStatus === "saved"
+                        ? "outline"
+                        : "secondary"
+                  }
+                  className="gap-1 font-normal"
+                >
+                  {notesSaveStatus === "saved" ? (
+                    <>
+                      <Check className="h-3 w-3" />
+                      Saved
+                    </>
+                  ) : notesSaveStatus === "error" ? (
+                    "Save failed"
+                  ) : (
+                    "Saving..."
+                  )}
+                </Badge>
+              ) : null}
+              {isSupported && (
+                <Button
+                  type="button"
+                  variant={isListening ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={toggleDictation}
+                >
+                  {isListening ? "Stop" : "Dictate"}
+                </Button>
+              )}
+            </div>
           </div>
           <textarea
             value={notes}
