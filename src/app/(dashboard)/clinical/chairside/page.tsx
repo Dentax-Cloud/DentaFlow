@@ -24,13 +24,17 @@ import {
 
 } from "@/lib/clinical/start-chairside-session";
 
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
+
 import { ChairsidePermissionDenied } from "@/components/clinical/chairside-permission-denied";
 
 import { ChairsideSessionBlocked } from "@/components/clinical/chairside-session-blocked";
 
 import { getAppointmentProcedureLines } from "@/app/(dashboard)/features/procedure-lines/actions";
-import { getPatientTreatmentPlans } from "@/app/(dashboard)/features/clinical/treatment-plan-actions";
-import type { OutstandingPlanItem } from "@/components/clinical/procedure-lines-panel";
+import {
+  buildOutstandingPlanItems,
+  loadPatientTreatmentPlansForChart,
+} from "@/lib/clinical/load-patient-treatment-plans";
 import type { ChairsideTreatmentPlan } from "@/components/clinical/treatment-plan-inline-panel";
 import ChairsidePageClient from "./chairside-client";
 
@@ -58,7 +62,13 @@ export default async function ChairsidePage({
 
   const ctx = await requireRouteAccess("clinical_chart", "read");
 
-
+  if (appointmentId) {
+    redirect(
+      encounterWorkspacePath(appointmentId, "chart", {
+        sessionId: sessionId ?? undefined,
+      }),
+    );
+  }
 
   if (!patientId) redirect("/clinical");
 
@@ -253,44 +263,13 @@ export default async function ChairsidePage({
       ? await getAppointmentProcedureLines(resolvedAppointmentId).catch(() => [])
       : [];
 
-  const rawTreatmentPlans = await getPatientTreatmentPlans(patient.id).catch(() => []);
-  const treatmentPlans: ChairsideTreatmentPlan[] = rawTreatmentPlans.map((plan) => ({
-    id: plan.id,
-    title: plan.title,
-    status: plan.status,
-    items: plan.items.map((item) => ({
-      id: item.id,
-      description: item.description,
-      status: item.status,
-      visitNumber: item.visitNumber,
-      linkedAppointmentId: item.linkedAppointmentId,
-      procedureCode: item.procedureCode,
-      procedureCatalogId: item.procedureCatalogId,
-      estimatedCost: Number(item.unitCost ?? item.totalCost ?? 0),
-    })),
-  }));
+  const rawTreatmentPlans = await loadPatientTreatmentPlansForChart(patient.id).catch(() => []);
+  const treatmentPlans: ChairsideTreatmentPlan[] = rawTreatmentPlans;
 
-  const ACTIVE_PLAN_STATUSES = new Set(["DRAFT", "PROPOSED", "ACCEPTED", "IN_PROGRESS"]);
-  const outstandingPlanItems: OutstandingPlanItem[] = treatmentPlans
-    .filter((plan) => ACTIVE_PLAN_STATUSES.has(plan.status))
-    .flatMap((plan) =>
-      plan.items
-        .filter(
-          (item) =>
-            item.status !== "completed" &&
-            item.status !== "COMPLETED" &&
-            (item.linkedAppointmentId === resolvedAppointmentId ||
-              item.linkedAppointmentId == null),
-        )
-        .map((item) => ({
-          id: item.id,
-          description: item.description,
-          planTitle: plan.title,
-          procedureCode: item.procedureCode,
-          unitCost: item.estimatedCost,
-          linkedAppointmentId: item.linkedAppointmentId,
-        })),
-    );
+  const outstandingPlanItems = buildOutstandingPlanItems(
+    treatmentPlans,
+    resolvedAppointmentId,
+  );
 
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Odontogram } from "@/components/clinical/dental-chart";
@@ -349,9 +350,14 @@ export function ClinicalPageClient({
             </Button>
             {patientId && (
               <Button variant="outline" size="sm" asChild>
-                <a href={`/clinical/chairside?patientId=${patientId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}`}>
+                <Link
+                  href={resolveClinicalSessionPath({
+                    patientId,
+                    appointmentId: appointmentId ?? null,
+                  })}
+                >
                   {canWriteClinical ? "Start chairside session" : "View chairside session"}
-                </a>
+                </Link>
               </Button>
             )}
             {patientId && (

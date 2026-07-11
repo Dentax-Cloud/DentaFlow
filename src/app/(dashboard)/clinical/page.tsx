@@ -1,13 +1,18 @@
 export const runtime = "nodejs";
 
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
 import { listTemplates } from "@/app/(dashboard)/features/clinical/template-actions";
 import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { getEncounterQueueAppointments } from "@/lib/clinical/encounter-queue";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
+import { EncounterQueuePanel } from "@/components/clinical/encounter-queue-panel";
+import { ClinicalBrowseLinks } from "@/components/clinical/clinical-browse-links";
 import { ClinicalPageClient } from "./clinical-client";
 
 export default async function ClinicalPage({
@@ -16,6 +21,11 @@ export default async function ClinicalPage({
   searchParams: Promise<{ patientId?: string; appointmentId?: string }>;
 }) {
   const { patientId, appointmentId } = await searchParams;
+
+  if (appointmentId) {
+    redirect(encounterWorkspacePath(appointmentId));
+  }
+
   const ctx = await requireRouteAccess("clinical_chart", "read");
   const canWriteClinical = Boolean(
     ctx.staffMember?.role &&
@@ -61,6 +71,10 @@ export default async function ClinicalPage({
     : [];
 
   const activeSessions = await getActiveChairsideSessionsForUser().catch(() => []);
+  const encounterQueue = await getEncounterQueueAppointments(
+    ctx.tenant.id,
+    ctx.tenant.timezone,
+  ).catch(() => []);
   const resumeSessions = activeSessions.map((session) => ({
     id: session.id,
     patientId: session.patientId,
@@ -72,8 +86,10 @@ export default async function ClinicalPage({
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4 md:p-6">
       {resumeSessions.length > 0 && <ResumeChairsideBanner sessions={resumeSessions} />}
+      <EncounterQueuePanel appointments={encounterQueue} timezone={ctx.tenant.timezone} />
+      <ClinicalBrowseLinks />
       <ClinicalPageClient
       canWriteClinical={canWriteClinical}
       patients={patients}

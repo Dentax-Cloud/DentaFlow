@@ -35,6 +35,7 @@ import { SlotActionMenu } from "@/components/appointments/slot-action-menu";
 import { BlockTimeDialog } from "@/components/appointments/block-time-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from "@prisma/client";
@@ -271,19 +272,15 @@ export function AppointmentsClient({
           </Button>
         ))}
         <Button size="sm" variant="ghost" asChild>
-          <Link href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
-            Open chart
+          <Link href={encounterWorkspacePath(apt.id)}>
+            Open encounter
           </Link>
         </Button>
         <Button
           size="sm"
           variant="outline"
           type="button"
-          onClick={() =>
-            router.push(
-              `/clinical/chairside?patientId=${apt.patientId}&appointmentId=${apt.id}`,
-            )
-          }
+          onClick={() => router.push(encounterWorkspacePath(apt.id))}
         >
           Chairside
         </Button>

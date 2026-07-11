@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
@@ -111,10 +112,8 @@ export function VisitBoardClient({
                   </div>
                   {appt.patientId ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/clinical/chairside?patientId=${appt.patientId}&appointmentId=${appt.id}`}
-                      >
-                        Open chairside
+                      <Link href={encounterWorkspacePath(appt.id)}>
+                        Open encounter
                       </Link>
                     </Button>
                   ) : null}

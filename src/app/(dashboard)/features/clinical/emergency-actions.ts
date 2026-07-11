@@ -13,6 +13,7 @@ import {
   type Vitals,
 } from "@/lib/clinical/emergency-types";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { generateText } from "ai";
 import { isAIConfigured, resolveOpenAIModel, SYSTEM_SAFETY } from "@/lib/ai/client";
 
@@ -382,8 +383,9 @@ export async function convertToChairside(intakeId: string) {
   return {
     patientId: intake.patientId,
     appointmentId: intake.appointmentId,
-    redirectUrl: `/clinical/chairside?patientId=${intake.patientId}${
-      intake.appointmentId ? `&appointmentId=${intake.appointmentId}` : ""
-    }`,
+    redirectUrl: resolveClinicalSessionPath({
+      patientId: intake.patientId,
+      appointmentId: intake.appointmentId,
+    }),
   };
 }
