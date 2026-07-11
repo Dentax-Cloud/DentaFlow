@@ -100,6 +100,7 @@ export default async function ClinicalPage({
       providerName={providerName}
       clinicName={ctx.tenant.name}
       templates={templates}
+      countryCode={ctx.tenant.countryCode}
     />
     </div>
   );

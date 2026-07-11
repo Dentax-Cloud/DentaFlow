@@ -1,18 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { format } from "date-fns";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChairsidePanel, type ChairsideEntryRow } from "@/components/clinical/chairside-panel";
-import {
-  ProcedureLinesPanel,
-  type OutstandingPlanItem,
-} from "@/components/clinical/procedure-lines-panel";
+import { EncounterPatientHeader } from "@/components/clinical/encounter-patient-header";
 import {
   TreatmentPlanInlinePanel,
   type ChairsideTreatmentPlan,
@@ -20,12 +14,18 @@ import {
 import { PerioPageClient } from "@/app/(dashboard)/clinical/perio/perio-client";
 import RadiographPageClient from "@/app/(dashboard)/clinical/radiographs/radiograph-client";
 import PhotoPageClient from "@/app/(dashboard)/clinical/photos/photo-client";
+import { EncounterChartTab } from "./encounter-chart-tab";
+import type { ChairsideEntryRow } from "@/components/clinical/chairside-panel";
 import type { ProcedureLineRow } from "@/app/(dashboard)/features/procedure-lines/actions";
 import type { ProcedureOption } from "@/lib/clinical/use-procedure-search";
 import type { EncounterTab } from "@/lib/clinical/encounter-url";
 import type { PerioChartRecord } from "@/components/clinical/perio-chart-history";
 import type { ImageRecord } from "@/components/clinical/image-gallery";
 import type { PerioMeasurement } from "@/lib/clinical/types";
+import type { OutstandingPlanItem } from "@/components/clinical/procedure-lines-panel";
+import type { ToothChartData } from "@/lib/clinical/chart-types";
+import type { PatientVisitHistoryRow } from "@/lib/clinical/load-patient-visit-history";
+import Link from "next/link";
 
 type PhotoRecord = ImageRecord & {
   photoCategory: string | null;
@@ -50,6 +50,9 @@ type Props = {
     id: string;
     firstName: string;
     lastName: string;
+    patientNumber: string;
+    dateOfBirth: string | null;
+    photoUrl: string | null;
     allergies: string[];
     bloodGroup: string | null;
     medicalHistory: string | null;
@@ -61,6 +64,8 @@ type Props = {
     entries: ChairsideEntryRow[];
     notes?: string | null;
   } | null;
+  initialChartData: ToothChartData;
+  visitHistory: PatientVisitHistoryRow[];
   procedureLines: ProcedureLineRow[];
   treatmentPlans: ChairsideTreatmentPlan[];
   outstandingPlanItems: OutstandingPlanItem[];
@@ -107,7 +112,6 @@ export function EncounterWorkspaceClient(props: Props) {
   const [tab, setTab] = useState<EncounterTab>(props.initialTab);
 
   const patientLabel = `${props.patient.firstName} ${props.patient.lastName}`.trim();
-  const apptTime = format(new Date(props.appointment.startTime), "EEE, MMM d · h:mm a");
   const showEmergencyTab = props.emergencies.length > 0;
 
   const syncTab = useCallback(
@@ -142,28 +146,7 @@ export function EncounterWorkspaceClient(props: Props) {
 
   return (
     <div className="flex h-[calc(100vh-64px)] flex-col">
-      <header className="shrink-0 border-b bg-background px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold">{patientLabel}</h1>
-              <Badge variant="secondary">{props.appointment.status.replace("_", " ")}</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {apptTime}
-              {props.appointment.chairName ? ` · ${props.appointment.chairName}` : ""}
-              {props.appointment.doctorName ? ` · ${props.appointment.doctorName}` : ""}
-              {props.appointment.ref ? ` · ${props.appointment.ref}` : ""}
-            </p>
-          </div>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/clinical">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              End encounter
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <EncounterPatientHeader patient={props.patient} appointment={props.appointment} />
 
       <Tabs
         value={tab}
@@ -200,30 +183,23 @@ export function EncounterWorkspaceClient(props: Props) {
                 No active chart session. A clinician must start treatment to chart live entries.
               </p>
             ) : (
-              <>
-                <ProcedureLinesPanel
-                  appointmentId={props.appointment.id}
-                  countryCode={props.countryCode}
-                  currentStaffMemberId={props.currentStaffMemberId}
-                  canWrite={props.canWrite}
-                  initialLines={props.procedureLines}
-                  procedures={props.procedures}
-                  outstandingPlanItems={props.outstandingPlanItems}
-                />
-                <ChairsidePanel
-                  canWrite={props.canWrite}
-                  sessionId={props.session.id}
-                  patientName={patientLabel}
-                  patientAllergies={props.patient.allergies}
-                  patientBloodGroup={props.patient.bloodGroup}
-                  patientMedicalHistory={props.patient.medicalHistory}
-                  appointmentId={props.appointment.id}
-                  initialEntries={props.session.entries}
-                  initialSessionNotes={props.session.notes}
-                  procedures={props.procedures}
-                  onFinalized={handleFinalized}
-                />
-              </>
+              <EncounterChartTab
+                canWrite={props.canWrite}
+                countryCode={props.countryCode}
+                currentStaffMemberId={props.currentStaffMemberId}
+                patientId={props.patient.id}
+                patientName={patientLabel}
+                appointmentId={props.appointment.id}
+                session={props.session}
+                initialChartData={props.initialChartData}
+                procedureLines={props.procedureLines}
+                treatmentPlans={props.treatmentPlans}
+                outstandingPlanItems={props.outstandingPlanItems}
+                procedures={props.procedures}
+                visitHistory={props.visitHistory}
+                onOpenPlanTab={() => syncTab("treatment-plan")}
+                onFinalized={handleFinalized}
+              />
             )}
           </TabsContent>
 
@@ -286,7 +262,10 @@ export function EncounterWorkspaceClient(props: Props) {
                       <Badge variant="secondary">{e.status}</Badge>
                       <span className="text-muted-foreground">
                         Pain {e.painScore}/10 ·{" "}
-                        {format(new Date(e.createdAt), "h:mm a")}
+                        {new Date(e.createdAt).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
                       </span>
                     </div>
                     <p className="mt-1 font-medium">{e.chiefComplaint}</p>
