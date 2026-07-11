@@ -12,10 +12,12 @@ import {
   getOrCreateActiveChairsideSession,
 } from "@/lib/clinical/start-chairside-session";
 import { getAppointmentProcedureLines } from "@/app/(dashboard)/features/procedure-lines/actions";
+import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
 import {
   buildOutstandingPlanItems,
   loadPatientTreatmentPlansForChart,
 } from "@/lib/clinical/load-patient-treatment-plans";
+import { loadPatientVisitHistory } from "@/lib/clinical/load-patient-visit-history";
 import { parseAnnotations } from "@/lib/clinical/image-types";
 import type { PerioMeasurement } from "@/lib/clinical/types";
 import { EncounterWorkspaceClient } from "./encounter-workspace-client";
@@ -59,6 +61,9 @@ export default async function EncounterWorkspacePage({
           id: true,
           firstName: true,
           lastName: true,
+          patientNumber: true,
+          dateOfBirth: true,
+          photoUrl: true,
           allergies: true,
           bloodGroup: true,
           medicalHistory: true,
@@ -122,6 +127,8 @@ export default async function EncounterWorkspacePage({
     photos,
     presentations,
     patientEmergencies,
+    chartData,
+    visitHistory,
   ] = await Promise.all([
     db.procedureCatalog.findMany({
       where: { tenantId: ctx.tenant.id, isActive: true },
@@ -154,6 +161,8 @@ export default async function EncounterWorkspacePage({
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    getPatientChart(ctx.tenant.id, patientId),
+    loadPatientVisitHistory(ctx.tenant.id, patientId).catch(() => []),
   ]);
 
   const outstandingPlanItems = buildOutstandingPlanItems(treatmentPlans, appointmentId);
@@ -187,10 +196,15 @@ export default async function EncounterWorkspacePage({
         id: patientId,
         firstName: appointment.patient.firstName,
         lastName: appointment.patient.lastName,
+        patientNumber: appointment.patient.patientNumber,
+        dateOfBirth: appointment.patient.dateOfBirth?.toISOString() ?? null,
+        photoUrl: appointment.patient.photoUrl,
         allergies: appointment.patient.allergies,
         bloodGroup: appointment.patient.bloodGroup,
         medicalHistory: medicalHistoryText,
       }}
+      initialChartData={chartData}
+      visitHistory={visitHistory}
       session={
         chairsideSession
           ? {

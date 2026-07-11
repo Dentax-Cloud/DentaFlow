@@ -78,6 +78,7 @@ export default function ChairsidePageClient({
       ) : null}
       <ChairsidePanel
         canWrite={canWrite}
+        countryCode={countryCode}
         sessionId={session.id}
         patientName={`${patient.firstName} ${patient.lastName}`}
         patientAllergies={patient.allergies}

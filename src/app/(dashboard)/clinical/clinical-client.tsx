@@ -52,6 +52,7 @@ export function ClinicalPageClient({
   providerName,
   clinicName,
   templates,
+  countryCode,
 }: {
   canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
@@ -62,6 +63,7 @@ export function ClinicalPageClient({
   providerName?: string;
   clinicName?: string;
   templates: ClinicalTemplateOption[];
+  countryCode: string;
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
   const [chartData, setChartData] = useState<ToothChartData>(initialChartData);
@@ -489,6 +491,7 @@ export function ClinicalPageClient({
                 patientId={patientId}
                 appointmentId={appointmentId}
                 procedures={procedures}
+                countryCode={countryCode}
               />
             )}
           </div>
