@@ -2,6 +2,7 @@
 
 import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import type { UserRole } from "@prisma/client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, ChevronRight } from "lucide-react";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
