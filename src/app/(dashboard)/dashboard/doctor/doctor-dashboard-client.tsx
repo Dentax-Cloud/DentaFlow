@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import type { UserRole } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { Calendar, ChevronRight } from "lucide-react";
@@ -253,9 +253,7 @@ export default function DoctorDashboardClient({
                       ) && (
                         <button
                           onClick={() =>
-                            router.push(
-                              `/clinical/chairside?patientId=${appt.patient.id}&appointmentId=${appt.id}`,
-                            )
+                            router.push(encounterWorkspacePath(appt.id))
                           }
                           className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
                         >

@@ -94,6 +94,7 @@ describe("RBAC routes and navigation", () => {
     expect(canAccessPath(UserRole.NURSE, "/clinical")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/chair-setup")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/radiographs")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/clinical/encounter/appt-1")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/chairside")).toBe(true);
   });
 
@@ -123,6 +124,6 @@ describe("RBAC routes and navigation", () => {
     const nurseNav = getNavItemsForRole(UserRole.NURSE);
     expect(nurseNav.some((item) => item.href === "/clinical")).toBe(true);
     expect(nurseNav.some((item) => item.href === "/clinical/chair-setup")).toBe(true);
-    expect(nurseNav.some((item) => item.href === "/clinical/radiographs")).toBe(true);
+    expect(nurseNav.some((item) => item.href === "/clinical/radiographs")).toBe(false);
   });
 });

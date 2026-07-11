@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { sendMail } from "@/lib/mail";
 import {
   formatClinicDate,
@@ -240,7 +241,7 @@ export async function notifyAppointmentStatus(
       title: "Patient In Chair",
       body: inChairBodyLines.join("\n"),
       link: appointment.patientId
-        ? `/clinical/chairside?patientId=${appointment.patientId}&appointmentId=${appointmentId}`
+        ? encounterWorkspacePath(appointmentId)
         : `/appointments?appointmentId=${appointmentId}`,
     },
     COMPLETED: {

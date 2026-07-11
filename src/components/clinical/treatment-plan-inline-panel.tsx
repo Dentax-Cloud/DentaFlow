@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/countries";
 import type { ProcedureOption } from "@/lib/clinical/use-procedure-search";
+import { ProcedureSearchPicker } from "@/components/clinical/procedure-search-picker";
 import {
   addTreatmentPlanItem,
   createTreatmentPlanRecord,
@@ -76,6 +77,7 @@ export function TreatmentPlanInlinePanel({
   const [itemVisitNum, setItemVisitNum] = useState(1);
   const [itemToothNumbers, setItemToothNumbers] = useState("");
   const [selectedCatalogId, setSelectedCatalogId] = useState("");
+  const [catalogLocked, setCatalogLocked] = useState(false);
 
   const money = (amount: number) => formatCurrency(amount, countryCode);
 
@@ -85,7 +87,7 @@ export function TreatmentPlanInlinePanel({
 
   const outstandingItems = useMemo(() => {
     if (!activePlan) return [];
-    return activePlan.items.filter((item) => isItemOutstanding(item.status));
+    return (activePlan.items ?? []).filter((item) => isItemOutstanding(item.status));
   }, [activePlan]);
 
   function handleCreatePlan(e: React.FormEvent) {
@@ -112,13 +114,16 @@ export function TreatmentPlanInlinePanel({
     });
   }
 
-  function handleCatalogSelect(procId: string) {
-    setSelectedCatalogId(procId);
-    const proc = procedures.find((p) => p.id === procId);
-    if (proc) {
-      setItemDescription(proc.name);
-      setItemCost(String(proc.sellingPrice));
+  function handleCatalogSelect(proc: ProcedureOption | null) {
+    if (!proc) {
+      setSelectedCatalogId("");
+      setCatalogLocked(false);
+      return;
     }
+    setSelectedCatalogId(proc.id);
+    setItemDescription(proc.name);
+    setItemCost(String(proc.sellingPrice));
+    setCatalogLocked(true);
   }
 
   function handleAddItem() {
@@ -150,6 +155,7 @@ export function TreatmentPlanInlinePanel({
         setItemVisitNum(1);
         setItemToothNumbers("");
         setSelectedCatalogId("");
+        setCatalogLocked(false);
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not add item.");
@@ -294,27 +300,22 @@ export function TreatmentPlanInlinePanel({
             <DialogTitle>Add item to {activePlan?.title ?? "plan"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
-            <div>
-              <Label>From catalog (optional)</Label>
-              <select
-                value={selectedCatalogId}
-                onChange={(e) => handleCatalogSelect(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">— Select procedure —</option>
-                {procedures.map((proc) => (
-                  <option key={proc.id} value={proc.id}>
-                    {proc.code} — {proc.name} ({money(proc.sellingPrice)})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ProcedureSearchPicker
+              procedures={procedures}
+              countryCode={countryCode}
+              selectedProcedureId={selectedCatalogId || null}
+              onSelect={handleCatalogSelect}
+              label="From catalog (optional)"
+              allowClear
+            />
             <div>
               <Label htmlFor="inline-item-desc">Description *</Label>
               <Input
                 id="inline-item-desc"
                 value={itemDescription}
                 onChange={(e) => setItemDescription(e.target.value)}
+                readOnly={catalogLocked}
+                className={catalogLocked ? "bg-muted" : undefined}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -327,6 +328,8 @@ export function TreatmentPlanInlinePanel({
                   step="0.01"
                   value={itemCost}
                   onChange={(e) => setItemCost(e.target.value)}
+                  readOnly={catalogLocked}
+                  className={catalogLocked ? "bg-muted" : undefined}
                 />
               </div>
               <div>

@@ -1,5 +1,6 @@
 import { CampaignChannel, UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { createNotification, notifyMultiple } from "@/lib/notifications/notification-service";
 import { isPrismaUniqueViolation, workerClaimLogId } from "@/worker/claim";
 import {
@@ -91,7 +92,7 @@ export async function processStalledProcedureLineEscalation(
     const openHours = Math.round(hoursOpen(line.createdAt, now) * 10) / 10;
     const procedure = procedureLabel(line);
     const visitBoardLink = `/clinical/visit-board?appointmentId=${line.appointmentId}`;
-    const chairsideLink = `/clinical/chairside?patientId=${patient?.id ?? ""}&appointmentId=${line.appointmentId}`;
+    const chairsideLink = encounterWorkspacePath(line.appointmentId);
 
     if (line.createdAt <= escalateCutoff) {
       const claimId = workerClaimLogId("stalled_line_escalate", line.id);

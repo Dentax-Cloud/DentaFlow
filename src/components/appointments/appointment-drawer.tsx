@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments/actions";
 import { beginChairsideVisit } from "@/app/(dashboard)/features/clinical/chairside-actions";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
 import {
@@ -181,7 +182,11 @@ export function AppointmentDrawer({
         });
         await refreshAppointment(appointment.id);
         router.push(
-          `/clinical/chairside?patientId=${result.patientId}&appointmentId=${result.appointmentId}&sessionId=${result.sessionId}`,
+          resolveClinicalSessionPath({
+            patientId: result.patientId,
+            appointmentId: result.appointmentId,
+            sessionId: result.sessionId,
+          }),
         );
         onClose();
         router.refresh();
