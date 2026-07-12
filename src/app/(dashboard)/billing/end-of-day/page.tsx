@@ -52,6 +52,7 @@ export default async function EndOfDayPage() {
   return (
     <EndOfDayClient
       date={today.toISOString()}
+      countryCode={ctx.tenant.countryCode}
       summary={{
         invoiceCount: invoices.length,
         invoiceTotal,

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Odontogram } from "@/components/clinical/dental-chart";
@@ -51,6 +52,7 @@ export function ClinicalPageClient({
   providerName,
   clinicName,
   templates,
+  countryCode,
 }: {
   canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
@@ -61,6 +63,7 @@ export function ClinicalPageClient({
   providerName?: string;
   clinicName?: string;
   templates: ClinicalTemplateOption[];
+  countryCode: string;
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
   const [chartData, setChartData] = useState<ToothChartData>(initialChartData);
@@ -349,9 +352,14 @@ export function ClinicalPageClient({
             </Button>
             {patientId && (
               <Button variant="outline" size="sm" asChild>
-                <a href={`/clinical/chairside?patientId=${patientId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}`}>
+                <Link
+                  href={resolveClinicalSessionPath({
+                    patientId,
+                    appointmentId: appointmentId ?? null,
+                  })}
+                >
                   {canWriteClinical ? "Start chairside session" : "View chairside session"}
-                </a>
+                </Link>
               </Button>
             )}
             {patientId && (
@@ -483,6 +491,7 @@ export function ClinicalPageClient({
                 patientId={patientId}
                 appointmentId={appointmentId}
                 procedures={procedures}
+                countryCode={countryCode}
               />
             )}
           </div>

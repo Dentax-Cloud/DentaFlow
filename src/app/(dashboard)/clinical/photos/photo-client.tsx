@@ -40,6 +40,7 @@ type Props = {
   photos: PhotoRecord[];
   presentations: Presentation[];
   defaultTab: string;
+  embedded?: boolean;
 };
 
 export default function PhotoPageClient({
@@ -50,6 +51,7 @@ export default function PhotoPageClient({
   photos,
   presentations,
   defaultTab,
+  embedded = false,
 }: Props) {
   const router = useRouter();
   const [showCamera, setShowCamera] = useState(false);
@@ -69,6 +71,7 @@ export default function PhotoPageClient({
     .filter(Boolean) as { before: PhotoRecord; after: PhotoRecord }[];
 
   function handlePatientChange(patientId: string) {
+    if (embedded) return;
     if (!patientId) router.push("/clinical/photos");
     else router.push(`/clinical/photos?patientId=${patientId}`);
   }
@@ -93,7 +96,8 @@ export default function PhotoPageClient({
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className={embedded ? "space-y-4" : "space-y-6 p-6"}>
+      {!embedded ? (
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Clinical Photography</h1>
@@ -136,7 +140,45 @@ export default function PhotoPageClient({
           </div>
         )}
       </div>
+      ) : (
+        selectedPatientId &&
+        canWriteClinical && (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setShowCamera(!showCamera);
+                setShowUpload(false);
+              }}
+            >
+              📷 Camera
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setShowUpload(!showUpload);
+                setShowCamera(false);
+              }}
+            >
+              ⬆ Upload
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => setShowPresBuilder(true)}
+              disabled={photos.length === 0}
+            >
+              🎞 Build presentation
+            </Button>
+          </div>
+        )
+      )}
 
+      {!embedded ? (
       <div>
         <label className="text-sm font-medium">Select patient</label>
         <select
@@ -152,6 +194,7 @@ export default function PhotoPageClient({
           ))}
         </select>
       </div>
+      ) : null}
 
       {!selectedPatientId ? (
         <div className="py-16 text-center text-muted-foreground">

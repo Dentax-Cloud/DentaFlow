@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, X } from "lucide-react";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,9 +23,11 @@ type Props = {
 };
 
 function resumeHref(session: ActiveChairsideSessionRow) {
-  const params = new URLSearchParams({ patientId: session.patientId, sessionId: session.id });
-  if (session.appointmentId) params.set("appointmentId", session.appointmentId);
-  return `/clinical/chairside?${params.toString()}`;
+  return resolveClinicalSessionPath({
+    patientId: session.patientId,
+    appointmentId: session.appointmentId,
+    sessionId: session.id,
+  });
 }
 
 export function ResumeChairsideBanner({ sessions, compact = false, className }: Props) {

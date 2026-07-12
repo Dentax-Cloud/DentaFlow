@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useTransition, useMemo } from "react";
+import { useState, useCallback, useTransition, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { useProcedureSearch, type ProcedureOption } from "@/lib/clinical/use-procedure-search";
 import { useVoiceDictation } from "@/lib/clinical/use-voice-dictation";
 import {
@@ -14,11 +15,19 @@ import {
   addChairsideEntry,
   removeChairsideEntry,
   updateChairsideEntry,
+  updateChairsideSessionNotes,
   finalizeChairsideSession,
+  type SerializedChairsideEntry,
 } from "@/app/(dashboard)/features/clinical/chairside-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/countries";
+import {
+  FDI_TO_UNIVERSAL,
+  getDisplayNumber,
+  type ChartNotation,
+} from "@/lib/clinical/odontogram-notation";
 
 const QUICK_CONDITIONS = [
   { label: "Caries", value: "CARIES", color: "bg-red-500" },
@@ -49,10 +58,18 @@ type Props = {
   patientMedicalHistory?: string | null;
   appointmentId?: string;
   initialEntries: ChairsideEntryRow[];
+  initialSessionNotes?: string | null;
   procedures: ProcedureOption[];
   onFinalized?: (invoiceId: string | null) => void;
   /** When false, session is view-only (e.g. nurse assisting chairside). */
   canWrite?: boolean;
+  countryCode?: string;
+  hidePatientBanner?: boolean;
+  hideToothInput?: boolean;
+  selectedToothFdi?: string | null;
+  onSelectedToothFdiChange?: (fdi: string | null) => void;
+  chartNotation?: ChartNotation;
+  onEntryAdded?: () => void;
 };
 
 export function ChairsidePanel({
@@ -63,13 +80,39 @@ export function ChairsidePanel({
   patientMedicalHistory,
   appointmentId,
   initialEntries,
+  initialSessionNotes = "",
   procedures,
   onFinalized,
   canWrite = true,
+  countryCode = "AE",
+  hidePatientBanner = false,
+  hideToothInput = false,
+  selectedToothFdi: controlledToothFdi,
+  onSelectedToothFdiChange,
+  chartNotation = "FDI",
+  onEntryAdded,
 }: Props) {
   const [entries, setEntries] = useState<ChairsideEntryRow[]>(initialEntries);
-  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
-  const [notes, setNotes] = useState("");
+  const [internalToothFdi, setInternalToothFdi] = useState<string | null>(null);
+  const selectedToothFdi =
+    controlledToothFdi !== undefined ? controlledToothFdi : internalToothFdi;
+
+  function setSelectedToothFdi(fdi: string | null) {
+    if (onSelectedToothFdiChange) onSelectedToothFdiChange(fdi);
+    else setInternalToothFdi(fdi);
+  }
+
+  const selectedUniversalTooth = selectedToothFdi
+    ? parseInt(FDI_TO_UNIVERSAL[selectedToothFdi] ?? selectedToothFdi, 10) || null
+    : null;
+
+  const money = (amount: number) => formatCurrency(amount, countryCode);
+  const [notes, setNotes] = useState(initialSessionNotes ?? "");
+  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const savedNotesRef = useRef(initialSessionNotes ?? "");
+  const notesSaveRequestRef = useRef(0);
   const [isPending, startTransition] = useTransition();
   const [isFinalized, setIsFinalized] = useState(false);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
@@ -79,6 +122,39 @@ export function ChairsidePanel({
   const { isListening, isSupported, toggle: toggleDictation } = useVoiceDictation(
     useCallback((text: string) => setNotes(text), []),
   );
+
+  useEffect(() => {
+    setNotes(initialSessionNotes ?? "");
+    savedNotesRef.current = initialSessionNotes ?? "";
+    setNotesSaveStatus("idle");
+  }, [initialSessionNotes, sessionId]);
+
+  useEffect(() => {
+    if (!canWrite) return;
+    if (notes === savedNotesRef.current) {
+      setNotesSaveStatus("idle");
+      return;
+    }
+
+    setNotesSaveStatus("saving");
+    const requestId = ++notesSaveRequestRef.current;
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        try {
+          await updateChairsideSessionNotes(sessionId, notes);
+          if (requestId !== notesSaveRequestRef.current) return;
+          savedNotesRef.current = notes;
+          setNotesSaveStatus("saved");
+        } catch {
+          if (requestId !== notesSaveRequestRef.current) return;
+          setNotesSaveStatus("error");
+          toast.error("Could not save session notes.");
+        }
+      });
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [canWrite, notes, sessionId]);
 
   const billableEntries = entries.filter((e) => e.includeInInvoice);
   const subtotal = billableEntries.reduce((sum, e) => sum + e.unitPrice * e.quantity, 0);
@@ -93,7 +169,7 @@ export function ChairsidePanel({
   const finalizeLabel =
     billableEntries.length > 0 ? "Complete & Create Invoice" : "Complete Session";
 
-  function mapEntry(entry: Awaited<ReturnType<typeof addChairsideEntry>>): ChairsideEntryRow {
+  function mapEntry(entry: SerializedChairsideEntry): ChairsideEntryRow {
     return {
       id: entry.id,
       toothNumber: entry.toothNumber,
@@ -102,7 +178,7 @@ export function ChairsidePanel({
       procedureName: entry.procedureName,
       conditionType: entry.conditionType,
       notes: entry.notes,
-      unitPrice: Number(entry.unitPrice ?? 0),
+      unitPrice: entry.unitPrice,
       quantity: entry.quantity,
       includeInInvoice: entry.includeInInvoice,
     };
@@ -113,7 +189,7 @@ export function ChairsidePanel({
       try {
         const entry = await addChairsideEntry({
           sessionId,
-          toothNumber: selectedTooth ?? undefined,
+          toothNumber: selectedUniversalTooth ?? undefined,
           procedureCode: proc.code,
           procedureName: proc.name,
           unitPrice: proc.sellingPrice,
@@ -123,7 +199,7 @@ export function ChairsidePanel({
         });
         setEntries((prev) => [...prev, mapEntry(entry)]);
         setQuery("");
-        setNotes("");
+        onEntryAdded?.();
       } catch {
         toast.error("Could not add procedure");
       }
@@ -131,21 +207,21 @@ export function ChairsidePanel({
   }
 
   function handleAddCondition(conditionType: string) {
-    if (!selectedTooth) {
-      toast.error("Select a tooth number first");
+    if (!selectedUniversalTooth) {
+      toast.error("Select a tooth on the chart first");
       return;
     }
     startTransition(async () => {
       try {
         const entry = await addChairsideEntry({
           sessionId,
-          toothNumber: selectedTooth,
+          toothNumber: selectedUniversalTooth,
           conditionType,
           notes: notes || undefined,
           includeInInvoice: false,
         });
         setEntries((prev) => [...prev, mapEntry(entry)]);
-        setNotes("");
+        onEntryAdded?.();
       } catch {
         toast.error("Could not record finding");
       }
@@ -262,6 +338,7 @@ export function ChairsidePanel({
   return (
     <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {!hidePatientBanner ? (
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -271,7 +348,7 @@ export function ChairsidePanel({
               </p>
             </div>
             <Badge variant={isPending ? "secondary" : "outline"}>
-              {isPending ? "Saving..." : canWrite ? "Auto-saved" : "View only"}
+              {isPending ? "Saving entry..." : canWrite ? "Entries auto-saved" : "View only"}
             </Badge>
           </div>
           {!canWrite && (
@@ -299,9 +376,17 @@ export function ChairsidePanel({
             </div>
           )}
         </Card>
+        ) : (
+          <div className="flex items-center justify-end">
+            <Badge variant={isPending ? "secondary" : "outline"}>
+              {isPending ? "Saving entry..." : canWrite ? "Entries auto-saved" : "View only"}
+            </Badge>
+          </div>
+        )}
 
         {canWrite && (
           <>
+        {!hideToothInput ? (
         <Card className="p-4">
           <h3 className="mb-3 text-sm font-medium">Selected tooth</h3>
           <div className="flex items-center gap-3">
@@ -309,17 +394,39 @@ export function ChairsidePanel({
               type="number"
               min={1}
               max={32}
-              value={selectedTooth ?? ""}
-              onChange={(e) => setSelectedTooth(parseInt(e.target.value, 10) || null)}
+              value={selectedUniversalTooth ?? ""}
+              onChange={(e) => {
+                const universal = parseInt(e.target.value, 10) || null;
+                if (!universal) {
+                  setSelectedToothFdi(null);
+                  return;
+                }
+                const fdi =
+                  Object.entries(FDI_TO_UNIVERSAL).find(([, u]) => u === String(universal))?.[0] ??
+                  String(universal);
+                setSelectedToothFdi(fdi);
+              }}
               placeholder="Tooth # (1-32)"
               className="w-32 rounded-md border px-3 py-2 text-sm"
             />
-            {selectedTooth && <Badge variant="secondary">Tooth {selectedTooth} selected</Badge>}
-            <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedTooth(null)}>
+            {selectedUniversalTooth ? (
+              <Badge variant="secondary">Tooth {selectedUniversalTooth} selected</Badge>
+            ) : null}
+            <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedToothFdi(null)}>
               Clear
             </Button>
           </div>
         </Card>
+        ) : selectedToothFdi ? (
+          <div className="flex items-center gap-2 text-sm">
+            <Badge variant="secondary">
+              Tooth {getDisplayNumber(selectedToothFdi, chartNotation)} selected
+            </Badge>
+            <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedToothFdi(null)}>
+              Clear
+            </Button>
+          </div>
+        ) : null}
 
         <Card className="p-4">
           <h3 className="mb-3 text-sm font-medium">Add procedure</h3>
@@ -353,7 +460,7 @@ export function ChairsidePanel({
                       </span>
                     </div>
                     <span className="text-sm font-semibold text-green-600">
-                      AED {proc.sellingPrice.toFixed(2)}
+                      {money(proc.sellingPrice)}
                     </span>
                   </button>
                 ))
@@ -365,8 +472,10 @@ export function ChairsidePanel({
         <Card className="p-4">
           <h3 className="mb-3 text-sm font-medium">
             Quick findings
-            {selectedTooth && (
-              <span className="ml-1 font-normal text-muted-foreground">— Tooth {selectedTooth}</span>
+            {selectedToothFdi && (
+              <span className="ml-1 font-normal text-muted-foreground">
+                — Tooth {getDisplayNumber(selectedToothFdi, chartNotation)}
+              </span>
             )}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -382,26 +491,53 @@ export function ChairsidePanel({
               </button>
             ))}
           </div>
-          {!selectedTooth && (
+          {!selectedUniversalTooth && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Select a tooth number above to record findings
+              {hideToothInput
+                ? "Select a tooth on the odontogram to record findings"
+                : "Select a tooth number above to record findings"}
             </p>
           )}
         </Card>
 
         <Card className="p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium">Notes / dictation</h3>
-            {isSupported && (
-              <Button
-                type="button"
-                variant={isListening ? "destructive" : "outline"}
-                size="sm"
-                onClick={toggleDictation}
-              >
-                {isListening ? "Stop" : "Dictate"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {canWrite && notesSaveStatus !== "idle" ? (
+                <Badge
+                  variant={
+                    notesSaveStatus === "error"
+                      ? "destructive"
+                      : notesSaveStatus === "saved"
+                        ? "outline"
+                        : "secondary"
+                  }
+                  className="gap-1 font-normal"
+                >
+                  {notesSaveStatus === "saved" ? (
+                    <>
+                      <Check className="h-3 w-3" />
+                      Saved
+                    </>
+                  ) : notesSaveStatus === "error" ? (
+                    "Save failed"
+                  ) : (
+                    "Saving..."
+                  )}
+                </Badge>
+              ) : null}
+              {isSupported && (
+                <Button
+                  type="button"
+                  variant={isListening ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={toggleDictation}
+                >
+                  {isListening ? "Stop" : "Dictate"}
+                </Button>
+              )}
+            </div>
           </div>
           <textarea
             value={notes}
@@ -476,7 +612,7 @@ export function ChairsidePanel({
                     <div className="flex flex-shrink-0 items-center gap-1">
                       {entry.unitPrice > 0 && (
                         <span className="text-xs font-semibold text-green-700">
-                          AED {(entry.unitPrice * entry.quantity).toFixed(0)}
+                          {money(entry.unitPrice * entry.quantity)}
                         </span>
                       )}
                       {canWrite && (
@@ -516,12 +652,12 @@ export function ChairsidePanel({
                   <span className="truncate text-muted-foreground">
                     {e.procedureName ?? e.conditionType}
                   </span>
-                  <span>AED {(e.unitPrice * e.quantity).toFixed(2)}</span>
+                  <span>{money(e.unitPrice * e.quantity)}</span>
                 </div>
               ))}
               <div className="flex justify-between border-t pt-1 font-semibold">
                 <span>Subtotal</span>
-                <span>AED {subtotal.toFixed(2)}</span>
+                <span>{money(subtotal)}</span>
               </div>
             </div>
           </Card>

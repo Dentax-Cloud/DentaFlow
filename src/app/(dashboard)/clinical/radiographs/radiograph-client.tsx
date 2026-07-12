@@ -12,6 +12,7 @@ type Props = {
   selectedPatientId: string | null;
   openUpload?: boolean;
   images: ImageRecord[];
+  embedded?: boolean;
 };
 
 export default function RadiographPageClient({
@@ -20,6 +21,7 @@ export default function RadiographPageClient({
   selectedPatientId,
   openUpload = false,
   images,
+  embedded = false,
 }: Props) {
   const router = useRouter();
   const [showUpload, setShowUpload] = useState(openUpload);
@@ -28,12 +30,14 @@ export default function RadiographPageClient({
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
 
   function handlePatientChange(patientId: string) {
+    if (embedded) return;
     if (!patientId) router.push("/clinical/radiographs");
     else router.push(`/clinical/radiographs?patientId=${patientId}`);
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className={embedded ? "space-y-4" : "space-y-6 p-6"}>
+      {!embedded ? (
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Radiograph Viewer</h1>
@@ -65,7 +69,24 @@ export default function RadiographPageClient({
           </Button>
         )}
       </div>
+      ) : (
+        selectedPatientId && canWriteClinical && (
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCompareMode(!compareMode)}
+            >
+              {compareMode ? "Exit compare" : "Compare"}
+            </Button>
+            <Button size="sm" onClick={() => setShowUpload(!showUpload)}>
+              + Upload image
+            </Button>
+          </div>
+        )
+      )}
 
+      {!embedded ? (
       <div>
         <label className="text-sm font-medium">Select patient</label>
         <select
@@ -81,6 +102,7 @@ export default function RadiographPageClient({
           ))}
         </select>
       </div>
+      ) : null}
 
       {showUpload && selectedPatientId && canWriteClinical && (
         <ImageUploadForm

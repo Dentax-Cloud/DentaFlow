@@ -21,6 +21,7 @@ export default async function BillingPage() {
       invoices={serializedInvoices}
       patients={patients}
       procedures={procedures.map(serializeDecimal)}
+      countryCode={ctx.tenant.countryCode}
     />
   );
 }

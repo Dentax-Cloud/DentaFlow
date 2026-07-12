@@ -40,6 +40,7 @@ export function PerioPageClient({
   chartHistory,
   currentStaffId,
   currentStaffName,
+  embedded = false,
 }: {
   canWriteClinical?: boolean;
   patients: PatientOption[];
@@ -47,6 +48,7 @@ export function PerioPageClient({
   chartHistory: PerioChartRecord[];
   currentStaffId: string | null;
   currentStaffName: string;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
@@ -94,6 +96,7 @@ export function PerioPageClient({
     setPatientId(id);
     setLastStaging(null);
     setMeasurements([]);
+    if (embedded) return;
     router.replace(id ? `/clinical/perio?patientId=${id}` : "/clinical/perio");
   }
 
@@ -126,19 +129,22 @@ export function PerioPageClient({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Periodontal charting</h1>
-          <p className="text-muted-foreground">6-point probing, auto-staging & chart comparison</p>
+    <div className={embedded ? "space-y-4" : "space-y-6"}>
+      {!embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Periodontal charting</h1>
+            <p className="text-muted-foreground">6-point probing, auto-staging & chart comparison</p>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={patientId ? `/clinical?patientId=${patientId}` : "/clinical"}>
+              Odontogram
+            </Link>
+          </Button>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={patientId ? `/clinical?patientId=${patientId}` : "/clinical"}>
-            Odontogram
-          </Link>
-        </Button>
-      </div>
+      ) : null}
 
+      {!embedded ? (
       <div className="max-w-md space-y-2">
         <Label htmlFor="perio-patient">Patient</Label>
         <select
@@ -155,6 +161,7 @@ export function PerioPageClient({
           ))}
         </select>
       </div>
+      ) : null}
 
       {!patientId ? (
         <Card className="border-dashed">

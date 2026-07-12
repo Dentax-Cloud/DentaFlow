@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { sendMail } from "@/lib/mail";
 import {
   formatClinicDate,
@@ -21,7 +22,9 @@ export type NotificationType =
   | "LAB_RESULT_READY"
   | "INVOICE_PAID"
   | "CLAIM_SUGGESTED"
-  | "RECALL_DUE";
+  | "RECALL_DUE"
+  | "STALLED_PROCEDURE_LINE_WARN"
+  | "STALLED_PROCEDURE_LINE_ESCALATED";
 
 export type NotificationChannel = "IN_APP" | "EMAIL" | "BOTH";
 
@@ -238,7 +241,7 @@ export async function notifyAppointmentStatus(
       title: "Patient In Chair",
       body: inChairBodyLines.join("\n"),
       link: appointment.patientId
-        ? `/clinical/chairside?patientId=${appointment.patientId}&appointmentId=${appointmentId}`
+        ? encounterWorkspacePath(appointmentId)
         : `/appointments?appointmentId=${appointmentId}`,
     },
     COMPLETED: {

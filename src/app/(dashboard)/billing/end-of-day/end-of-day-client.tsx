@@ -1,6 +1,6 @@
 "use client";
 
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -17,11 +17,14 @@ type Summary = {
 
 export function EndOfDayClient({
   date,
+  countryCode,
   summary,
 }: {
   date: string;
+  countryCode: string;
   summary: Summary;
 }) {
+  const money = (amount: number) => formatCurrency(amount, countryCode);
   function handlePrint() {
     window.print();
   }
@@ -43,7 +46,7 @@ export function EndOfDayClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.invoiceCount}</div>
-            <div className="text-sm text-muted-foreground">{formatCurrency(summary.invoiceTotal)}</div>
+            <div className="text-sm text-muted-foreground">{money(summary.invoiceTotal)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -51,9 +54,9 @@ export function EndOfDayClient({
             <CardTitle className="text-base">Collected</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.collected)}</div>
+            <div className="text-2xl font-bold">{money(summary.collected)}</div>
             <div className="text-sm text-muted-foreground">
-              Cash {formatCurrency(summary.cash)} · Card {formatCurrency(summary.card)}
+              Cash {money(summary.cash)} · Card {money(summary.card)}
             </div>
           </CardContent>
         </Card>
@@ -63,7 +66,7 @@ export function EndOfDayClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.outstandingCount}</div>
-            <div className="text-sm text-muted-foreground">{formatCurrency(summary.outstanding)}</div>
+            <div className="text-sm text-muted-foreground">{money(summary.outstanding)}</div>
           </CardContent>
         </Card>
         <Card>
