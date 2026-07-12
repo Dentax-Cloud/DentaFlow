@@ -427,6 +427,10 @@ model Appointment {
   isBlock      Boolean           @default(false)
   type         String?
   notes        String?
+  /// ROUTINE | SAME_DAY_WALKIN | EMERGENCY
+  priority       String?           @default("ROUTINE")
+  /// Required (enforced in server action) when priority is EMERGENCY
+  priorityReason String?
   reminderSent Boolean           @default(false)
   noShowRisk     RiskLevel?
   appointmentRef       String?
