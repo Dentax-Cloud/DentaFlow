@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { QuickScan } from "@/components/reception/quick-scan";
+import { WalkInPanel } from "@/components/reception/walk-in-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,10 +52,16 @@ export default async function ReceptionPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Reception</h1>
-        <p className="text-muted-foreground">Scan patient IDs for quick check-in</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Reception</h1>
+          <p className="text-muted-foreground">
+            Scan patient IDs for quick check-in, or add a same-day walk-in
+          </p>
+        </div>
       </div>
+
+      <WalkInPanel />
 
       <QuickScan />
 

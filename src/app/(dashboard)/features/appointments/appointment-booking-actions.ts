@@ -41,11 +41,25 @@ export async function bookAppointment(input: {
   durationMins: number;
   procedureId?: string;
   branchId?: string;
+  chairId?: string;
   notes?: string;
   preAuthStatus?: string;
+  /** ROUTINE | SAME_DAY_WALKIN | EMERGENCY — defaults to ROUTINE */
+  priority?: string;
+  priorityReason?: string;
+  status?: AppointmentStatus;
+  type?: string;
 }): Promise<{ success: boolean; appointmentId?: string; error?: string }> {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.appointments.write);
+
+  const priority = input.priority ?? "ROUTINE";
+  if (priority === "EMERGENCY" && !input.priorityReason?.trim()) {
+    return {
+      success: false,
+      error: "Priority reason is required for emergency appointments.",
+    };
+  }
 
   const slots = await getDoctorSlots({
     tenantId: ctx.tenantId,
@@ -84,6 +98,8 @@ export async function bookAppointment(input: {
       select: { name: true },
     });
     if (procedure) title = procedure.name;
+  } else if (priority === "SAME_DAY_WALKIN") {
+    title = "Walk-in";
   }
 
   const appointmentId = randomUUID();
@@ -96,28 +112,151 @@ export async function bookAppointment(input: {
       patientId: input.patientId,
       doctorId: doctorRecordId,
       branchId: input.branchId ?? null,
+      chairId: input.chairId ?? null,
       startTime: start,
       endTime: end,
       title,
-      status: "SCHEDULED",
+      status: input.status ?? "SCHEDULED",
+      type: input.type ?? null,
       notes: input.notes ?? null,
       procedureId: input.procedureId ?? null,
       bookedById: ctx.staffMember?.id ?? null,
       bookedVia: "RECEPTION",
       preAuthStatus: input.preAuthStatus ?? "NOT_REQUIRED",
       appointmentRef,
+      priority,
+      priorityReason: input.priorityReason?.trim() || null,
     },
   });
 
   await notifyAppointmentStatus(
     appointmentId,
     ctx.tenantId,
-    "SCHEDULED",
+    input.status ?? "SCHEDULED",
     await getPatientName(ctx.tenantId, input.patientId),
   ).catch(() => null);
 
   revalidatePath("/appointments");
+  revalidatePath("/reception");
   return { success: true, appointmentId };
+}
+
+/** Book the soonest free slot across doctors (walk-in). Never displaces existing bookings. */
+export async function bookWalkInAppointment(input: {
+  patientId: string;
+  durationMins?: number;
+  branchId?: string;
+  notes?: string;
+  /** If set, book this doctor/time instead of the cross-doctor soonest slot. */
+  doctorId?: string;
+  date?: string;
+  startTime?: string;
+  chairId?: string;
+}): Promise<{
+  success: boolean;
+  appointmentId?: string;
+  error?: string;
+  slot?: { doctorId: string; doctorName: string; date: string; time: string };
+}> {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.write);
+
+  const durationMins = input.durationMins ?? 30;
+  const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+  const { getClinicNowParts } = await import("@/lib/datetime/clinic-timezone");
+  const { dateStr: today } = getClinicNowParts(clinicTz);
+  const date = input.date ?? today;
+
+  const { getNextAvailableSlotAnyDoctor } =
+    await import("@/lib/appointments/availability");
+
+  let doctorId = input.doctorId;
+  let startTime = input.startTime;
+  let chairId = input.chairId;
+  let doctorName: string | undefined;
+
+  if (!doctorId || !startTime) {
+    const next = await getNextAvailableSlotAnyDoctor(
+      ctx.tenantId,
+      date,
+      durationMins,
+      input.branchId,
+    );
+    if (!next) {
+      return {
+        success: false,
+        error: "No available slots today across any doctor.",
+      };
+    }
+    doctorId = doctorId ?? next.doctorId;
+    startTime = startTime ?? next.time;
+    chairId = chairId ?? next.chairId ?? undefined;
+    doctorName = next.doctorName;
+  }
+
+  const result = await bookAppointment({
+    patientId: input.patientId,
+    doctorId,
+    date,
+    startTime,
+    durationMins,
+    branchId: input.branchId,
+    chairId,
+    notes: input.notes,
+    priority: "SAME_DAY_WALKIN",
+    type: "WALK_IN",
+    status: "ARRIVED",
+  });
+
+  if (!result.success) return result;
+
+  if (!doctorName) {
+    const staff = await db.staffMember.findFirst({
+      where: { id: doctorId, tenantId: ctx.tenantId },
+      select: { firstName: true, lastName: true },
+    });
+    doctorName = staff
+      ? `Dr. ${staff.firstName ?? ""} ${staff.lastName ?? ""}`.trim()
+      : "Doctor";
+  }
+
+  return {
+    ...result,
+    slot: { doctorId, doctorName, date, time: startTime },
+  };
+}
+
+export async function getNextAvailableSlot(input: {
+  date: string;
+  durationMins: number;
+  branchId?: string;
+}) {
+  const ctx = await requireTenantContext();
+  const { getNextAvailableSlotAnyDoctor } =
+    await import("@/lib/appointments/availability");
+  return getNextAvailableSlotAnyDoctor(
+    ctx.tenantId,
+    input.date,
+    input.durationMins,
+    input.branchId,
+  );
+}
+
+export async function getEmergencyDoctorOptions(input?: {
+  date?: string;
+  branchId?: string;
+}) {
+  const ctx = await requireTenantContext();
+  const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
+  const { getClinicNowParts } = await import("@/lib/datetime/clinic-timezone");
+  const { dateStr: today } = getClinicNowParts(clinicTz);
+  const { getDoctorsWithNowStatus } =
+    await import("@/lib/appointments/availability");
+  return getDoctorsWithNowStatus({
+    tenantId: ctx.tenantId,
+    date: input?.date ?? today,
+    branchId: input?.branchId,
+  });
 }
 
 export async function getDoctorsWithAvailability(input: {

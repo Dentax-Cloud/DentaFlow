@@ -4,7 +4,6 @@ import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { startOfDay, endOfDay } from "date-fns";
-import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS, hasPermission } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import {
@@ -13,6 +12,7 @@ import {
   type Vitals,
 } from "@/lib/clinical/emergency-types";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
+import { resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 import { generateText } from "ai";
 import { isAIConfigured, resolveOpenAIModel, SYSTEM_SAFETY } from "@/lib/ai/client";
 
@@ -107,9 +107,26 @@ export async function createEmergencyIntake(input: {
   vitals?: Vitals;
   allergies?: string;
   medications?: string;
-}) {
+  /** StaffMember id of the doctor who will take the patient */
+  doctorId: string;
+  /** When to schedule: now, or after the doctor's current patient */
+  when: "NOW" | "AFTER_CURRENT";
+  /** Required for EMERGENCY priority — defaults from complaint label */
+  priorityReason?: string;
+}): Promise<{ intake: { id: string }; appointment: { id: string } }> {
   const ctx = await requireEmergencyWrite();
   await requirePatient(ctx.tenantId, input.patientId);
+
+  if (!input.doctorId) {
+    throw new Error("A doctor must be selected before registering an emergency.");
+  }
+
+  const priorityReason =
+    input.priorityReason?.trim() ||
+    getComplaintLabel(input.chiefComplaint);
+  if (!priorityReason) {
+    throw new Error("Priority reason is required for emergency appointments.");
+  }
 
   const triageLevel = calculateTriageLevel(input.painScore, input.chiefComplaint);
   const complaintLabel = getComplaintLabel(input.chiefComplaint);
@@ -119,15 +136,71 @@ export async function createEmergencyIntake(input: {
     orderBy: { isPrimary: "desc" },
   });
 
-  const startTime = new Date();
+  // Resolve StaffMember id → Doctor record id
+  let doctorRecord = await db.doctor.findFirst({
+    where: { id: input.doctorId, tenantId: ctx.tenantId },
+    select: { id: true },
+  });
+  if (!doctorRecord) {
+    doctorRecord = await db.doctor.findFirst({
+      where: { userId: input.doctorId, tenantId: ctx.tenantId },
+      select: { id: true },
+    });
+  }
+  if (!doctorRecord) {
+    throw new Error("Selected doctor was not found.");
+  }
+
+  let startTime = new Date();
+  if (input.when === "AFTER_CURRENT") {
+    const current = await db.appointment.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        doctorId: doctorRecord.id,
+        status: "IN_CHAIR",
+        deletedAt: null,
+      },
+      orderBy: { endTime: "desc" },
+      select: { endTime: true },
+    });
+    if (current?.endTime && current.endTime.getTime() > startTime.getTime()) {
+      startTime = current.endTime;
+    } else {
+      // No in-chair patient — fall back to soonest free slot for this doctor (additive)
+      const clinicTz = resolveClinicTimezone(
+        (await db.tenant.findUnique({
+          where: { id: ctx.tenantId },
+          select: { timezone: true },
+        }))?.timezone,
+      );
+      const { getClinicNowParts } = await import("@/lib/datetime/clinic-timezone");
+      const { dateStr: today } = getClinicNowParts(clinicTz);
+      const { getDoctorSlots } = await import("@/lib/appointments/availability");
+      const slots = await getDoctorSlots({
+        tenantId: ctx.tenantId,
+        doctorId: input.doctorId,
+        date: today,
+        durationMins: 60,
+        branchId: branch?.id,
+      });
+      const next = slots.find((s) => s.available);
+      if (next) {
+        const { clinicLocalToUtc } = await import("@/lib/datetime/clinic-timezone");
+        startTime = clinicLocalToUtc(today, next.time, clinicTz);
+      }
+    }
+  }
+
   const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
 
-  let appointment: { id: string } | null = null;
+  // Create appointment first — failure must surface (no silent swallow).
+  let appointment: { id: string };
   try {
     appointment = await db.appointment.create({
       data: {
         tenantId: ctx.tenantId,
         patientId: input.patientId,
+        doctorId: doctorRecord.id,
         title: `Emergency — ${complaintLabel}`,
         startTime,
         endTime,
@@ -136,18 +209,26 @@ export async function createEmergencyIntake(input: {
         notes: `Emergency: ${input.chiefComplaint} | Pain: ${input.painScore}/10`,
         providerId: ctx.staffMember?.id ?? null,
         branchId: branch?.id ?? null,
+        bookedVia: "RECEPTION",
+        bookedById: ctx.staffMember?.id ?? null,
+        priority: "EMERGENCY",
+        priorityReason,
       },
       select: { id: true },
     });
-  } catch {
-    appointment = null;
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to create emergency appointment";
+    throw new Error(
+      `Emergency appointment could not be created: ${message}. Intake was not registered.`,
+    );
   }
 
   const intake = await db.emergencyIntake.create({
     data: {
       tenantId: ctx.tenantId,
       patientId: input.patientId,
-      appointmentId: appointment?.id ?? null,
+      appointmentId: appointment.id,
       chiefComplaint: input.chiefComplaint,
       painScore: input.painScore,
       painLocation: input.painLocation ?? null,
@@ -177,6 +258,9 @@ export async function createEmergencyIntake(input: {
           chiefComplaint: input.chiefComplaint,
           painScore: input.painScore,
           triageLevel,
+          appointmentId: appointment.id,
+          doctorId: doctorRecord.id,
+          priorityReason,
         },
       },
     })

@@ -3,14 +3,16 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
 import {
   getDoctorsWithAvailability,
   getSlotsForDoctor,
   bookAppointment,
 } from "@/app/(dashboard)/features/appointments/appointment-booking-actions";
-import { createPatient } from "@/app/(dashboard)/features/patients/actions";
 import type { DoctorAvailability, TimeSlot } from "@/lib/appointments/availability";
+import {
+  PatientSearchPicker,
+  type PatientSearchResult,
+} from "@/components/patients/patient-search-picker";
 
 type Procedure = {
   id: string;
@@ -21,17 +23,6 @@ type Procedure = {
 };
 
 type Branch = { id: string; name: string };
-
-type PatientResult = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  patientId: string | null;
-  patientNumber: string;
-  phone: string | null;
-  allergies: string[];
-  insuranceProvider: string | null;
-};
 
 type InitialPrefill = {
   date?: string;
@@ -52,7 +43,7 @@ export default function BookAppointmentClient({
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
 
-  const [patient, setPatient] = useState<PatientResult | null>(null);
+  const [patient, setPatient] = useState<PatientSearchResult | null>(null);
   const [procedure, setProcedure] = useState<Procedure | null>(null);
   const [generalConsultation, setGeneralConsultation] = useState(false);
   const [customDuration, setCustomDuration] = useState<number | null>(null);
@@ -64,35 +55,9 @@ export default function BookAppointmentClient({
 
   const [doctors, setDoctors] = useState<DoctorAvailability[]>([]);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
-  const [patientSearch, setPatientSearch] = useState("");
-  const [patientResults, setPatientResults] = useState<PatientResult[]>([]);
-  const [showQuickRegister, setShowQuickRegister] = useState(false);
-  const [quickReg, setQuickReg] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    dateOfBirth: "",
-  });
 
   const durationMins =
     customDuration ?? procedure?.durationMins ?? (generalConsultation ? 30 : 30);
-
-  useEffect(() => {
-    if (patientSearch.length < 2) {
-      setPatientResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const res = await fetch(
-        `/api/patients/search?q=${encodeURIComponent(patientSearch)}`,
-      );
-      if (res.ok) {
-        const data = (await res.json()) as { patients?: PatientResult[] };
-        setPatientResults(data.patients ?? []);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [patientSearch]);
 
   useEffect(() => {
     if (!selectedDate || !durationMins) return;
@@ -126,10 +91,6 @@ export default function BookAppointmentClient({
   }, [slots, step, initialPrefill?.time]);
 
   function continueFromProcedure() {
-    if (initialPrefill?.date && initialPrefill?.time) {
-      setStep(3);
-      return;
-    }
     setStep(3);
   }
 
@@ -175,44 +136,6 @@ export default function BookAppointmentClient({
         `Appointment booked for ${patient.firstName} ${patient.lastName}`,
       );
       router.push("/appointments");
-    });
-  }
-
-  async function handleQuickRegister() {
-    if (!quickReg.firstName.trim() || !quickReg.lastName.trim()) {
-      toast.error("First and last name are required");
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await createPatient({
-        firstName: quickReg.firstName.trim(),
-        lastName: quickReg.lastName.trim(),
-        phone: quickReg.phone.trim() || undefined,
-        dateOfBirth: quickReg.dateOfBirth || undefined,
-      });
-
-      if (!result.success) {
-        toast.error(result.error ?? "Registration failed");
-        return;
-      }
-
-      const p = result.data;
-      setPatient({
-        id: p.id,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        patientId: p.patientId,
-        patientNumber: p.patientNumber,
-        phone: p.phone,
-        allergies: p.allergies ?? [],
-        insuranceProvider: null,
-      });
-      setPatientSearch(`${p.firstName} ${p.lastName}`);
-      setShowQuickRegister(false);
-      setQuickReg({ firstName: "", lastName: "", phone: "", dateOfBirth: "" });
-      toast.success("Patient registered");
-      setStep(2);
     });
   }
 
@@ -263,160 +186,13 @@ export default function BookAppointmentClient({
       {step === 1 && (
         <div className="bg-white border rounded-xl p-5 space-y-4">
           <h2 className="font-semibold">Select Patient</h2>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-              placeholder="Search by name, phone, or patient ID..."
-              className="w-full pl-9 pr-4 py-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
 
-          {patientResults.length > 0 && (
-            <div className="border rounded-lg overflow-hidden">
-              {patientResults.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setPatient(p);
-                    setPatientSearch(`${p.firstName} ${p.lastName}`);
-                    setPatientResults([]);
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b last:border-0 transition-colors"
-                >
-                  <p className="font-medium text-sm">
-                    {p.firstName} {p.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.patientId ?? p.patientNumber} · {p.phone}
-                    {p.allergies.length > 0 && (
-                      <span className="text-red-600 ml-2">
-                        ⚠ {p.allergies.join(", ")}
-                      </span>
-                    )}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!patient && (
-            <div className="border-t pt-4 space-y-3">
-              {!showQuickRegister ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuickRegister(true);
-                    if (patientSearch && !quickReg.phone) {
-                      setQuickReg((prev) => ({ ...prev, phone: patientSearch }));
-                    }
-                  }}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  Patient not found? Register new patient
-                </button>
-              ) : (
-                <div className="bg-gray-50 border rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Quick registration</h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickRegister(false)}
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium">First name *</label>
-                      <input
-                        value={quickReg.firstName}
-                        onChange={(e) =>
-                          setQuickReg((p) => ({ ...p, firstName: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium">Last name *</label>
-                      <input
-                        value={quickReg.lastName}
-                        onChange={(e) =>
-                          setQuickReg((p) => ({ ...p, lastName: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium">Phone</label>
-                      <input
-                        value={quickReg.phone}
-                        onChange={(e) =>
-                          setQuickReg((p) => ({ ...p, phone: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium">Date of birth</label>
-                      <input
-                        type="date"
-                        value={quickReg.dateOfBirth}
-                        onChange={(e) =>
-                          setQuickReg((p) => ({ ...p, dateOfBirth: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleQuickRegister}
-                    disabled={isPending}
-                    className="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-green-700"
-                  >
-                    {isPending ? "Registering…" : "Register & continue →"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {patient && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                  {patient.firstName[0]}
-                  {patient.lastName[0]}
-                </div>
-                <div>
-                  <p className="font-semibold">
-                    {patient.firstName} {patient.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {patient.patientId ?? patient.patientNumber}
-                    {patient.insuranceProvider &&
-                      ` · ${patient.insuranceProvider}`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPatient(null);
-                    setPatientSearch("");
-                  }}
-                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Change
-                </button>
-              </div>
-            </div>
-          )}
+          <PatientSearchPicker
+            selected={patient}
+            onSelect={setPatient}
+            onClear={() => setPatient(null)}
+            onRegistered={() => setStep(2)}
+          />
 
           <button
             type="button"
