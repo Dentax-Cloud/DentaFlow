@@ -105,29 +105,34 @@ export async function bookAppointment(input: {
   const appointmentId = randomUUID();
   const appointmentRef = await generateAppointmentRef(ctx.tenantId);
 
-  await db.appointment.create({
-    data: {
-      id: appointmentId,
-      tenantId: ctx.tenantId,
-      patientId: input.patientId,
-      doctorId: doctorRecordId,
-      branchId: input.branchId ?? null,
-      chairId: input.chairId ?? null,
-      startTime: start,
-      endTime: end,
-      title,
-      status: input.status ?? "SCHEDULED",
-      type: input.type ?? null,
-      notes: input.notes ?? null,
-      procedureId: input.procedureId ?? null,
-      bookedById: ctx.staffMember?.id ?? null,
-      bookedVia: "RECEPTION",
-      preAuthStatus: input.preAuthStatus ?? "NOT_REQUIRED",
-      appointmentRef,
-      priority,
-      priorityReason: input.priorityReason?.trim() || null,
-    },
+  const { createAppointmentWithSlotLock } =
+    await import("@/lib/appointments/create-with-slot-lock");
+
+  const locked = await createAppointmentWithSlotLock({
+    id: appointmentId,
+    tenantId: ctx.tenantId,
+    patientId: input.patientId,
+    doctorId: doctorRecordId,
+    branchId: input.branchId ?? null,
+    chairId: input.chairId ?? null,
+    startTime: start,
+    endTime: end,
+    title,
+    status: input.status ?? "SCHEDULED",
+    type: input.type ?? null,
+    notes: input.notes ?? null,
+    procedureId: input.procedureId ?? null,
+    bookedById: ctx.staffMember?.id ?? null,
+    bookedVia: "RECEPTION",
+    preAuthStatus: input.preAuthStatus ?? "NOT_REQUIRED",
+    appointmentRef,
+    priority,
+    priorityReason: input.priorityReason?.trim() || null,
   });
+
+  if (!locked.success) {
+    return { success: false, error: locked.error };
+  }
 
   await notifyAppointmentStatus(
     appointmentId,

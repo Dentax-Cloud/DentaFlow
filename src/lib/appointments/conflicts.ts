@@ -7,6 +7,7 @@ const ACTIVE_STATUSES: AppointmentStatus[] = [
   "ARRIVED",
   "IN_CHAIR",
   "COMPLETED",
+  "INVOICED",
 ];
 
 export type SchedulingConflict = "chair" | "doctor" | "invalid_range";

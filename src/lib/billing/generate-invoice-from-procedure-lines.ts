@@ -7,9 +7,9 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
+import { assertCanCreateVisitInvoice } from "@/lib/billing/visit-invoice-guard";
 import {
   buildVisitInvoiceNotes,
-  countDistinctVisitInvoices,
   mapProcedureLinesToInvoiceItems,
   selectBillableProcedureLines,
   type ProcedureLineBillable,
@@ -90,17 +90,21 @@ export async function generateInvoiceFromProcedureLines(
     throw new Error("No billable closed procedure lines are available for invoicing.");
   }
 
-  const existingVisitInvoiceCount = countDistinctVisitInvoices(
-    serializedLines.map((line) => line.lockedInvoiceId),
-  );
-  const visitInvoiceNumber = existingVisitInvoiceCount + 1;
   const isInterim = appointment.status !== "COMPLETED";
+  const billingKind = isInterim ? "INTERIM" : "FINAL";
+
+  // Phase 6: block accidental dual-path / duplicate non-interim invoices
+  const { nextVisitSequence } = await assertCanCreateVisitInvoice({
+    tenantId: ctx.tenantId,
+    appointmentId: appointment.id,
+    billingKind,
+  });
 
   const items = mapProcedureLinesToInvoiceItems(billable);
   const notes = buildVisitInvoiceNotes({
     appointmentId: appointment.id,
     appointmentRef: appointment.appointmentRef,
-    visitInvoiceNumber,
+    visitInvoiceNumber: nextVisitSequence,
     isInterim,
   });
 
@@ -110,6 +114,9 @@ export async function generateInvoiceFromProcedureLines(
     items,
     notes,
     status: "DRAFT",
+    appointmentId: appointment.id,
+    visitSequence: nextVisitSequence,
+    billingKind,
   });
 
   const now = new Date();
@@ -142,7 +149,7 @@ export async function generateInvoiceFromProcedureLines(
     invoiceId: invoice.id,
     invoiceRef: invoice.invoiceRef,
     total: Number(invoice.total),
-    visitInvoiceNumber,
+    visitInvoiceNumber: nextVisitSequence,
     lockedLineIds: billable.map((line) => line.id),
   };
 }

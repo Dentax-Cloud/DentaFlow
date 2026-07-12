@@ -1,6 +1,10 @@
 import type { AppointmentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
+import {
+  assertCanCreateVisitInvoice,
+  appointmentHasVisitInvoice,
+} from "@/lib/billing/visit-invoice-guard";
 import { completeVisit } from "@/lib/clinical/complete-visit";
 import {
   formatChairsideValidationError,
@@ -104,6 +108,24 @@ async function deductConsumablesForSession(params: {
   appointmentId: string;
   patientId: string;
 }) {
+  // Phase 6: if ProcedureLine path already billed this visit, skip chairside auto-deduct
+  // (avoids double USAGE when both pipelines touch the same appointment).
+  if (await appointmentHasVisitInvoice(params.tenantId, params.appointmentId)) {
+    const existingKinds = await db.invoice.findMany({
+      where: {
+        tenantId: params.tenantId,
+        appointmentId: params.appointmentId,
+        deletedAt: null,
+        billingKind: { in: ["INTERIM", "FINAL"] },
+      },
+      select: { id: true },
+      take: 1,
+    });
+    if (existingKinds.length > 0) {
+      return;
+    }
+  }
+
   const appointment = await db.appointment.findFirst({
     where: { id: params.appointmentId, tenantId: params.tenantId },
     select: { chairId: true },
@@ -176,16 +198,35 @@ export async function finalizeChairsideSessionRecord(params: {
       };
     });
 
-    const invoice = await createInvoiceFromItems({
-      tenantId: params.tenantId,
-      patientId: session.patientId,
-      items,
-      notes: session.appointmentId
-        ? `Chairside session · Appointment ${session.appointmentId}`
-        : "Chairside session",
-      status: "DRAFT",
-    });
-    invoiceId = invoice.id;
+    if (session.appointmentId) {
+      // Phase 6: mutually exclusive with ProcedureLine / Ready-to-Invoice invoices
+      const { nextVisitSequence } = await assertCanCreateVisitInvoice({
+        tenantId: params.tenantId,
+        appointmentId: session.appointmentId,
+        billingKind: "CHAIRSIDE",
+      });
+
+      const invoice = await createInvoiceFromItems({
+        tenantId: params.tenantId,
+        patientId: session.patientId,
+        items,
+        notes: `Chairside session · Appointment ${session.appointmentId}`,
+        status: "DRAFT",
+        appointmentId: session.appointmentId,
+        visitSequence: nextVisitSequence,
+        billingKind: "CHAIRSIDE",
+      });
+      invoiceId = invoice.id;
+    } else {
+      const invoice = await createInvoiceFromItems({
+        tenantId: params.tenantId,
+        patientId: session.patientId,
+        items,
+        notes: "Chairside session",
+        status: "DRAFT",
+      });
+      invoiceId = invoice.id;
+    }
   }
 
   if (session.appointmentId) {

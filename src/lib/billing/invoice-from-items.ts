@@ -6,6 +6,7 @@ import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { sendInvoiceEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import type { InvoiceItemType } from "@/lib/billing/india-gst";
+import type { VisitBillingKind } from "@/lib/billing/visit-invoice-guard";
 
 export type InvoiceLineItem = {
   description: string;
@@ -25,6 +26,10 @@ export type CreateInvoiceFromItemsParams = {
   items: InvoiceLineItem[];
   notes?: string | null;
   status?: "DRAFT" | "SENT";
+  /** Visit link — set for chairside / ProcedureLine visit invoices */
+  appointmentId?: string | null;
+  visitSequence?: number | null;
+  billingKind?: VisitBillingKind | null;
 };
 
 /**
@@ -64,6 +69,9 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
     data: {
       tenantId: params.tenantId,
       patientId: params.patientId,
+      appointmentId: params.appointmentId ?? null,
+      visitSequence: params.visitSequence ?? null,
+      billingKind: params.billingKind ?? null,
       invoiceNumber: generateInvoiceNumber(count + 1),
       invoiceRef: await generateInvoiceRef(params.tenantId),
       status: params.status ?? "DRAFT",

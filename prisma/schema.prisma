@@ -453,6 +453,7 @@ model Appointment {
   tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clinicalNotes ClinicalNote[]
   procedureLines ProcedureLine[]
+  invoices     Invoice[]
 
   @@index([tenantId])
   @@index([tenantId, startTime])
@@ -934,6 +935,12 @@ model Invoice {
   id                    String        @id @default(cuid())
   tenantId              String
   patientId             String
+  /// Links invoice to a visit. Null for legacy / patient-only manual invoices.
+  appointmentId         String?
+  /// 1-based sequence within an appointment (allows Phase 4 interim multi-invoice).
+  visitSequence         Int?
+  /// INTERIM | FINAL | CHAIRSIDE — non-interim kinds are mutually exclusive across paths.
+  billingKind           String?
   invoiceNumber         String
   invoiceRef            String?
   status                InvoiceStatus @default(DRAFT)
@@ -971,6 +978,7 @@ model Invoice {
   insuranceClaimRef     String?
   providerCode          String?
   networkType           String?
+  appointment           Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   patient               Patient       @relation(fields: [patientId], references: [id])
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items                 InvoiceItem[]
@@ -978,8 +986,10 @@ model Invoice {
   claims                Claim[]
 
   @@unique([tenantId, invoiceNumber])
+  @@unique([tenantId, appointmentId, visitSequence])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, appointmentId])
 }
 
 model InvoiceItem {

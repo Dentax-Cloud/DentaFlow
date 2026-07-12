@@ -593,6 +593,20 @@ export async function deductProcedureConsumables(input: {
       continue;
     }
 
+    // Phase 6: idempotent per appointment + inventory item (prevents double USAGE)
+    const alreadyDeducted = await db.stockTransaction.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        itemId: item.inventoryItemId,
+        appointmentId: input.appointmentId,
+        type: StockTransactionType.USAGE,
+      },
+      select: { id: true },
+    });
+    if (alreadyDeducted) {
+      continue;
+    }
+
     const transactionRef = await generateStockRef(ctx.tenantId);
 
     await db.inventoryItem.update({

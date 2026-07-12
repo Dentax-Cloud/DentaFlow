@@ -18,7 +18,9 @@ import { getStaffActor } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
+import { assertCanCreateVisitInvoice } from "@/lib/billing/visit-invoice-guard";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
+import { deductProcedureConsumables } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
 
@@ -556,12 +558,21 @@ export const generateInvoiceFromProcedures = createAction({
       };
     });
 
+    const { nextVisitSequence } = await assertCanCreateVisitInvoice({
+      tenantId: ctx.tenant.id,
+      appointmentId: input.appointmentId,
+      billingKind: "FINAL",
+    });
+
     const invoice = await createInvoiceFromItems({
       tenantId: ctx.tenant.id,
       patientId: input.patientId,
       items: lineItems,
       notes: `Appointment ${input.appointmentId}`,
       status: "DRAFT",
+      appointmentId: input.appointmentId,
+      visitSequence: nextVisitSequence,
+      billingKind: "FINAL",
     });
 
     await db.appointment.updateMany({
@@ -569,37 +580,68 @@ export const generateInvoiceFromProcedures = createAction({
       data: { status: "INVOICED" },
     });
 
+    // Phase 6: do not allow auto-close to create a second chairside invoice / re-deduct
     await autoCloseChairsideSessionsForAppointment({
       tenantId: ctx.tenant.id,
       appointmentId: input.appointmentId,
       appointmentStatus: "INVOICED",
       staffMemberId: ctx.staffMember?.id,
-      allowInvoice: true,
+      allowInvoice: false,
     }).catch(() => null);
+
+    const appointment = await db.appointment.findFirst({
+      where: tenantWhere(ctx.tenant.id, { id: input.appointmentId }),
+      select: { chairId: true },
+    });
 
     for (const catalogItem of catalogItems) {
       if (!catalogItem.inventoryConsumption) continue;
-      let consumption: { inventoryItemId: string; quantity: number }[] = [];
-      try {
-        consumption = JSON.parse(catalogItem.inventoryConsumption);
-      } catch {
+      if (!appointment?.chairId) {
+        // Fall back to idempotent stock txn without chair when chair unknown
+        let consumption: { inventoryItemId: string; quantity?: number; qty?: number }[] = [];
+        try {
+          consumption = JSON.parse(catalogItem.inventoryConsumption);
+        } catch {
+          continue;
+        }
+        for (const row of consumption) {
+          const qty = row.quantity ?? row.qty ?? 0;
+          if (!row.inventoryItemId || qty <= 0) continue;
+          const already = await db.stockTransaction.findFirst({
+            where: {
+              tenantId: ctx.tenant.id,
+              itemId: row.inventoryItemId,
+              appointmentId: input.appointmentId,
+              type: "USAGE",
+            },
+            select: { id: true },
+          });
+          if (already) continue;
+          await db.inventoryItem.update({
+            where: { id: row.inventoryItemId },
+            data: { quantity: { decrement: qty } },
+          });
+          await db.stockTransaction.create({
+            data: {
+              tenantId: ctx.tenant.id,
+              itemId: row.inventoryItemId,
+              type: "USAGE",
+              quantity: qty,
+              appointmentId: input.appointmentId,
+              patientId: input.patientId,
+              notes: `Used in procedure: ${catalogItem.name}`,
+            },
+          });
+        }
         continue;
       }
-      for (const { inventoryItemId, quantity } of consumption) {
-        await db.inventoryItem.update({
-          where: { id: inventoryItemId },
-          data: { quantity: { decrement: quantity } },
-        });
-        await db.stockTransaction.create({
-          data: {
-            tenantId: ctx.tenant.id,
-            itemId: inventoryItemId,
-            type: "USAGE",
-            quantity,
-            notes: `Used in procedure: ${catalogItem.name}`,
-          },
-        });
-      }
+
+      await deductProcedureConsumables({
+        procedureCode: catalogItem.code,
+        chairId: appointment.chairId,
+        appointmentId: input.appointmentId,
+        patientId: input.patientId,
+      }).catch(() => null);
     }
 
     revalidatePath("/billing");

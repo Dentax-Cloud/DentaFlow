@@ -43,26 +43,33 @@ export async function confirmBookingRequest(bookingId: string) {
   );
   const endTime = new Date(startTime.getTime() + booking.durationMins * 60 * 1000);
 
-  const appointment = await db.appointment.create({
-    data: {
-      id: randomUUID(),
-      tenantId: ctx.tenant.id,
-      patientId: booking.patientId,
-      doctorId: booking.doctorId,
-      title: "Online booking",
-      startTime,
-      endTime,
-      status: "CONFIRMED",
-      notes: booking.notes,
-      type: "ONLINE_BOOKING",
-    },
+  const { createAppointmentWithSlotLock } =
+    await import("@/lib/appointments/create-with-slot-lock");
+
+  const appointmentId = randomUUID();
+  const locked = await createAppointmentWithSlotLock({
+    id: appointmentId,
+    tenantId: ctx.tenant.id,
+    patientId: booking.patientId,
+    doctorId: booking.doctorId,
+    startTime,
+    endTime,
+    title: "Online booking",
+    status: "CONFIRMED",
+    notes: booking.notes,
+    type: "ONLINE_BOOKING",
+    bookedVia: "PORTAL",
   });
+
+  if (!locked.success) {
+    throw new Error(locked.error);
+  }
 
   await db.bookingRequest.update({
     where: { id: booking.id },
     data: {
       status: "CONFIRMED",
-      appointmentId: appointment.id,
+      appointmentId,
       confirmedAt: new Date(),
     },
   });
