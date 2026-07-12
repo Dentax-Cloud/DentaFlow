@@ -8,7 +8,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import {
   CLAIM_KANBAN_COLUMNS,
   type ClaimProcedureSnapshotLine,
@@ -46,14 +46,16 @@ type ClaimableInvoice = {
 type Props = {
   claims: SerializedClaim[];
   claimableInvoices: ClaimableInvoice[];
-  currency?: string;
+  countryCode: string;
 };
 
 function ClaimCard({
   claim,
+  countryCode,
   onSelect,
 }: {
   claim: SerializedClaim;
+  countryCode: string;
   onSelect: (claim: SerializedClaim) => void;
 }) {
   const patientName = claim.patient
@@ -68,7 +70,7 @@ function ClaimCard({
     >
       <p className="text-sm font-medium leading-tight">{patientName}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {formatCurrency(claim.submittedAmount)}
+        {formatCurrency(claim.submittedAmount, countryCode)}
       </p>
       {claim.daysSinceSubmission != null && claim.submittedAt && (
         <p className="mt-1 text-xs text-muted-foreground">
@@ -77,14 +79,20 @@ function ClaimCard({
       )}
       {claim.status === "PARTIALLY_APPROVED" && claim.approvedAmount != null && (
         <Badge variant="secondary" className="mt-2 text-xs">
-          Approved {formatCurrency(claim.approvedAmount)}
+          Approved {formatCurrency(claim.approvedAmount, countryCode)}
         </Badge>
       )}
     </button>
   );
 }
 
-function ProcedureTable({ lines }: { lines: ClaimProcedureSnapshotLine[] }) {
+function ProcedureTable({
+  lines,
+  countryCode,
+}: {
+  lines: ClaimProcedureSnapshotLine[];
+  countryCode: string;
+}) {
   if (lines.length === 0) {
     return <p className="text-sm text-muted-foreground">No procedure snapshot</p>;
   }
@@ -105,7 +113,7 @@ function ProcedureTable({ lines }: { lines: ClaimProcedureSnapshotLine[] }) {
               <td className="p-2 font-mono text-xs">{line.procedureCode ?? "—"}</td>
               <td className="p-2">{line.description}</td>
               <td className="p-2 text-right">{line.quantity}</td>
-              <td className="p-2 text-right">{formatCurrency(line.total)}</td>
+              <td className="p-2 text-right">{formatCurrency(line.total, countryCode)}</td>
             </tr>
           ))}
         </tbody>
@@ -114,8 +122,9 @@ function ProcedureTable({ lines }: { lines: ClaimProcedureSnapshotLine[] }) {
   );
 }
 
-export function ClaimsClient({ claims, claimableInvoices }: Props) {
+export function ClaimsClient({ claims, claimableInvoices, countryCode }: Props) {
   const router = useRouter();
+  const money = (amount: number) => formatCurrency(amount, countryCode);
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<SerializedClaim | null>(null);
@@ -214,7 +223,12 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                 </Card>
               ) : (
                 column.claims.map((claim) => (
-                  <ClaimCard key={claim.id} claim={claim} onSelect={setSelected} />
+                  <ClaimCard
+                    key={claim.id}
+                    claim={claim}
+                    countryCode={countryCode}
+                    onSelect={setSelected}
+                  />
                 ))
               )}
             </div>
@@ -255,7 +269,7 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                     </p>
                   </div>
                   <span className="text-sm font-semibold text-green-700">
-                    {formatCurrency(inv.insuranceAmount)}
+                    {money(inv.insuranceAmount)}
                   </span>
                 </button>
               ))}
@@ -294,21 +308,21 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                   <div>
                     <p className="text-xs text-muted-foreground">Submitted amount</p>
                     <p className="font-medium">
-                      {formatCurrency(selected.submittedAmount)}
+                      {money(selected.submittedAmount)}
                     </p>
                   </div>
                   {selected.approvedAmount != null && (
                     <div>
                       <p className="text-xs text-muted-foreground">Approved amount</p>
                       <p className="font-medium">
-                        {formatCurrency(selected.approvedAmount)}
+                        {money(selected.approvedAmount)}
                       </p>
                     </div>
                   )}
                   {selected.paidAmount != null && (
                     <div>
                       <p className="text-xs text-muted-foreground">Paid amount</p>
-                      <p className="font-medium">{formatCurrency(selected.paidAmount)}</p>
+                      <p className="font-medium">{money(selected.paidAmount)}</p>
                     </div>
                   )}
                 </div>
@@ -325,7 +339,7 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
 
                 {selected.paymentVariance != null && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                    Payment variance: {formatCurrency(selected.paymentVariance)}
+                    Payment variance: {money(selected.paymentVariance)}
                   </div>
                 )}
 
@@ -333,7 +347,7 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                   <p className="mb-2 text-xs font-medium text-muted-foreground">
                     Procedure snapshot (immutable)
                   </p>
-                  <ProcedureTable lines={selected.procedureSnapshot} />
+                  <ProcedureTable lines={selected.procedureSnapshot} countryCode={countryCode} />
                 </div>
 
                 {selected.appealedClaim && (
@@ -494,7 +508,7 @@ export function ClaimsClient({ claims, claimableInvoices }: Props) {
                           });
                           if (result.success && result.data.hasVariance) {
                             toast.warning(
-                              `Payment variance: ${formatCurrency(result.data.variance)} vs approved ${formatCurrency(result.data.approvedAmount)}`,
+                              `Payment variance: ${money(result.data.variance)} vs approved ${money(result.data.approvedAmount)}`,
                             );
                           }
                           return result;

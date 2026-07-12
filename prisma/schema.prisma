@@ -136,6 +136,7 @@ model Tenant {
   notifications        Notification[]
   procedureBundles      ProcedureBundle[]
   complianceRecords     ClinicalComplianceRecord[]
+  procedureLines        ProcedureLine[]
 }
 
 model TenantApprovalRequest {
@@ -451,11 +452,43 @@ model Appointment {
   provider     StaffMember?      @relation("AssignedProvider", fields: [providerId], references: [id])
   tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clinicalNotes ClinicalNote[]
+  procedureLines ProcedureLine[]
 
   @@index([tenantId])
   @@index([tenantId, startTime])
   @@index([tenantId, patientId])
   @@index([tenantId, status])
+}
+
+model ProcedureLine {
+  id              String    @id @default(cuid())
+  tenantId        String
+  appointmentId   String
+  ownerType       String    // "DOCTOR" | "STORE"
+  ownerId         String?   // StaffMember.id when DOCTOR-owned
+  status          String    @default("IN_PROGRESS")
+  // IN_PROGRESS | CLOSED | VOIDED | LOCKED
+  procedureCode   String?
+  procedureName   String?
+  unitPrice       Decimal?  @default(0) @db.Decimal(10, 2)
+  quantity        Int       @default(1)
+  treatmentItemId String?   // optional link to a planned TreatmentItem
+  requiresPreAuth Boolean   @default(false)
+  preAuthStatus   String?
+  closedAt        DateTime?
+  closedById      String?
+  voidReason      String?
+  lockedAt        DateTime?
+  lockedInvoiceId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, appointmentId])
+  @@index([tenantId, status])
+  @@index([ownerId])
 }
 
 model Tooth {

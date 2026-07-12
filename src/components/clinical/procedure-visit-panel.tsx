@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { generateInvoiceFromProcedures } from "@/app/(dashboard)/features/clinical/actions";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import { FileText, Plus, X } from "lucide-react";
 
 type SelectedProcedure = {
@@ -22,10 +22,12 @@ export function ProcedureVisitPanel({
   patientId,
   appointmentId,
   procedures,
+  countryCode,
 }: {
   patientId: string;
   appointmentId?: string;
   procedures: ProcedureCatalog[];
+  countryCode: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<SelectedProcedure[]>([]);
@@ -86,6 +88,7 @@ export function ProcedureVisitPanel({
   }
 
   const total = selected.reduce((s, p) => s + p.price * p.quantity, 0);
+  const money = (amount: number) => formatCurrency(amount, countryCode);
 
   return (
     <Card>
@@ -102,7 +105,7 @@ export function ProcedureVisitPanel({
             <option value="">Select procedure…</option>
             {procedures.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.code} — {p.name} ({formatCurrency(Number(p.price))})
+                {p.code} — {p.name} ({money(Number(p.price))})
               </option>
             ))}
           </select>
@@ -123,7 +126,7 @@ export function ProcedureVisitPanel({
               >
                 <span>{p.name}</span>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{formatCurrency(p.price)}</Badge>
+                  <Badge variant="secondary">{money(p.price)}</Badge>
                   <Button
                     type="button"
                     size="icon"
@@ -140,7 +143,7 @@ export function ProcedureVisitPanel({
 
         {selected.length > 0 && (
           <div className="flex items-center justify-between border-t pt-4">
-            <span className="font-medium">Total: {formatCurrency(total)}</span>
+            <span className="font-medium">Total: {money(total)}</span>
             <Button onClick={handleGenerateInvoice} disabled={generating}>
               <FileText className="mr-2 h-4 w-4" />
               {generating ? "Creating…" : "Generate invoice"}

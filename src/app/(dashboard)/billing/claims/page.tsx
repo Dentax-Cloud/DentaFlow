@@ -15,7 +15,11 @@ export default async function ClaimsPage() {
 
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading claims…</div>}>
-      <ClaimsClient claims={claims} claimableInvoices={claimableInvoices} />
+      <ClaimsClient
+        claims={claims}
+        claimableInvoices={claimableInvoices}
+        countryCode={ctx.tenant.countryCode}
+      />
     </Suspense>
   );
 }

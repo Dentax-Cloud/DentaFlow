@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import {
   createInvoice,
   markInvoiceSent,
@@ -53,10 +54,12 @@ type Props = {
   invoices: InvoiceWithRelations[];
   patients: Patient[];
   procedures: ProcedureCatalog[];
+  countryCode: string;
 };
 
-export function BillingClient({ invoices, patients, procedures }: Props) {
+export function BillingClient({ invoices, patients, procedures, countryCode }: Props) {
   const router = useRouter();
+  const money = (amount: number) => formatCurrency(amount, countryCode);
   const [createOpen, setCreateOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithRelations | null>(null);
@@ -187,7 +190,7 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
         <div>
           <h1 className="text-3xl font-bold">Billing</h1>
           <p className="text-muted-foreground">
-            Outstanding: {formatCurrency(totalOutstanding)}
+            Outstanding: {money(totalOutstanding)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -240,7 +243,7 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
                     <option value="">Choose procedure…</option>
                     {procedures.map((p) => (
                       <option key={p.id} value={p.code}>
-                        {p.code} — {p.name} ({formatCurrency(Number(p.price))})
+                        {p.code} — {p.name} ({money(Number(p.price))})
                       </option>
                     ))}
                   </select>
@@ -282,7 +285,7 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
                 >
                   Add line
                 </Button>
-                <p className="text-sm text-muted-foreground">Subtotal: {formatCurrency(lineTotal)} (tax applied on save)</p>
+                <p className="text-sm text-muted-foreground">Subtotal: {money(lineTotal)} (tax applied on save)</p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -332,12 +335,12 @@ export function BillingClient({ invoices, patients, procedures }: Props) {
                   )}
                   {balance > 0 && inv.status !== "PAID" && (
                     <p className="mt-1 text-xs font-medium text-amber-600">
-                      Balance due: {formatCurrency(balance)}
+                      Balance due: {money(balance)}
                     </p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">{formatCurrency(Number(inv.total))}</span>
+                  <span className="font-semibold">{money(Number(inv.total))}</span>
                   <Badge variant={statusColors[inv.status] ?? "secondary"}>{inv.status}</Badge>
                   {inv.status === "DRAFT" && (
                     <Button type="button" size="sm" variant="outline" onClick={() => handleMarkSent(inv.id)}>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, parse, startOfWeek, getDay } from "date-fns";
+import { format, parse, startOfWeek, getDay, isSameWeek } from "date-fns";
 import {
   calendarGridToClinicUtc,
   clinicDateString,
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   updateAppointmentChair,
   updateAppointmentStatus,
@@ -34,6 +35,7 @@ import { SlotActionMenu } from "@/components/appointments/slot-action-menu";
 import { BlockTimeDialog } from "@/components/appointments/block-time-dialog";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
 import { useChairsideAppointmentConfirm } from "@/components/clinical/chairside-appointment-confirm";
+import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-badge";
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from "@prisma/client";
@@ -57,6 +59,27 @@ const CALENDAR_HIDDEN_STATUSES = new Set(["CANCELED", "NO_SHOW"]);
 
 function isVisibleOnCalendar(status: string) {
   return !CALENDAR_HIDDEN_STATUSES.has(status);
+}
+
+function appointmentMatchesSearch(apt: AppointmentWithRelations, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const patientName = `${apt.patient?.firstName ?? ""} ${apt.patient?.lastName ?? ""}`.toLowerCase();
+  const doctorName = apt.doctor?.user
+    ? `${apt.doctor.user.firstName ?? ""} ${apt.doctor.user.lastName ?? ""}`.toLowerCase()
+    : "";
+  const chairName = apt.chair?.name?.toLowerCase() ?? "";
+  const title = apt.title?.toLowerCase() ?? "";
+  const reference = apt.appointmentRef?.toLowerCase() ?? "";
+
+  return (
+    patientName.includes(q) ||
+    title.includes(q) ||
+    doctorName.includes(q) ||
+    chairName.includes(q) ||
+    reference.includes(q)
+  );
 }
 
 const statusLabel: Record<string, string> = {
@@ -92,6 +115,7 @@ export function AppointmentsClient({
   emergencyImmediate = 0,
   insuranceStatusMap = {},
   staffRole,
+  loadedWeekStart,
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
@@ -103,10 +127,13 @@ export function AppointmentsClient({
   emergencyImmediate?: number;
   insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
   staffRole?: UserRole;
+  loadedWeekStart: string;
 }) {
   const resolvedTimezone = resolveClinicTimezone(clinicTimezone);
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [calendarDate, setCalendarDate] = useState(() => new Date(loadedWeekStart));
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "board">("calendar");
   const [slotStart, setSlotStart] = useState<Date | undefined>();
@@ -131,6 +158,18 @@ export function AppointmentsClient({
 
   const BigCalendar = useMemo(() => withDragAndDrop(BigCalendarBase), []);
 
+  const loadedWeekDate = useMemo(() => new Date(loadedWeekStart), [loadedWeekStart]);
+
+  const searchOutsideLoadedWeek = Boolean(
+    searchQuery.trim() &&
+      !isSameWeek(calendarDate, loadedWeekDate, { weekStartsOn: 1 }),
+  );
+
+  const displayedAppointments = useMemo(() => {
+    if (!searchQuery.trim()) return appointments;
+    return appointments.filter((apt) => appointmentMatchesSearch(apt, searchQuery));
+  }, [appointments, searchQuery]);
+
   const localizer = useMemo(() => {
     return dateFnsLocalizer({
       format,
@@ -142,7 +181,7 @@ export function AppointmentsClient({
   }, []);
 
   const events: Event[] = useMemo(() => {
-    return appointments
+    return displayedAppointments
       .filter((a) => isVisibleOnCalendar(a.status))
       .map((a) => ({
       title: a.isBlock
@@ -152,7 +191,7 @@ export function AppointmentsClient({
       end: new Date(a.endTime),
       resource: a,
     }));
-  }, [appointments]);
+  }, [displayedAppointments]);
 
   useEffect(() => {
     const pusher = getPusherClient();
@@ -233,19 +272,15 @@ export function AppointmentsClient({
           </Button>
         ))}
         <Button size="sm" variant="ghost" asChild>
-          <Link href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
-            Open chart
+          <Link href={encounterWorkspacePath(apt.id)}>
+            Open encounter
           </Link>
         </Button>
         <Button
           size="sm"
           variant="outline"
           type="button"
-          onClick={() =>
-            router.push(
-              `/clinical/chairside?patientId=${apt.patientId}&appointmentId=${apt.id}`,
-            )
-          }
+          onClick={() => router.push(encounterWorkspacePath(apt.id))}
         >
           Chairside
         </Button>
@@ -393,13 +428,47 @@ export function AppointmentsClient({
       {view === "calendar" && (
         <Card>
           <CardHeader>
-            <CardTitle>Week view</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle>Week view</CardTitle>
+              <Input
+                placeholder="Search patient, title, doctor, chair, ref…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-xs"
+              />
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {searchOutsideLoadedWeek ? (
+              <div
+                className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100"
+                role="status"
+              >
+                Search only applies to the loaded week —{" "}
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => setSearchQuery("")}
+                >
+                  clear search
+                </button>{" "}
+                or{" "}
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => router.refresh()}
+                >
+                  refresh
+                </button>{" "}
+                to search a different range.
+              </div>
+            ) : null}
             <div className="h-[70vh]">
               <BigCalendar
                 localizer={localizer}
                 events={events}
+                date={calendarDate}
+                onNavigate={(date) => setCalendarDate(date)}
                 startAccessor={(event) => (event as { start: Date }).start}
                 endAccessor={(event) => (event as { end: Date }).end}
                 views={["week", "day", "agenda"]}
@@ -600,7 +669,7 @@ export function AppointmentsClient({
       <div>
         <h2 className="mb-3 text-lg font-semibold">This week</h2>
         <div className="space-y-2">
-          {appointments.map((apt) => (
+          {displayedAppointments.map((apt) => (
             <Card
               key={apt.id}
               className={`cursor-pointer hover:bg-muted/30 ${apt.isBlock ? "border-dashed border-muted-foreground/40 bg-muted/20" : ""}`}
@@ -638,8 +707,10 @@ export function AppointmentsClient({
               </CardContent>
             </Card>
           ))}
-          {appointments.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">No appointments this week</p>
+          {displayedAppointments.length === 0 && (
+            <p className="text-center text-muted-foreground py-8">
+              {searchQuery.trim() ? "No matching appointments this week" : "No appointments this week"}
+            </p>
           )}
         </div>
       </div>

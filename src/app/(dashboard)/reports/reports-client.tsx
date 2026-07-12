@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import { Download } from "lucide-react";
 import type {
   getChairUtilizationReport,
@@ -37,6 +37,7 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export function ReportsClient({
   kpis,
   tenantId,
+  countryCode,
   doctorProductivity,
   revenueByProcedure,
   retention,
@@ -45,12 +46,14 @@ export function ReportsClient({
 }: {
   kpis: KPIs;
   tenantId: string;
+  countryCode: string;
   doctorProductivity: DoctorRow[];
   revenueByProcedure: ProcedureRow[];
   retention: Retention;
   chairUtil: ChairUtil;
   taxSummary: TaxSummary;
 }) {
+  const money = (amount: number) => formatCurrency(amount, countryCode);
   const [tab, setTab] = useState<TabId>("overview");
 
   function exportCsv(filename: string, rows: string[][]) {
@@ -153,7 +156,7 @@ export function ReportsClient({
       {tab === "overview" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { label: "Revenue (MTD)", value: formatCurrency(kpis.revenueThisMonth) },
+            { label: "Revenue (MTD)", value: money(kpis.revenueThisMonth) },
             { label: "Patients", value: kpis.patientCount },
             { label: "Chair utilization", value: `${kpis.chairUtilization}%` },
             { label: "Appointments today", value: kpis.todayAppointments },
@@ -185,7 +188,7 @@ export function ReportsClient({
               <div key={d.doctorId} className="flex justify-between border-b pb-2 text-sm">
                 <span className="font-medium">{d.doctorName}</span>
                 <span>
-                  {d.appointmentsCompleted} appts · {formatCurrency(d.revenue)} invoiced
+                  {d.appointmentsCompleted} appts · {money(d.revenue)} invoiced
                 </span>
               </div>
             ))}
@@ -203,16 +206,16 @@ export function ReportsClient({
               <p className="mb-4 text-sm text-muted-foreground">
                 Most profitable:{" "}
                 <Badge variant="success">{topProcedure.name}</Badge> —{" "}
-                {formatCurrency(topProcedure.totalRevenue)}
+                {money(topProcedure.totalRevenue)}
               </p>
             )}
             {revenueByProcedure.map((p) => (
               <div key={p.name} className="flex justify-between border-b pb-2 text-sm">
                 <span>{p.name}</span>
                 <span>
-                  ×{p.count} · {formatCurrency(p.totalRevenue)}
-                  {(p.taxCollected ?? 0) > 0 ? ` · tax ${formatCurrency(p.taxCollected)}` : ""} · avg{" "}
-                  {formatCurrency(p.averagePerVisit)}
+                  ×{p.count} · {money(p.totalRevenue)}
+                  {(p.taxCollected ?? 0) > 0 ? ` · tax ${money(p.taxCollected)}` : ""} · avg{" "}
+                  {money(p.averagePerVisit)}
                 </span>
               </div>
             ))}
@@ -235,7 +238,7 @@ export function ReportsClient({
               <CardTitle className="text-sm">Revenue total</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(taxSummary.total)}</p>
+              <p className="text-2xl font-bold">{money(taxSummary.total)}</p>
             </CardContent>
           </Card>
           <Card>
@@ -245,7 +248,7 @@ export function ReportsClient({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(taxSummary.tax)}</p>
+              <p className="text-2xl font-bold">{money(taxSummary.tax)}</p>
             </CardContent>
           </Card>
           {taxSummary.hasGstBreakdown ? (
@@ -255,7 +258,7 @@ export function ReportsClient({
                   <CardTitle className="text-sm">CGST</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.cgst)}</p>
+                  <p className="text-2xl font-bold">{money(taxSummary.cgst)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -263,7 +266,7 @@ export function ReportsClient({
                   <CardTitle className="text-sm">SGST</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.sgst)}</p>
+                  <p className="text-2xl font-bold">{money(taxSummary.sgst)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -271,7 +274,7 @@ export function ReportsClient({
                   <CardTitle className="text-sm">IGST</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.igst)}</p>
+                  <p className="text-2xl font-bold">{money(taxSummary.igst)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -279,7 +282,7 @@ export function ReportsClient({
                   <CardTitle className="text-sm">Exempt services</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.exemptSubtotal)}</p>
+                  <p className="text-2xl font-bold">{money(taxSummary.exemptSubtotal)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -287,7 +290,7 @@ export function ReportsClient({
                   <CardTitle className="text-sm">Taxable goods</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(taxSummary.taxableSubtotal)}</p>
+                  <p className="text-2xl font-bold">{money(taxSummary.taxableSubtotal)}</p>
                 </CardContent>
               </Card>
             </>
