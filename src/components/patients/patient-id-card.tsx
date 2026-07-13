@@ -5,6 +5,7 @@ import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { buildQrPayload, toBarcodeValue } from "@/lib/ids/barcode-utils";
 import { Button } from "@/components/ui/button";
+import { PersonAvatar } from "@/components/profile/person-avatar";
 
 export type PatientIdCardProps = {
   patientId: string;
@@ -20,9 +21,18 @@ export type PatientIdCardProps = {
   clinicPhone?: string | null;
 };
 
+function nameParts(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "",
+  };
+}
+
 export function PatientIdCard(props: PatientIdCardProps) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const qrRef = useRef<HTMLCanvasElement>(null);
+  const { firstName, lastName } = nameParts(props.patientName);
 
   useEffect(() => {
     if (barcodeRef.current && props.patientId) {
@@ -66,6 +76,15 @@ export function PatientIdCard(props: PatientIdCardProps) {
     const win = window.open("", "_blank", "width=400,height=280");
     if (!win) return;
     const barcodeSvg = barcodeRef.current?.outerHTML ?? "";
+    const initials = props.patientName
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+    const photoHtml = props.photoUrl
+      ? `<img src="${props.photoUrl}" alt="" style="width:60px;height:60px;border-radius:50%;object-fit:cover;flex-shrink:0" />`
+      : `<div style="width:60px;height:60px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0">${initials}</div>`;
     win.document.write(`
       <!DOCTYPE html>
       <html><head><title>Patient ID</title>
@@ -81,6 +100,7 @@ export function PatientIdCard(props: PatientIdCardProps) {
       <div class="card">
         <div class="header"><span>${props.clinicName}</span><span>${props.tenantCode}</span></div>
         <div class="body">
+          ${photoHtml}
           <div>
             <div style="font-weight:bold;font-size:13px">${props.patientName}</div>
             ${props.dateOfBirth ? `<div>DOB: ${props.dateOfBirth.slice(0, 10)}</div>` : ""}
@@ -106,14 +126,13 @@ export function PatientIdCard(props: PatientIdCardProps) {
         <span className="font-mono text-xs">{props.tenantCode}</span>
       </div>
       <div className="flex gap-3 p-3">
-        <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-lg bg-muted text-lg font-bold">
-          {props.patientName
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase()}
-        </div>
+        <PersonAvatar
+          photoUrl={props.photoUrl}
+          firstName={firstName}
+          lastName={lastName}
+          size="lg"
+          className="h-[60px] w-[60px] shrink-0 text-lg"
+        />
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold">{props.patientName}</div>
           {props.dateOfBirth && (
