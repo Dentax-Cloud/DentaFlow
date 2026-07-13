@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 import { runPostDerivedVisitIntelligence } from "@/lib/encounter/post-visit-intelligence";
 
 export type AppointmentCompletionDerivation =
@@ -35,6 +36,9 @@ export async function computeAppointmentCompletionStatus(
  * Isolated status transition when all ProcedureLines are terminal.
  * Does NOT call completeVisit() — uses encounter intelligence (estimate + plan
  * suggestions) instead of chairside finalize / recall side effects from Phase 6.
+ *
+ * Does close ACTIVE ChairsideSession(s) for the appointment with allowInvoice:false
+ * so ProcedureLine remains the sole billing path (no dual-path CHAIRSIDE invoice).
  */
 export async function applyDerivedAppointmentCompletion(
   tenantId: string,
@@ -57,24 +61,53 @@ export async function applyDerivedAppointmentCompletion(
       tenant: { select: { countryCode: true } },
     },
   });
-  if (!appointment || appointment.status === "COMPLETED") {
+  if (!appointment) {
     return { applied: false, derivation };
   }
 
-  await db.appointment.update({
-    where: { id: appointmentId },
-    data: { status: "COMPLETED" },
-  });
+  let applied = false;
 
-  if (appointment.patientId && appointment.patient) {
-    await runPostDerivedVisitIntelligence({
-      tenantId,
-      appointmentId,
-      patientId: appointment.patientId,
-      patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim(),
-      countryCode: appointment.tenant.countryCode,
-    }).catch(() => null);
+  if (appointment.status !== "COMPLETED") {
+    await db.appointment.update({
+      where: { id: appointmentId },
+      data: { status: "COMPLETED" },
+    });
+    applied = true;
+
+    if (appointment.patientId && appointment.patient) {
+      await runPostDerivedVisitIntelligence({
+        tenantId,
+        appointmentId,
+        patientId: appointment.patientId,
+        patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim(),
+        countryCode: appointment.tenant.countryCode,
+      }).catch(() => null);
+    }
   }
 
-  return { applied: true, derivation };
+  // Invoice-free session close — ProcedureLine owns billing on this path.
+  // Also heals stale ACTIVE sessions if the appointment was already COMPLETED.
+  await autoCloseChairsideSessionsForAppointment({
+    tenantId,
+    appointmentId,
+    appointmentStatus: "COMPLETED",
+    allowInvoice: false,
+  }).catch(() => null);
+
+  // Guarantee banner clear: if finalize aborted (e.g. chart validation),
+  // still leave no ACTIVE sessions for this completed visit.
+  await db.chairsideSession.updateMany({
+    where: {
+      tenantId,
+      appointmentId,
+      status: "ACTIVE",
+    },
+    data: {
+      status: "FINALIZED",
+      finalizedAt: new Date(),
+      closedReason: "auto_closed_appointment_completed",
+    },
+  });
+
+  return { applied, derivation };
 }
