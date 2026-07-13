@@ -3,6 +3,7 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/auth",
   "/api/webhooks",
+  "/api/uploadthing", // UploadThing webhook must be unauthenticated (no session cookie)
   "/api/platform/maintenance",
   "/sign-up",
   "/invite/accept",
