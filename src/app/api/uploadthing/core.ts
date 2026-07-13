@@ -164,6 +164,13 @@ export const ourFileRouter = {
     })
     .onUploadComplete(async ({ metadata, file }) => {
       const url = file.ufsUrl ?? file.url;
+      console.info("[uploadthing] profilePhoto onUploadComplete", {
+        entityType: metadata.entityType,
+        entityId: metadata.entityId,
+        tenantId: metadata.tenantId,
+        fileName: file.name,
+        url,
+      });
 
       if (metadata.entityType === "patient") {
         await db.patient.update({
@@ -176,6 +183,11 @@ export const ourFileRouter = {
           data: { avatarUrl: url },
         });
       }
+
+      console.info("[uploadthing] profilePhoto DB write OK", {
+        entityType: metadata.entityType,
+        entityId: metadata.entityId,
+      });
 
       return { url, entityType: metadata.entityType, entityId: metadata.entityId };
     }),
