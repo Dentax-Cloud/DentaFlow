@@ -14,9 +14,19 @@ async function routeWithResolvedToken(
     return Response.json({ error: "UploadThing is not configured" }, { status: 503 });
   }
 
+  // Behind nginx, request Host inference can be wrong — pin the public callback URL.
+  const callbackUrl =
+    process.env.UPLOADTHING_CALLBACK_URL?.trim() ||
+    (process.env.NEXTAUTH_URL
+      ? `${process.env.NEXTAUTH_URL.replace(/\/$/, "")}/api/uploadthing`
+      : undefined);
+
   const handler = createRouteHandler({
     router: ourFileRouter,
-    config: { token: config.token },
+    config: {
+      token: config.token,
+      ...(callbackUrl ? { callbackUrl } : {}),
+    },
   });
 
   return method === "GET" ? handler.GET(request) : handler.POST(request);
