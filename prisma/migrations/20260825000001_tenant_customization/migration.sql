@@ -26,6 +26,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS "TenantInsuranceProvider_tenant_code_key"
 CREATE INDEX IF NOT EXISTS "TenantInsuranceProvider_tenantId_idx"
   ON "TenantInsuranceProvider"("tenantId");
 
+-- Columns from 20260706210000 (authored before this CREATE on drifted DBs).
+-- On greenfield, that earlier migration no-ops; ensure columns exist here.
+DO $$ BEGIN
+  CREATE TYPE "ClaimSubmissionMethod" AS ENUM ('EMAIL', 'PORTAL', 'CLEARINGHOUSE', 'MANUAL');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE "TenantInsuranceProvider"
+  ADD COLUMN IF NOT EXISTS "claimSubmissionMethod" "ClaimSubmissionMethod" NOT NULL DEFAULT 'MANUAL',
+  ADD COLUMN IF NOT EXISTS "claimsPortalUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "turnaroundDays" INTEGER;
+
+UPDATE "TenantInsuranceProvider"
+SET "claimSubmissionMethod" = 'EMAIL'
+WHERE "claimEmail" IS NOT NULL AND TRIM("claimEmail") <> ''
+  AND "claimSubmissionMethod" = 'MANUAL';
+
 -- Insurance fee schedules (per procedure per insurer per network)
 CREATE TABLE IF NOT EXISTS "InsuranceFeeSchedule" (
   "id"              TEXT NOT NULL DEFAULT gen_random_uuid()::text,
