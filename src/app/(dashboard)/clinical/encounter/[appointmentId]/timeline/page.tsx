@@ -5,7 +5,7 @@ import Link from "next/link";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 import { buildTimelineForAppointment } from "@/lib/encounter/compat";
-import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
+import { encounterWorkspacePath, encounterSpinePath } from "@/lib/clinical/encounter-url";
 import { ChairsideTimelineClient } from "./timeline-client";
 
 export default async function ChairsideTimelinePage({
@@ -16,7 +16,8 @@ export default async function ChairsideTimelinePage({
   const { appointmentId } = await params;
   const ctx = await requireRouteAccess("clinical_chart", "read");
 
-  if (!isEncounterSpineEnabled(ctx.tenant)) {
+  const spineOn = isEncounterSpineEnabled(ctx.tenant);
+  if (!spineOn) {
     redirect(encounterWorkspacePath(appointmentId, "chart"));
   }
 
@@ -37,10 +38,10 @@ export default async function ChairsideTimelinePage({
           </p>
         </div>
         <Link
-          href={encounterWorkspacePath(appointmentId, "chart")}
+          href={encounterSpinePath(appointmentId)}
           className="text-sm text-teal-800 underline-offset-4 hover:underline"
         >
-          Back to encounter workspace
+          Back to encounter
         </Link>
       </div>
 

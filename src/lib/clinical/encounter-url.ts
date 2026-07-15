@@ -18,6 +18,11 @@ export function encounterWorkspacePath(
   return `/clinical/encounter/${appointmentId}${qs ? `?${qs}` : ""}`;
 }
 
+/** Module 6 encounter spine workspace (flag-gated). */
+export function encounterSpinePath(appointmentId: string): string {
+  return `/clinical/encounter/${appointmentId}/spine`;
+}
+
 /** Legacy chairside links → encounter workspace when appointment is known. */
 export function resolveClinicalSessionPath(params: {
   patientId: string;
