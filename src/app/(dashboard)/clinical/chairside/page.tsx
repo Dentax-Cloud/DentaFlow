@@ -24,7 +24,8 @@ import {
 
 } from "@/lib/clinical/start-chairside-session";
 
-import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
+import { encounterWorkspacePath, encounterSpinePath } from "@/lib/clinical/encounter-url";
+import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 
 import { ChairsidePermissionDenied } from "@/components/clinical/chairside-permission-denied";
 
@@ -61,6 +62,13 @@ export default async function ChairsidePage({
   const { patientId, appointmentId, sessionId } = await searchParams;
 
   const ctx = await requireRouteAccess("clinical_chart", "read");
+
+  if (isEncounterSpineEnabled(ctx.tenant)) {
+    if (appointmentId) {
+      redirect(encounterSpinePath(appointmentId));
+    }
+    redirect("/clinical");
+  }
 
   if (appointmentId) {
     redirect(

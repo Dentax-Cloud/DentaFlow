@@ -22,6 +22,8 @@ import { parseAnnotations } from "@/lib/clinical/image-types";
 import type { PerioMeasurement } from "@/lib/clinical/types";
 import { EncounterWorkspaceClient } from "./encounter-workspace-client";
 import type { EncounterTab } from "@/lib/clinical/encounter-url";
+import { encounterSpinePath } from "@/lib/clinical/encounter-url";
+import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 
 const VALID_TABS = new Set<EncounterTab>([
   "chart",
@@ -45,6 +47,11 @@ export default async function EncounterWorkspacePage({
     tabParam && VALID_TABS.has(tabParam as EncounterTab) ? (tabParam as EncounterTab) : "chart";
 
   const ctx = await requireRouteAccess("clinical_chart", "read");
+
+  if (isEncounterSpineEnabled(ctx.tenant)) {
+    redirect(encounterSpinePath(appointmentId));
+  }
+
   const role = ctx.staffMember?.role;
   const canWrite = Boolean(role && hasPermission(role, PERMISSIONS.clinical_chart.write));
 
