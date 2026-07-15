@@ -137,6 +137,16 @@ model Tenant {
   procedureBundles      ProcedureBundle[]
   complianceRecords     ClinicalComplianceRecord[]
   procedureLines        ProcedureLine[]
+  encounters            Encounter[]
+  encounterProcedureLines EncounterProcedureLine[]
+  encounterProcedureBundles EncounterProcedureBundle[]
+  materialUsages        MaterialUsage[]
+  insuranceVerifications InsuranceVerification[]
+  consentRecords        ConsentRecord[]
+  riskAssessments       RiskAssessment[]
+  labCases              LabCase[]
+  clinicalAlerts        ClinicalAlert[]
+  providerPresences     ProviderPresence[]
 }
 
 model TenantApprovalRequest {
@@ -203,6 +213,10 @@ model StaffMember {
   doctor          Doctor?
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userPermissions UserPermission[]
+  encounterProcedureLines EncounterProcedureLine[] @relation("EncounterLineProvider")
+  riskAssessmentsCleared  RiskAssessment[]         @relation("RiskClearedBy")
+  clinicalAlertsAcked     ClinicalAlert[]          @relation("AlertAcknowledgedBy")
+  providerPresences       ProviderPresence[]
 
   @@index([tenantId])
   @@index([authUserId])
@@ -340,6 +354,7 @@ model Patient {
   customFieldValues     PatientCustomFieldValue[]
   memberships           PatientMembership[]
   corporateAccount      CorporateAccount?     @relation(fields: [corporateAccountId], references: [id], onDelete: SetNull)
+  encounters            Encounter[]
 
   @@unique([tenantId, patientNumber])
   @@index([tenantId])
@@ -453,6 +468,7 @@ model Appointment {
   tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clinicalNotes ClinicalNote[]
   procedureLines ProcedureLine[]
+  encounters Encounter[]
 
   @@index([tenantId])
   @@index([tenantId, startTime])
@@ -751,6 +767,7 @@ model TreatmentPlan {
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   parentPlan        TreatmentPlan?      @relation("PlanRevisions", fields: [parentPlanId], references: [id])
   revisions         TreatmentPlan[]     @relation("PlanRevisions")
+  encounters        Encounter[]
 
   @@index([tenantId, patientId])
   @@index([tenantId, parentPlanId])
@@ -779,6 +796,7 @@ model TreatmentItem {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   treatmentPlan       TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  encounterProcedureLines EncounterProcedureLine[]
 
   @@index([tenantId, treatmentPlanId])
   @@index([tenantId, visitNumber])
@@ -824,14 +842,19 @@ model ClinicalImage {
   photoCategory   String?
   isBeforePhoto   Boolean   @default(false)
   afterImageId    String?
+  /// Module 6: pre/post comparison pair (nullable; additive — afterImageId retained for legacy).
+  comparesToId    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  comparesTo      ClinicalImage?  @relation("ClinicalImageComparison", fields: [comparesToId], references: [id], onDelete: SetNull)
+  comparedFrom    ClinicalImage[] @relation("ClinicalImageComparison")
 
   @@index([tenantId])
   @@index([tenantId, patientId])
   @@index([tenantId, type])
+  @@index([comparesToId])
 }
 
 model PhotoSeries {
@@ -928,7 +951,8 @@ model ProcedureCatalog {
   isOnlineBookable Boolean   @default(false)
   sortOrder        Int       @default(0)
   globalProcedure  GlobalProcedure? @relation(fields: [gpmrId], references: [id], onDelete: SetNull)
-  }
+  encounterProcedureLines EncounterProcedureLine[]
+}
 
 model Invoice {
   id                    String        @id @default(cuid())
@@ -1287,6 +1311,7 @@ model InventoryItem {
   supplierBarcodes   SupplierBarcode[]
   purchaseOrderItems PurchaseOrderItem[]
   invoiceItems       InvoiceItem[]
+  materialUsages     MaterialUsage[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -2321,4 +2346,243 @@ model ClinicalComplianceRecord {
   
   @@index([tenantId, patientId])
   @@index([performedAt])
+}
+
+// =============================================================================
+// Module 6 Phase 1 — Encounter spine (additive).
+// Naming note: Visit Board already owns `ProcedureLine` and the catalog owns
+// `ProcedureBundle`. Spine equivalents are EncounterProcedureLine /
+// EncounterProcedureBundle. Conceptually these ARE the Prompt's ProcedureLine
+// / ProcedureBundle for the encounter state machine.
+// Status values are lowercase strings in DB (rendered uppercase in UI).
+// =============================================================================
+
+model Encounter {
+  id               String    @id @default(cuid())
+  tenantId         String
+  patientId        String
+  appointmentId    String
+  treatmentPlanId  String?
+  /// arrival_intake | chief_complaint_exam | gates | procedure_execution |
+  /// close_out | billing | recall_scheduled | interrupted
+  status           String    @default("arrival_intake")
+  /// resumed | abandoned_partial_bill | abandoned_no_bill
+  interruptOutcome String?
+  startedAt        DateTime  @default(now())
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+
+  procedureLines         EncounterProcedureLine[]
+  procedureBundles       EncounterProcedureBundle[]
+  insuranceVerifications InsuranceVerification[]
+  consentRecords         ConsentRecord[]
+  riskAssessments        RiskAssessment[]
+  clinicalAlerts         ClinicalAlert[]
+  providerPresences      ProviderPresence[]
+
+  @@index([tenantId])
+  @@index([tenantId, patientId])
+  @@index([tenantId, appointmentId])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+}
+
+/// Module 6 spine procedure step (Prompt “ProcedureLine”).
+model EncounterProcedureLine {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  encounterId        String
+  treatmentItemId    String?
+  procedureBundleId  String?
+  procedureCatalogId String
+  toothNumbers       String[]  @default([])
+  surfaces           String[]  @default([])
+  /// planned | in_progress | completed | declined | interrupted
+  status             String    @default("planned")
+  /// matched | added | modified | declined
+  plannedVsPerformed String    @default("matched")
+  providerId         String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter        Encounter                @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  treatmentItem    TreatmentItem?           @relation(fields: [treatmentItemId], references: [id], onDelete: SetNull)
+  procedureBundle  EncounterProcedureBundle? @relation(fields: [procedureBundleId], references: [id], onDelete: SetNull)
+  procedureCatalog ProcedureCatalog         @relation(fields: [procedureCatalogId], references: [id], onDelete: Restrict)
+  provider         StaffMember?             @relation("EncounterLineProvider", fields: [providerId], references: [id], onDelete: SetNull)
+
+  materialUsages MaterialUsage[]
+  consentRecords ConsentRecord[]
+  labCases       LabCase[]
+
+  @@index([tenantId, encounterId])
+  @@index([tenantId, status])
+  @@index([procedureBundleId])
+}
+
+/// Module 6 spine grouping construct (Prompt “ProcedureBundle” — not the catalog model).
+model EncounterProcedureBundle {
+  id          String   @id @default(cuid())
+  tenantId    String
+  encounterId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter Encounter                @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  lines     EncounterProcedureLine[]
+
+  @@index([tenantId, encounterId])
+}
+
+model MaterialUsage {
+  id              String    @id @default(cuid())
+  tenantId        String
+  procedureLineId String
+  itemId          String
+  /// tracked | consumable
+  tier            String    @default("consumable")
+  lotNumber       String?
+  expiryDate      DateTime?
+  quantity        Decimal   @db.Decimal(12, 4)
+  unitCost        Decimal   @db.Decimal(12, 2)
+  deductedAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procedureLine EncounterProcedureLine @relation(fields: [procedureLineId], references: [id], onDelete: Cascade)
+  item          InventoryItem          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, procedureLineId])
+  @@index([tenantId, itemId])
+}
+
+model InsuranceVerification {
+  id                String    @id @default(cuid())
+  tenantId          String
+  encounterId       String
+  /// pending | eligible | ineligible | unknown | error
+  eligibilityStatus String    @default("pending")
+  coverageLimits    Json      @default("{}")
+  /// not_required | pending | approved | denied | expired
+  preAuthStatus     String    @default("not_required")
+  estimatedCoverage Decimal   @default(0) @db.Decimal(12, 2)
+  estimatedCopay    Decimal   @default(0) @db.Decimal(12, 2)
+  verifiedAt        DateTime?
+  /// Minutes until verification is considered stale (default 24h; tenant may override 12–72h).
+  staleAfterMinutes Int       @default(1440)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, encounterId])
+}
+
+model ConsentRecord {
+  id              String    @id @default(cuid())
+  tenantId        String
+  encounterId     String
+  procedureLineId String?
+  /// clinical | marketing
+  purpose         String    @default("clinical")
+  grantedAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter     Encounter               @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  procedureLine EncounterProcedureLine? @relation(fields: [procedureLineId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, encounterId])
+}
+
+model RiskAssessment {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  encounterId         String
+  asaClass            String?
+  vitalsSnapshot      Json      @default("{}")
+  flaggedInteractions Json      @default("[]")
+  clearedByStaffId    String?
+  clearedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter      Encounter   @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  clearedByStaff StaffMember? @relation("RiskClearedBy", fields: [clearedByStaffId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, encounterId])
+}
+
+model LabCase {
+  id              String    @id @default(cuid())
+  tenantId        String
+  procedureLineId String
+  /// sent | in_fabrication | returned | quality_checked | seated
+  status          String    @default("sent")
+  sentAt          DateTime?
+  returnedAt      DateTime?
+  seatedAt        DateTime?
+  externalLabRef  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procedureLine EncounterProcedureLine @relation(fields: [procedureLineId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, procedureLineId])
+  @@index([tenantId, status])
+}
+
+model ClinicalAlert {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  encounterId          String
+  /// high_vitals | drug_interaction | pain_spike | insurance_denial |
+  /// material_expiry | missing_sterilization_log
+  type                 String
+  sourceRecordId       String?
+  acknowledgedAt       DateTime?
+  acknowledgedByStaffId String?
+  createdAt            DateTime  @default(now())
+
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter          Encounter    @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  acknowledgedByStaff StaffMember? @relation("AlertAcknowledgedBy", fields: [acknowledgedByStaffId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, encounterId])
+  @@index([tenantId, type])
+}
+
+model ProviderPresence {
+  id          String    @id @default(cuid())
+  tenantId    String
+  encounterId String
+  staffId     String
+  /// Matches Encounter.status values
+  stage       String
+  presentFrom DateTime  @default(now())
+  presentTo   DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter Encounter   @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  staff     StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, encounterId])
+  @@index([tenantId, staffId])
 }
