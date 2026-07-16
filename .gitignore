@@ -22,6 +22,11 @@
 .DS_Store
 *.pem
 
+# local verification scratch (Phase 2+ click-test outputs)
+tmp-*/
+tmp-*.sql
+tmp-*.txt
+
 # debug
 npm-debug.log*
 yarn-debug.log*
