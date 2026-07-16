@@ -33,7 +33,12 @@ import {
   advanceSpinePastGates,
   closeAndInvoiceSpineEncounter,
   loadSpineWorkspaceData,
+  scheduleSpineRecall,
+  saveSpineCloseOutNote,
 } from "@/app/(dashboard)/features/clinical/encounter-spine-actions";
+import { findPrescriptionAllergyConflicts } from "@/lib/encounter/close-out";
+import { PreClinicalChecks } from "@/components/clinical/pre-clinical-checks";
+import { ImageGallery } from "@/components/clinical/image-gallery";
 
 type DraftState = {
   asaClass: string;
@@ -52,6 +57,10 @@ type DraftState = {
   materialTier: "tracked" | "consumable";
   materialQty: string;
   materialLot: string;
+  prescriptionText: string;
+  closeOutNote: string;
+  ackAllergyConflict: boolean;
+  recallMonths: string;
 };
 
 const EMPTY_DRAFT: DraftState = {
@@ -71,6 +80,10 @@ const EMPTY_DRAFT: DraftState = {
   materialTier: "consumable",
   materialQty: "1",
   materialLot: "",
+  prescriptionText: "",
+  closeOutNote: "",
+  ackAllergyConflict: false,
+  recallMonths: "6",
 };
 
 function draftKey(encounterId: string) {
@@ -118,6 +131,7 @@ export function SpineWorkspaceClient({
   const [gates, setGates] = useState<GateSummary>(initial.gates);
   const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
+  const [preCheckOk, setPreCheckOk] = useState(true);
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
@@ -498,42 +512,57 @@ export function SpineWorkspaceClient({
         </h2>
 
         {canWrite && !closed ? (
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[16rem] flex-1">
-              <label className={labelCls} htmlFor="proc">
-                Add procedure
-              </label>
-              <select
-                id="proc"
-                className={field}
-                value={draft.catalogId}
-                onChange={(e) => patchDraft({ catalogId: e.target.value })}
-                disabled={pending}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[16rem] flex-1">
+                <label className={labelCls} htmlFor="proc">
+                  Add procedure
+                </label>
+                <select
+                  id="proc"
+                  className={field}
+                  value={draft.catalogId}
+                  onChange={(e) => {
+                    patchDraft({ catalogId: e.target.value });
+                    setPreCheckOk(true);
+                  }}
+                  disabled={pending}
+                >
+                  {procedures.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={!write || !draft.catalogId || !preCheckOk}
+                onClick={() =>
+                  run(
+                    () =>
+                      addSpineProcedureLine({
+                        encounterId: encounter.id,
+                        procedureCatalogId: draft.catalogId,
+                      }),
+                    "Procedure line added",
+                  )
+                }
               >
-                {procedures.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.code} — {p.name}
-                  </option>
-                ))}
-              </select>
+                Add line
+              </button>
             </div>
-            <button
-              type="button"
-              className={btnPrimary}
-              disabled={!write || !draft.catalogId}
-              onClick={() =>
-                run(
-                  () =>
-                    addSpineProcedureLine({
-                      encounterId: encounter.id,
-                      procedureCatalogId: draft.catalogId,
-                    }),
-                  "Procedure line added",
-                )
-              }
-            >
-              Add line
-            </button>
+            {draft.catalogId ? (
+              <PreClinicalChecks
+                procedureId={draft.catalogId}
+                patientId={initial.patient.id}
+                procedureName={
+                  procedures.find((p) => p.id === draft.catalogId)?.name
+                }
+                onChecksComplete={setPreCheckOk}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -880,6 +909,170 @@ export function SpineWorkspaceClient({
         ) : (
           <p className="text-sm text-slate-500">
             Interrupt available during procedure execution, close-out, or billing.
+          </p>
+        )}
+      </section>
+
+      {/* Close-out: Rx allergy check, recall, notes/images reuse */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
+          Close-out
+        </h2>
+        <p className="text-sm text-slate-600">
+          Current meds:{" "}
+          {initial.patient.medications?.length
+            ? initial.patient.medications.join(", ")
+            : "None recorded"}
+        </p>
+        {canWrite && !closed ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className={labelCls} htmlFor="rx">
+                Prescription / discharge meds
+              </label>
+              <textarea
+                id="rx"
+                className={field}
+                rows={3}
+                value={draft.prescriptionText}
+                onChange={(e) => patchDraft({ prescriptionText: e.target.value })}
+                placeholder="e.g. Amoxicillin 500mg…"
+                disabled={pending}
+              />
+              {(() => {
+                const hits = findPrescriptionAllergyConflicts(
+                  initial.patient.allergies,
+                  draft.prescriptionText,
+                );
+                if (!hits.length) return null;
+                return (
+                  <div className="space-y-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200">
+                    <p>
+                      Allergy cross-check warning: may conflict with{" "}
+                      {hits.map((h) => h.allergy).join(", ")}.
+                    </p>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={draft.ackAllergyConflict}
+                        onChange={(e) =>
+                          patchDraft({ ackAllergyConflict: e.target.checked })
+                        }
+                      />
+                      Patient/clinician acknowledged — proceed anyway
+                    </label>
+                  </div>
+                );
+              })()}
+              <label className={labelCls} htmlFor="closeNote">
+                Clinical close-out note
+              </label>
+              <textarea
+                id="closeNote"
+                className={field}
+                rows={2}
+                value={draft.closeOutNote}
+                onChange={(e) => patchDraft({ closeOutNote: e.target.value })}
+                disabled={pending}
+              />
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={
+                  !write ||
+                  (!draft.prescriptionText.trim() && !draft.closeOutNote.trim())
+                }
+                onClick={() =>
+                  run(
+                    () =>
+                      saveSpineCloseOutNote({
+                        encounterId: encounter.id,
+                        prescriptionText: draft.prescriptionText,
+                        clinicalNote: draft.closeOutNote,
+                        acknowledgeAllergyConflict: draft.ackAllergyConflict,
+                      }),
+                    "Close-out note saved",
+                  )
+                }
+              >
+                Save close-out note
+              </button>
+              <p className="text-xs text-slate-500">
+                Full SOAP editor:{" "}
+                <Link
+                  href={`/clinical?patientId=${initial.patient.id}`}
+                  className="text-teal-800 underline-offset-4 hover:underline"
+                >
+                  Open clinical notes
+                </Link>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className={labelCls} htmlFor="recallMonths">
+                Schedule recall (months)
+              </label>
+              <input
+                id="recallMonths"
+                type="number"
+                min={1}
+                max={24}
+                className={field}
+                value={draft.recallMonths}
+                onChange={(e) => patchDraft({ recallMonths: e.target.value })}
+                disabled={pending}
+              />
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={!write}
+                onClick={() =>
+                  run(
+                    () =>
+                      scheduleSpineRecall({
+                        encounterId: encounter.id,
+                        intervalMonths: Number(draft.recallMonths) || 6,
+                      }),
+                    "Recall scheduled",
+                  )
+                }
+              >
+                Schedule recall
+              </button>
+              <p className="text-xs text-slate-500">
+                Or book on calendar:{" "}
+                <Link
+                  href={`/appointments?patientId=${initial.patient.id}`}
+                  className="text-teal-800 underline-offset-4 hover:underline"
+                >
+                  Appointments
+                </Link>
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {initial.clinicalImages?.length ? (
+          <div className="space-y-2">
+            <p className={labelCls}>Recent clinical images</p>
+            <ImageGallery
+              canDelete={false}
+              images={initial.clinicalImages.map((img) => ({
+                id: img.id,
+                url: img.url,
+                type: img.type,
+                fileName: img.fileName,
+                toothNumbers: null,
+                quadrant: null,
+                notes: null,
+                takenAt: img.takenAt,
+                annotations: [],
+              }))}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">
+            No clinical images yet. Capture from radiographs/photos tabs on the
+            classic workspace when the spine flag is off, or via UploadThing flows.
           </p>
         )}
       </section>

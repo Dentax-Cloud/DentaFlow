@@ -2,12 +2,27 @@ import { AuditAction } from "@prisma/client";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/actions/safe-action";
 import { evaluateEncounterGates, canOverridePreAuth, overridePreAuthGate } from "./gates";
+import { evaluateRiskGate } from "./gates/risk";
 import {
   resolveEncounterSpineSettings,
   staleAfterMinutesFromSettings,
 } from "./tenant-settings";
 import type { UserRole } from "@prisma/client";
 import type { GateSummary } from "./types";
+
+export async function assertRiskClearedForEncounter(
+  tenantId: string,
+  encounterId: string,
+): Promise<void> {
+  const risk = await db.riskAssessment.findFirst({
+    where: { tenantId, encounterId },
+    orderBy: { createdAt: "desc" },
+  });
+  const result = evaluateRiskGate(risk);
+  if (!result.cleared) {
+    throw new Error(result.reason ?? "Risk assessment must be cleared before this step.");
+  }
+}
 
 export async function loadGateBundleForEncounter(tenantId: string, encounterId: string) {
   const [encounter, settings] = await Promise.all([

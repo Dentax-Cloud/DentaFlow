@@ -210,13 +210,21 @@ export type SpineWorkspaceData = {
   gates: GateSummary;
   procedures: SpineCatalogSnippet[];
   inventoryItems: SpineInventorySnippet[];
-  patient: {
+  clinicalImages: Array<{
     id: string;
+    url: string;
+    type: string;
+    fileName: string | null;
+    takenAt: string | null;
+  }>;
+    patient: {
+      id: string;
     firstName: string;
     lastName: string;
     patientNumber: string | null;
     allergies: string[];
     medicalHistory: string | null;
+    medications: string[];
   };
   painScoreThreshold: number;
 };
@@ -498,6 +506,9 @@ export async function grantSpineConsent(input: { encounterId: string }) {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
 
+  const { assertRiskClearedForEncounter } = await import("@/lib/encounter/gate-enforcement");
+  await assertRiskClearedForEncounter(ctx.tenantId, input.encounterId);
+
   const active = await db.consentRecord.findFirst({
     where: {
       tenantId: ctx.tenantId,
@@ -535,6 +546,9 @@ export async function upsertSpineInsuranceVerification(input: {
 }) {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
+
+  const { assertRiskClearedForEncounter } = await import("@/lib/encounter/gate-enforcement");
+  await assertRiskClearedForEncounter(ctx.tenantId, input.encounterId);
 
   const [settingsRow, tenant] = await Promise.all([
     db.settings.findUnique({
@@ -826,6 +840,7 @@ export async function loadSpineWorkspaceData(
           patientNumber: true,
           allergies: true,
           medicalHistory: true,
+          medications: true,
         },
       },
     },
@@ -846,6 +861,20 @@ export async function loadSpineWorkspaceData(
     select: encounterSelectForWorkspace(),
   });
 
+  // After close & invoice, keep showing the closed encounter — do not spawn a
+  // fresh open session on every refresh for the same appointment.
+  if (!encounterRow) {
+    encounterRow = await db.encounter.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        appointmentId,
+        deletedAt: null,
+      },
+      orderBy: { startedAt: "desc" },
+      select: encounterSelectForWorkspace(),
+    });
+  }
+
   if (!encounterRow) {
     // Writers create; readers may still fail if none exists
     try {
@@ -864,7 +893,7 @@ export async function loadSpineWorkspaceData(
 
   if (!encounterRow) throw new Error("Encounter not found.");
 
-  const [gates, procedures, inventoryItems, settingsRow] = await Promise.all([
+  const [gates, procedures, inventoryItems, settingsRow, clinicalImages] = await Promise.all([
     buildLiveGateSummary(ctx.tenantId, encounterRow.id),
     db.procedureCatalog.findMany({
       where: { tenantId: ctx.tenantId, isActive: true },
@@ -881,6 +910,15 @@ export async function loadSpineWorkspaceData(
     db.settings.findUnique({
       where: { tenantId: ctx.tenantId },
       select: { encounterSpineSettings: true },
+    }),
+    db.clinicalImage.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        patientId: appointment.patient.id,
+      },
+      orderBy: { takenAt: "desc" },
+      take: 12,
+      select: { id: true, url: true, type: true, fileName: true, takenAt: true },
     }),
   ]);
 
@@ -916,6 +954,13 @@ export async function loadSpineWorkspaceData(
       itemRef: i.itemRef,
       unit: i.unit,
     })),
+    clinicalImages: clinicalImages.map((img) => ({
+      id: img.id,
+      url: img.url,
+      type: img.type,
+      fileName: img.fileName,
+      takenAt: img.takenAt?.toISOString() ?? null,
+    })),
     patient: {
       id: appointment.patient.id,
       firstName: appointment.patient.firstName,
@@ -923,7 +968,159 @@ export async function loadSpineWorkspaceData(
       patientNumber: appointment.patient.patientNumber,
       allergies: appointment.patient.allergies,
       medicalHistory: medicalHistoryText,
+      medications: appointment.patient.medications ?? [],
     },
     painScoreThreshold: spineSettings.painScoreThreshold,
   };
+}
+
+export async function scheduleSpineRecall(input: {
+  encounterId: string;
+  intervalMonths?: number;
+}) {
+  const ctx = await requireSpineWrite();
+  const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
+  const months =
+    typeof input.intervalMonths === "number" && input.intervalMonths > 0
+      ? Math.min(24, Math.round(input.intervalMonths))
+      : undefined;
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: ctx.tenantId },
+    select: { metadata: true },
+  });
+  const { parseRecallSettings } = await import("@/lib/recall/helpers");
+  const settings = parseRecallSettings(tenant?.metadata);
+  const dueDate = new Date();
+  dueDate.setMonth(dueDate.getMonth() + (months ?? settings.defaultIntervalMonths));
+
+  const existing = await db.recall.findFirst({
+    where: {
+      tenantId: ctx.tenantId,
+      patientId: owned.patientId,
+      status: "PENDING",
+      completedAt: null,
+      dueDate: { gte: new Date() },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+  if (existing) {
+    revalidateSpinePaths(owned.appointmentId);
+    return {
+      id: existing.id,
+      dueDate: existing.dueDate.toISOString(),
+      created: false as const,
+    };
+  }
+
+  const recall = await db.recall.create({
+    data: {
+      tenantId: ctx.tenantId,
+      patientId: owned.patientId,
+      type: "ROUTINE",
+      dueDate,
+      status: "PENDING",
+      notes: `Scheduled from spine encounter ${input.encounterId}`,
+    },
+  });
+
+  const { createAuditLog } = await import("@/lib/actions/safe-action");
+  const { AuditAction } = await import("@prisma/client");
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember?.id,
+    action: AuditAction.CREATE,
+    entity: "Recall",
+    entityId: recall.id,
+    metadata: { encounterId: input.encounterId, dueDate: dueDate.toISOString() },
+  });
+
+  revalidateSpinePaths(owned.appointmentId);
+  return {
+    id: recall.id,
+    dueDate: recall.dueDate.toISOString(),
+    created: true as const,
+  };
+}
+
+export async function saveSpineCloseOutNote(input: {
+  encounterId: string;
+  prescriptionText: string;
+  acknowledgeAllergyConflict?: boolean;
+  clinicalNote?: string;
+}) {
+  const ctx = await requireSpineWrite();
+  const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
+  const patient = await db.patient.findFirst({
+    where: { id: owned.patientId, tenantId: ctx.tenantId, deletedAt: null },
+    select: { id: true, allergies: true },
+  });
+  if (!patient) throw new Error("Patient not found.");
+
+  const { findPrescriptionAllergyConflicts } = await import("@/lib/encounter/close-out");
+  const conflicts = findPrescriptionAllergyConflicts(
+    patient.allergies,
+    input.prescriptionText,
+  );
+  if (conflicts.length > 0 && !input.acknowledgeAllergyConflict) {
+    throw new Error(
+      `Allergy conflict: prescription may relate to ${conflicts
+        .map((c) => c.allergy)
+        .join(", ")}. Acknowledge to proceed.`,
+    );
+  }
+
+  const parts = [
+    input.prescriptionText.trim()
+      ? `Prescription / meds:\n${input.prescriptionText.trim()}`
+      : "",
+    input.clinicalNote?.trim() ? `Close-out note:\n${input.clinicalNote.trim()}` : "",
+    conflicts.length
+      ? `Allergy acknowledgment: ${conflicts.map((c) => c.allergy).join(", ")}`
+      : "",
+  ].filter(Boolean);
+
+  if (parts.length === 0) {
+    throw new Error("Enter a prescription or clinical close-out note.");
+  }
+
+  if (!ctx.staffMember?.id) {
+    throw new Error("Staff member required to save close-out note.");
+  }
+
+  const note = await db.clinicalNote.create({
+    data: {
+      tenantId: ctx.tenantId,
+      patientId: patient.id,
+      providerId: ctx.staffMember.id,
+      appointmentId: owned.appointmentId,
+      noteType: "SOAP",
+      title: "Spine close-out",
+      rawNotes: parts.join("\n\n"),
+      plan: input.prescriptionText.trim() || null,
+      assessment: input.clinicalNote?.trim() || null,
+      toothNumbers: [],
+      signedAt: new Date(),
+      signedByName: `${ctx.staffMember.firstName ?? ""} ${ctx.staffMember.lastName ?? ""}`.trim(),
+    },
+  });
+
+  const { createAuditLog } = await import("@/lib/actions/safe-action");
+  const { AuditAction } = await import("@prisma/client");
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember.id,
+    action: AuditAction.CREATE,
+    entity: "ClinicalNote",
+    entityId: note.id,
+    metadata: {
+      kind: "spine_close_out",
+      encounterId: input.encounterId,
+      allergyConflicts: conflicts,
+      acknowledged: Boolean(input.acknowledgeAllergyConflict),
+    },
+  });
+
+  revalidateSpinePaths(owned.appointmentId);
+  return { noteId: note.id, allergyConflicts: conflicts };
 }
