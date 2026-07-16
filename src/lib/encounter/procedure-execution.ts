@@ -15,6 +15,7 @@ import {
 } from "./tenant-settings";
 import type { EncounterProcedureLineStatus, PlannedVsPerformed } from "./types";
 import { isProcedureLineTerminal } from "./state-machine";
+import { treatmentItemIdsForWriteBack } from "./close-out";
 
 const LINE_TRANSITIONS: Record<
   EncounterProcedureLineStatus,
@@ -328,11 +329,11 @@ export async function writeBackPlanAndRecall(params: {
   if (!encounter) throw new Error("Encounter not found.");
 
   const now = new Date();
-  for (const line of encounter.procedureLines) {
-    if (!line.treatmentItemId) continue;
+  const itemIds = treatmentItemIdsForWriteBack(encounter.procedureLines);
+  for (const treatmentItemId of itemIds) {
     await db.treatmentItem.updateMany({
       where: {
-        id: line.treatmentItemId,
+        id: treatmentItemId,
         tenantId: params.tenantId,
         status: { not: "completed" },
       },
@@ -366,7 +367,7 @@ export async function writeBackPlanAndRecall(params: {
     entityId: encounter.id,
     metadata: {
       kind: "plan_recall_writeback",
-      treatmentItemIds: encounter.procedureLines.map((l) => l.treatmentItemId),
+      treatmentItemIds: itemIds,
       originRecallId: encounter.originRecallId,
     },
   });
