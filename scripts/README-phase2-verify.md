@@ -2,6 +2,14 @@
 
 Reusable local scripts for PR #4 / VPS re-checks. Outputs land in `tmp-phase2-clicktest/` (gitignored).
 
+These scripts are **not** part of the Next.js app build (`scripts/` is excluded in `tsconfig.json`). Playwright is not a package dependency — install it locally before running click-tests:
+
+```bash
+pnpm add -D playwright
+# optional: install browsers if needed
+pnpm exec playwright install chromium
+```
+
 ## Fixtures
 
 ```bash
