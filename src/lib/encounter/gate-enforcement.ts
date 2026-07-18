@@ -22,8 +22,8 @@ const UNKNOWN_GATES: GateSummary = {
 
 /**
  * Read-path gate summary from already-loaded records.
- * Evaluates each gate independently for UI display and NEVER throws —
- * missing/empty records become blocked/pending statuses.
+ * Evaluates each gate independently for UI display — missing/empty records
+ * become blocked/pending statuses (evaluate* helpers return, never throw).
  * Write-path asserts remain: assertRiskClearedForEncounter /
  * assertProcedureStartGatesAllowed (illegal ops only).
  */
@@ -35,31 +35,27 @@ export function summarizeGatesFromRecords(input: {
   preAuthOverridden?: boolean;
   now?: Date;
 }): GateSummary {
-  try {
-    const risk = evaluateRiskGate(input.risk ?? null);
-    const consent = evaluateConsentGate(input.consent ?? null);
-    const insurance = evaluateInsuranceGate(input.insurance ?? null, {
-      preAuthOverridden: input.preAuthOverridden,
-      now: input.now,
-    });
-    const sterilization = evaluateSterilizationGates(input.sterilizationLogs ?? []);
+  const risk = evaluateRiskGate(input.risk ?? null);
+  const consent = evaluateConsentGate(input.consent ?? null);
+  const insurance = evaluateInsuranceGate(input.insurance ?? null, {
+    preAuthOverridden: input.preAuthOverridden,
+    now: input.now,
+  });
+  const sterilization = evaluateSterilizationGates(input.sterilizationLogs ?? []);
 
-    const sterilAllClear =
-      sterilization.length === 0
-        ? "pending"
-        : sterilization.every((s) => s.cleared)
-          ? "cleared"
-          : "blocked";
+  const sterilAllClear =
+    sterilization.length === 0
+      ? "pending"
+      : sterilization.every((s) => s.cleared)
+        ? "cleared"
+        : "blocked";
 
-    return {
-      risk: risk.cleared ? "cleared" : "blocked",
-      consent: consent.cleared ? "cleared" : "blocked",
-      insurance: insurance.cleared ? "cleared" : "blocked",
-      sterilization: sterilAllClear,
-    };
-  } catch {
-    return { ...UNKNOWN_GATES };
-  }
+  return {
+    risk: risk.cleared ? "cleared" : "blocked",
+    consent: consent.cleared ? "cleared" : "blocked",
+    insurance: insurance.cleared ? "cleared" : "blocked",
+    sterilization: sterilAllClear,
+  };
 }
 
 export async function assertRiskClearedForEncounter(
@@ -190,31 +186,28 @@ export function gateBundleToSummary(
 }
 
 /**
- * Live gate summary for spine/timeline UI. Never throws — empty/initial
- * encounters return blocked/pending statuses (or unknown on load failure).
+ * Live gate summary for spine UI. Empty/initial encounters return
+ * blocked/pending statuses via summarizeGatesFromRecords — no catch-all:
+ * load/DB failures still surface. Write-path asserts still throw on illegal ops.
  */
 export async function buildLiveGateSummary(
   tenantId: string,
   encounterId: string,
 ): Promise<GateSummary> {
-  try {
-    const loaded = await loadGateBundleForEncounter(tenantId, encounterId);
-    if (!loaded) return { ...UNKNOWN_GATES };
+  const loaded = await loadGateBundleForEncounter(tenantId, encounterId);
+  if (!loaded) return { ...UNKNOWN_GATES };
 
-    const { encounter } = loaded;
-    return summarizeGatesFromRecords({
-      risk: encounter.riskAssessments[0] ?? null,
-      consent: encounter.consentRecords[0] ?? null,
-      insurance: encounter.insuranceVerifications[0] ?? null,
-      sterilizationLogs: encounter.procedureLines.map((l) => ({
-        procedureLineId: l.id,
-        loggedAt: l.sterilizationLoggedAt,
-      })),
-      preAuthOverridden: encounter.preAuthOverridden,
-    });
-  } catch {
-    return { ...UNKNOWN_GATES };
-  }
+  const { encounter } = loaded;
+  return summarizeGatesFromRecords({
+    risk: encounter.riskAssessments[0] ?? null,
+    consent: encounter.consentRecords[0] ?? null,
+    insurance: encounter.insuranceVerifications[0] ?? null,
+    sterilizationLogs: encounter.procedureLines.map((l) => ({
+      procedureLineId: l.id,
+      loggedAt: l.sterilizationLoggedAt,
+    })),
+    preAuthOverridden: encounter.preAuthOverridden,
+  });
 }
 
 export async function applyPreAuthOverride(params: {
