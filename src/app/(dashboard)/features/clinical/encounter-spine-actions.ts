@@ -893,42 +893,35 @@ export async function loadSpineWorkspaceData(
 
   if (!encounterRow) throw new Error("Encounter not found.");
 
-  const [gatesResult, procedures, inventoryItems, settingsRow, clinicalImages] =
-    await Promise.all([
-      buildLiveGateSummary(ctx.tenantId, encounterRow.id).catch(() => ({
-        risk: "unknown" as const,
-        consent: "unknown" as const,
-        insurance: "unknown" as const,
-        sterilization: "unknown" as const,
-      })),
-      db.procedureCatalog.findMany({
-        where: { tenantId: ctx.tenantId, isActive: true },
-        orderBy: { name: "asc" },
-        take: 200,
-        select: { id: true, code: true, name: true, category: true, price: true },
-      }),
-      db.inventoryItem.findMany({
-        where: { tenantId: ctx.tenantId, deletedAt: null },
-        orderBy: { name: "asc" },
-        take: 100,
-        select: { id: true, name: true, itemRef: true, unit: true },
-      }),
-      db.settings.findUnique({
-        where: { tenantId: ctx.tenantId },
-        select: { encounterSpineSettings: true },
-      }),
-      db.clinicalImage.findMany({
-        where: {
-          tenantId: ctx.tenantId,
-          patientId: appointment.patient.id,
-        },
-        orderBy: { takenAt: "desc" },
-        take: 12,
-        select: { id: true, url: true, type: true, fileName: true, takenAt: true },
-      }),
-    ]);
+  const [gates, procedures, inventoryItems, settingsRow, clinicalImages] = await Promise.all([
+    buildLiveGateSummary(ctx.tenantId, encounterRow.id),
+    db.procedureCatalog.findMany({
+      where: { tenantId: ctx.tenantId, isActive: true },
+      orderBy: { name: "asc" },
+      take: 200,
+      select: { id: true, code: true, name: true, category: true, price: true },
+    }),
+    db.inventoryItem.findMany({
+      where: { tenantId: ctx.tenantId, deletedAt: null },
+      orderBy: { name: "asc" },
+      take: 100,
+      select: { id: true, name: true, itemRef: true, unit: true },
+    }),
+    db.settings.findUnique({
+      where: { tenantId: ctx.tenantId },
+      select: { encounterSpineSettings: true },
+    }),
+    db.clinicalImage.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        patientId: appointment.patient.id,
+      },
+      orderBy: { takenAt: "desc" },
+      take: 12,
+      select: { id: true, url: true, type: true, fileName: true, takenAt: true },
+    }),
+  ]);
 
-  const gates = gatesResult;
   const spineSettings = resolveEncounterSpineSettings({
     settingsJson: settingsRow?.encounterSpineSettings as Record<string, unknown> | null,
     featureFlags: ctx.tenant.featureFlags as Record<string, unknown> | null,
