@@ -19,8 +19,18 @@ import {
   EncounterDoubleInvoiceError,
   isSpineLineIncludedInInvoice,
 } from "@/lib/encounter/billing";
-import { canOverridePreAuth, evaluateEncounterGates } from "@/lib/encounter/gates";
-import { gateBundleToSummary } from "@/lib/encounter/gate-enforcement";
+import {
+  canOverridePreAuth,
+  evaluateEncounterGates,
+  evaluateRiskGate,
+  evaluateConsentGate,
+  evaluateInsuranceGate,
+  evaluateSterilizationGate,
+} from "@/lib/encounter/gates";
+import {
+  gateBundleToSummary,
+  summarizeGatesFromRecords,
+} from "@/lib/encounter/gate-enforcement";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 import { encounterSpinePath, encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import {
@@ -293,5 +303,61 @@ describe("double-invoice concurrency semantics", () => {
     expect(fulfilled.length + rejected.length).toBe(2);
     expect(fulfilled.length).toBeGreaterThanOrEqual(1);
     expect(new EncounterDoubleInvoiceError().name).toBe("EncounterDoubleInvoiceError");
+  });
+});
+
+describe("fresh encounter gate read-path (never throws)", () => {
+  it("evaluate* helpers return statuses for empty/initial state without throwing", () => {
+    expect(() => evaluateRiskGate(null)).not.toThrow();
+    expect(evaluateRiskGate(null)).toMatchObject({
+      cleared: false,
+      reason: "Risk assessment has not been recorded.",
+    });
+
+    expect(() => evaluateConsentGate(null)).not.toThrow();
+    expect(evaluateConsentGate(null).cleared).toBe(false);
+
+    expect(() => evaluateInsuranceGate(null)).not.toThrow();
+    expect(evaluateInsuranceGate(null).cleared).toBe(false);
+
+    expect(() =>
+      evaluateSterilizationGate({ procedureLineId: "p1", loggedAt: null }),
+    ).not.toThrow();
+    expect(
+      evaluateSterilizationGate({ procedureLineId: "p1", loggedAt: null }).cleared,
+    ).toBe(false);
+  });
+
+  it("summarizeGatesFromRecords on a fresh arrival_intake encounter returns blocked/pending, never throws", () => {
+    let summary;
+    expect(() => {
+      summary = summarizeGatesFromRecords({
+        risk: null,
+        consent: null,
+        insurance: null,
+        sterilizationLogs: [],
+        preAuthOverridden: false,
+      });
+    }).not.toThrow();
+
+    expect(summary).toEqual({
+      risk: "blocked",
+      consent: "blocked",
+      insurance: "blocked",
+      sterilization: "pending",
+    });
+  });
+
+  it("gateBundleToSummary on short-circuited evaluateEncounterGates (risk missing) does not throw", () => {
+    const bundle = evaluateEncounterGates({
+      risk: null,
+      consent: null,
+      insurance: null,
+      sterilizationLogs: [],
+    });
+    expect(bundle.risk.cleared).toBe(false);
+    expect(bundle.consent).toBeNull();
+    expect(() => gateBundleToSummary(bundle)).not.toThrow();
+    expect(gateBundleToSummary(bundle).risk).toBe("blocked");
   });
 });

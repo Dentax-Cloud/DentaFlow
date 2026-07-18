@@ -208,7 +208,20 @@ export async function buildGateSummaryForEncounter(
   encounterId: string,
   isCompat: boolean,
 ): Promise<GateSummary> {
-  if (isCompat || encounterId.startsWith("compat:")) {
+  try {
+    if (isCompat || encounterId.startsWith("compat:")) {
+      return {
+        risk: "unknown",
+        consent: "unknown",
+        insurance: "unknown",
+        sterilization: "unknown",
+      };
+    }
+
+    // Prefer the Phase 2 never-throw live summary when a real encounter row exists.
+    const { buildLiveGateSummary } = await import("./gate-enforcement");
+    return buildLiveGateSummary(tenantId, encounterId);
+  } catch {
     return {
       risk: "unknown",
       consent: "unknown",
@@ -216,35 +229,6 @@ export async function buildGateSummaryForEncounter(
       sterilization: "unknown",
     };
   }
-
-  const [risk, consent, insurance] = await Promise.all([
-    db.riskAssessment.findFirst({
-      where: { tenantId, encounterId },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.consentRecord.findFirst({
-      where: { tenantId, encounterId, purpose: "clinical", revokedAt: null },
-      orderBy: { grantedAt: "desc" },
-    }),
-    db.insuranceVerification.findFirst({
-      where: { tenantId, encounterId },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  return {
-    risk: risk?.clearedAt ? "cleared" : risk ? "pending" : "unknown",
-    consent: consent ? "cleared" : "unknown",
-    insurance:
-      insurance?.eligibilityStatus === "eligible"
-        ? "cleared"
-        : insurance?.eligibilityStatus === "ineligible"
-          ? "blocked"
-          : insurance
-            ? "pending"
-            : "unknown",
-    sterilization: "unknown",
-  };
 }
 
 /**

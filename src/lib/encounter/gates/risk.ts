@@ -6,6 +6,7 @@ export type RiskGateResult =
 
 /**
  * Gate 1 — risk assessment must clear before consent/insurance (parallel).
+ * Read-safe: never throws; missing assessment → cleared:false + reason.
  */
 export function evaluateRiskGate(assessment: RiskAssessment | null): RiskGateResult {
   if (!assessment) {

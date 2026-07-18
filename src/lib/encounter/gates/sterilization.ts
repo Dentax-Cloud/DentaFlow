@@ -2,6 +2,7 @@
  * Gate 3 — sterilization is checked per-procedure (after parallel consent/insurance).
  * Phase 1 skeleton: accepts an explicit log present flag / timestamp from caller
  * until a dedicated sterilization log table is introduced.
+ * Read-safe: never throws; missing log → cleared:false + reason.
  */
 export type SterilizationLogInput = {
   procedureLineId: string;

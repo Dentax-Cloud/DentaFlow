@@ -6,6 +6,7 @@ export type ConsentGateSpineResult =
 
 /**
  * Gate 2a — clinical consent (runs in parallel with insurance after risk clears).
+ * Read-safe: never throws; missing/revoked → cleared:false + reason.
  */
 export function evaluateConsentGate(
   record: ConsentRecord | null,
