@@ -39,3 +39,27 @@ pnpm exec tsx scripts/phase2-flag-off-ui-clicktest.ts
 pnpm exec tsx scripts/phase2-verify-migrations.ts   # BOM check
 pnpm exec prisma migrate deploy                     # against target DATABASE_URL
 ```
+
+## Mail / Mailhog (VPS test runbook)
+
+`getMailTransporter()` (`src/lib/mail/send.ts`) resolves settings via `getSetting()` which reads **PlatformSetting DB first**, then env fallbacks:
+
+| Setting key | Env fallback | Notes |
+|---|---|---|
+| `SMTP_HOST` | `SMTP_HOST` | If set (DB or env), uses this host — not the Mailhog shortcut |
+| `SMTP_PORT` | `SMTP_PORT` | Default parse `587` when using explicit SMTP path |
+| `SMTP_USER` | `SMTP_USER` | Optional auth |
+| `SMTP_PASSWORD` | `SMTP_PASSWORD` | Optional auth |
+| `SMTP_FROM_EMAIL` | `SMTP_FROM` | From address |
+| `SMTP_FROM_NAME` | `SMTP_FROM_NAME` | Display name |
+| `EMAIL_ENABLED` | *(none)* | DB-only; `"false"` disables SMTP path |
+
+Mailhog fallback path (host `MAILHOG_HOST` default `mailhog`, port **1025**) only runs when **`SMTP_HOST` is empty** *or* `EMAIL_ENABLED === "false"`, **and** `NODE_ENV=development` **or** `USE_MAILHOG=true`.
+
+To divert VPS test mail to Mailhog (`dentaflow-mailhog:1025`):
+
+1. Prefer explicit SMTP: clear conflicting DB `PlatformSetting` rows for `SMTP_*`, then set  
+   `SMTP_HOST=dentaflow-mailhog` `SMTP_PORT=1025` (no auth).  
+2. Or: set DB `EMAIL_ENABLED=false` (or empty `SMTP_HOST`) and `USE_MAILHOG=true` `MAILHOG_HOST=dentaflow-mailhog`.
+
+Env-only `SMTP_HOST=…` is ignored if a non-empty DB `PlatformSetting` for that key exists.

@@ -3,12 +3,64 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/actions/safe-action";
 import { evaluateEncounterGates, canOverridePreAuth, overridePreAuthGate } from "./gates";
 import { evaluateRiskGate } from "./gates/risk";
+import { evaluateConsentGate } from "./gates/consent";
+import { evaluateInsuranceGate } from "./gates/insurance";
+import { evaluateSterilizationGates } from "./gates/sterilization";
 import {
   resolveEncounterSpineSettings,
   staleAfterMinutesFromSettings,
 } from "./tenant-settings";
 import type { UserRole } from "@prisma/client";
 import type { GateSummary } from "./types";
+
+const UNKNOWN_GATES: GateSummary = {
+  risk: "unknown",
+  consent: "unknown",
+  insurance: "unknown",
+  sterilization: "unknown",
+};
+
+/**
+ * Read-path gate summary from already-loaded records.
+ * Evaluates each gate independently for UI display and NEVER throws —
+ * missing/empty records become blocked/pending statuses.
+ * Write-path asserts remain: assertRiskClearedForEncounter /
+ * assertProcedureStartGatesAllowed (illegal ops only).
+ */
+export function summarizeGatesFromRecords(input: {
+  risk: Parameters<typeof evaluateRiskGate>[0];
+  consent: Parameters<typeof evaluateConsentGate>[0];
+  insurance: Parameters<typeof evaluateInsuranceGate>[0];
+  sterilizationLogs: Parameters<typeof evaluateSterilizationGates>[0];
+  preAuthOverridden?: boolean;
+  now?: Date;
+}): GateSummary {
+  try {
+    const risk = evaluateRiskGate(input.risk ?? null);
+    const consent = evaluateConsentGate(input.consent ?? null);
+    const insurance = evaluateInsuranceGate(input.insurance ?? null, {
+      preAuthOverridden: input.preAuthOverridden,
+      now: input.now,
+    });
+    const sterilization = evaluateSterilizationGates(input.sterilizationLogs ?? []);
+
+    const sterilAllClear =
+      sterilization.length === 0
+        ? "pending"
+        : sterilization.every((s) => s.cleared)
+          ? "cleared"
+          : "blocked";
+
+    return {
+      risk: risk.cleared ? "cleared" : "blocked",
+      consent: consent.cleared ? "cleared" : "blocked",
+      insurance: insurance.cleared ? "cleared" : "blocked",
+      sterilization: sterilAllClear,
+    };
+  } catch {
+    return { ...UNKNOWN_GATES };
+  }
+}
 
 export async function assertRiskClearedForEncounter(
   tenantId: string,
@@ -107,6 +159,10 @@ export async function assertProcedureStartGatesAllowed(params: {
   }
 }
 
+/**
+ * Map an evaluateEncounterGates() result to GateSummary.
+ * Prefer summarizeGatesFromRecords for page/read paths.
+ */
 export function gateBundleToSummary(
   result: ReturnType<typeof evaluateEncounterGates>,
 ): GateSummary {
@@ -133,26 +189,32 @@ export function gateBundleToSummary(
   };
 }
 
+/**
+ * Live gate summary for spine/timeline UI. Never throws — empty/initial
+ * encounters return blocked/pending statuses (or unknown on load failure).
+ */
 export async function buildLiveGateSummary(
   tenantId: string,
   encounterId: string,
 ): Promise<GateSummary> {
-  const loaded = await loadGateBundleForEncounter(tenantId, encounterId);
-  if (!loaded) {
-    return { risk: "unknown", consent: "unknown", insurance: "unknown", sterilization: "unknown" };
+  try {
+    const loaded = await loadGateBundleForEncounter(tenantId, encounterId);
+    if (!loaded) return { ...UNKNOWN_GATES };
+
+    const { encounter } = loaded;
+    return summarizeGatesFromRecords({
+      risk: encounter.riskAssessments[0] ?? null,
+      consent: encounter.consentRecords[0] ?? null,
+      insurance: encounter.insuranceVerifications[0] ?? null,
+      sterilizationLogs: encounter.procedureLines.map((l) => ({
+        procedureLineId: l.id,
+        loggedAt: l.sterilizationLoggedAt,
+      })),
+      preAuthOverridden: encounter.preAuthOverridden,
+    });
+  } catch {
+    return { ...UNKNOWN_GATES };
   }
-  const { encounter } = loaded;
-  const result = evaluateEncounterGates({
-    risk: encounter.riskAssessments[0] ?? null,
-    consent: encounter.consentRecords[0] ?? null,
-    insurance: encounter.insuranceVerifications[0] ?? null,
-    sterilizationLogs: encounter.procedureLines.map((l) => ({
-      procedureLineId: l.id,
-      loggedAt: l.sterilizationLoggedAt,
-    })),
-    preAuthOverridden: encounter.preAuthOverridden,
-  });
-  return gateBundleToSummary(result);
 }
 
 export async function applyPreAuthOverride(params: {
