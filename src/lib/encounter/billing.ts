@@ -66,6 +66,23 @@ export function assertNoInProgressLines(statuses: string[]): void {
   }
 }
 
+/**
+ * Pure pre-flight for Close & Invoice. Returns a validation message, never throws.
+ * `in_progress` / `planned` are not billable — only `completed` (or `interrupted` + partialBill).
+ */
+export function getEncounterInvoiceGateMessage(
+  lines: { status: string; billedInvoiceId?: string | null }[],
+  opts?: { partialBill?: boolean },
+): string | null {
+  if (lines.some((l) => l.status === "in_progress")) {
+    return "Cannot generate invoice while any procedure line is still in progress.";
+  }
+  if (!lines.some((l) => isSpineLineIncludedInInvoice(l, opts))) {
+    return "No billable procedure or material lines to invoice. Complete at least one procedure line before closing.";
+  }
+  return null;
+}
+
 export async function buildInvoiceItemsFromEncounter(
   tenantId: string,
   encounterId: string,
@@ -172,21 +189,24 @@ export async function closeAndInvoiceEncounter(params: CloseAndInvoiceEncounterP
   });
   if (!encounter) throw new Error("Encounter not found.");
 
-  if (encounter.procedureLines.some((l) => l.status === "in_progress")) {
-    throw new EncounterBillingGateError(
-      "Cannot generate invoice while any procedure line is still in progress.",
-    );
-  }
-
   const partial =
     params.partialBill || encounter.interruptOutcome === "abandoned_partial_bill";
+
+  const gateMessage = getEncounterInvoiceGateMessage(encounter.procedureLines, {
+    partialBill: Boolean(partial),
+  });
+  if (gateMessage) {
+    throw new EncounterBillingGateError(gateMessage);
+  }
 
   const items = await buildInvoiceItemsFromEncounter(params.tenantId, params.encounterId, {
     partialBill: Boolean(partial),
   });
   if (items.length === 0) {
+    // planned / in_progress / declined lines are intentionally non-billable;
+    // only completed (or interrupted + partialBill) enter the invoice.
     throw new EncounterBillingGateError(
-      "No billable procedure or material lines to invoice.",
+      "No billable procedure or material lines to invoice. Complete at least one procedure line before closing.",
     );
   }
 
