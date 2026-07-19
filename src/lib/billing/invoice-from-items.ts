@@ -25,6 +25,8 @@ export type CreateInvoiceFromItemsParams = {
   items: InvoiceLineItem[];
   notes?: string | null;
   status?: "DRAFT" | "SENT";
+  /** Module 6 spine: unique per encounter — concurrency-safe double-invoice guard. */
+  encounterId?: string | null;
 };
 
 /**
@@ -64,6 +66,7 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
     data: {
       tenantId: params.tenantId,
       patientId: params.patientId,
+      encounterId: params.encounterId ?? null,
       invoiceNumber: generateInvoiceNumber(count + 1),
       invoiceRef: await generateInvoiceRef(params.tenantId),
       status: params.status ?? "DRAFT",

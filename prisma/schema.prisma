@@ -958,6 +958,8 @@ model Invoice {
   id                    String        @id @default(cuid())
   tenantId              String
   patientId             String
+  /// Module 6 spine: invoice produced from an Encounter (double-invoice guard).
+  encounterId           String?       @unique
   invoiceNumber         String
   invoiceRef            String?
   status                InvoiceStatus @default(DRAFT)
@@ -997,6 +999,7 @@ model Invoice {
   networkType           String?
   patient               Patient       @relation(fields: [patientId], references: [id])
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounter             Encounter?    @relation("EncounterInvoice", fields: [encounterId], references: [id], onDelete: SetNull)
   items                 InvoiceItem[]
   payments              Payment[]
   claims                Claim[]
@@ -1938,6 +1941,8 @@ model Settings {
   enableOnlinePayments Boolean       @default(true)
   smsProvider          String?
   whatsappProvider     String?
+  /// Module 6: { insuranceStaleAfterHours, painScoreThreshold }
+  encounterSpineSettings Json?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2363,11 +2368,25 @@ model Encounter {
   patientId        String
   appointmentId    String
   treatmentPlanId  String?
+  /// Optional recall that originated this visit (fulfilled on close).
+  originRecallId   String?
   /// arrival_intake | chief_complaint_exam | gates | procedure_execution |
   /// close_out | billing | recall_scheduled | interrupted
   status           String    @default("arrival_intake")
+  /// Status restored when interrupt resolves to resumed
+  statusBeforeInterrupt String?
   /// resumed | abandoned_partial_bill | abandoned_no_bill
   interruptOutcome String?
+  incidentNote     String?
+  /// manual_close_bill | abandoned_partial_bill | abandoned_no_bill | …
+  closedReason     String?
+  painScore        Int?
+  /// extra_anesthetic | paused | follow_up_flagged
+  painNextAction   String?
+  preAuthOverridden Boolean  @default(false)
+  preAuthOverrideReason String?
+  preAuthOverrideByStaffId String?
+  patientAckPreAuthAt DateTime?
   startedAt        DateTime  @default(now())
   closedAt         DateTime?
   createdAt        DateTime  @default(now())
@@ -2378,6 +2397,7 @@ model Encounter {
   patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
   appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  billedInvoice Invoice?       @relation("EncounterInvoice")
 
   procedureLines         EncounterProcedureLine[]
   procedureBundles       EncounterProcedureBundle[]
@@ -2409,6 +2429,9 @@ model EncounterProcedureLine {
   /// matched | added | modified | declined
   plannedVsPerformed String    @default("matched")
   providerId         String?
+  unitPrice          Decimal?  @db.Decimal(12, 2)
+  sterilizationLoggedAt DateTime?
+  billedInvoiceId    String?
   startedAt          DateTime?
   completedAt        DateTime?
   createdAt          DateTime  @default(now())

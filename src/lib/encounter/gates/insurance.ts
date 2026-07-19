@@ -25,6 +25,7 @@ export function isVerificationStale(
 /**
  * Gate 2b — insurance eligibility (parallel with consent after risk clears).
  * Pre-auth denial blocks unless overridden via overridePreAuthGate.
+ * Read-safe: never throws; missing verification → cleared:false + reason.
  */
 export function evaluateInsuranceGate(
   verification: InsuranceVerification | null,
