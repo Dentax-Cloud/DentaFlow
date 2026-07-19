@@ -66,11 +66,24 @@ async function main() {
 
     await page.goto(`${BASE}/clinical/encounter/${APPT}/spine`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1000);
+    report.threeZoneLayout =
+      (await page.locator("[data-stage]").count()) >= 4 &&
+      (await page.getByRole("navigation").count()) +
+        (await page.getByLabel(/Encounter stages|Billing preview|Running total/i).count()) >
+        0;
     report.gateSummary = (await page.getByText("Gate summary").count()) > 0;
+    report.hydrationWarnings = logs.filter((l) => /hydrat/i.test(l)).length;
 
-    // Advance intake → exam → gates
+    // Advance intake → exam → gates (status strip is outside collapsible cards)
     await clickExact(page, "→ CHIEF COMPLAINT EXAM");
     await clickExact(page, "→ GATES");
+
+    // Phase 2b: expand Gate summary stage card if collapsed
+    const gateCardToggle = page.locator('[data-stage="gates"] button').first();
+    if ((await gateCardToggle.getAttribute("aria-expanded")) === "false") {
+      await gateCardToggle.click();
+      await page.waitForTimeout(300);
+    }
 
     await page.locator("#asa").fill("II");
     await clickExact(page, "Clear risk");
@@ -79,18 +92,39 @@ async function main() {
 
     await clickExact(page, "→ PROCEDURE EXECUTION");
 
+    const procToggle = page.locator('[data-stage="procedures"] button').first();
+    if ((await procToggle.getAttribute("aria-expanded")) === "false") {
+      await procToggle.click();
+      await page.waitForTimeout(300);
+    }
+
     // Add procedure (first catalog option already selected)
     await clickExact(page, "Add line");
+    await page.waitForTimeout(1500);
+    await page
+      .locator('[data-stage="procedures"]')
+      .getByText(/PLANNED|IN PROGRESS|COMPLETED/i)
+      .first()
+      .waitFor({ timeout: 15000 });
+
+    const procCard = page.locator('[data-stage="procedures"]');
     // Sterilize + start + complete first line buttons
-    const sterilize = page.getByRole("button", { name: /Steriliz/i });
-    if ((await sterilize.count()) > 0) await sterilize.first().click();
-    await page.waitForTimeout(700);
-    const start = page.getByRole("button", { name: /^Start$/i });
-    if ((await start.count()) > 0) await start.first().click();
-    await page.waitForTimeout(700);
-    const complete = page.getByRole("button", { name: /^Complete$/i });
-    if ((await complete.count()) > 0) await complete.first().click();
-    await page.waitForTimeout(700);
+    const sterilize = procCard.getByRole("button", { name: /^Sterilize$/i });
+    if ((await sterilize.count()) > 0) {
+      await sterilize.first().click();
+      await page.waitForTimeout(1500);
+    }
+    const start = procCard.getByRole("button", { name: /^Start$/i });
+    if ((await start.count()) > 0) {
+      await start.first().click();
+      await page.waitForTimeout(1500);
+    }
+    const complete = procCard.getByRole("button", { name: /^Complete$/i });
+    if ((await complete.count()) > 0) {
+      await complete.first().click();
+      await page.waitForTimeout(1500);
+    }
+    await procCard.getByText(/COMPLETED/i).first().waitFor({ timeout: 15000 });
 
     // Material if selects present
     const logMat = page.getByRole("button", { name: /Log material/i });
@@ -100,12 +134,45 @@ async function main() {
     }
 
     await clickExact(page, "→ CLOSE OUT");
+    const closeToggle = page.locator('[data-stage="close_out"] button').first();
+    if ((await closeToggle.getAttribute("aria-expanded")) === "false") {
+      await closeToggle.click();
+      await page.waitForTimeout(300);
+    }
     await page.locator("#rx").fill("Ibuprofen 400mg PRN");
     await clickExact(page, "Save close-out note");
     await clickExact(page, "Schedule recall");
     await clickExact(page, "→ BILLING");
 
-    const invoiceBtn = page.getByRole("button", { name: "Close & invoice", exact: true });
+    const billToggle = page.locator('[data-stage="billing"] button').first();
+    if ((await billToggle.getAttribute("aria-expanded")) === "false") {
+      await billToggle.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Layout evidence screenshots (Phase 2b)
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.screenshot({ path: `${OUT}/phase2b-desktop-three-zone.png`, fullPage: false });
+    const collapseNav = page.getByRole("button", { name: /Collapse stage navigation/i });
+    if ((await collapseNav.count()) > 0) {
+      await collapseNav.click();
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: `${OUT}/phase2b-nav-collapsed.png`, fullPage: false });
+      await page.getByRole("button", { name: /Expand stage navigation/i }).click();
+    }
+    const odontoTool = page.getByRole("button", { name: /^Odontogram$/i });
+    if ((await odontoTool.count()) > 0) {
+      await odontoTool.first().click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `${OUT}/phase2b-odontogram-overlay.png`, fullPage: false });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(200);
+    }
+    await page.screenshot({ path: `${OUT}/phase2b-billing-drawer.png`, fullPage: false });
+
+    const invoiceBtn = page
+      .locator('[data-stage="billing"]')
+      .getByRole("button", { name: "Close & invoice", exact: true });
     report.invoiceEnabled = await invoiceBtn.isEnabled();
     if (await invoiceBtn.isEnabled()) {
       await invoiceBtn.click();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EncounterGateSummary } from "@/components/clinical/encounter-gate-summary";
@@ -39,6 +39,19 @@ import {
 import { findPrescriptionAllergyConflicts } from "@/lib/encounter/close-out";
 import { PreClinicalChecks } from "@/components/clinical/pre-clinical-checks";
 import { ImageGallery } from "@/components/clinical/image-gallery";
+import { buildSpineBillingPreview } from "@/lib/encounter/billing-preview";
+import type { ToothChartData } from "@/lib/clinical/chart-types";
+import type { PerioMeasurement } from "@/lib/clinical/types";
+import {
+  SpineStageNav,
+  statusToNavStage,
+  type SpineNavPanelId,
+  type SpineToolId,
+} from "./spine-stage-nav";
+import { SpineStageCard } from "./spine-stage-card";
+import { SpineClinicalFindings } from "./spine-clinical-findings";
+import { SpineBillingDrawer } from "./spine-billing-drawer";
+import { SpineToolOverlay } from "./spine-tool-overlay";
 
 type DraftState = {
   asaClass: string;
@@ -132,6 +145,13 @@ export function SpineWorkspaceClient({
   const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
   const [preCheckOk, setPreCheckOk] = useState(true);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [activePanel, setActivePanel] = useState<SpineNavPanelId>(() =>
+    statusToNavStage(initial.encounter.status),
+  );
+  const [overlayTool, setOverlayTool] = useState<SpineToolId | null>(null);
+  const [focusTooth, setFocusTooth] = useState<string | undefined>();
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
@@ -144,7 +164,19 @@ export function SpineWorkspaceClient({
 
   useEffect(() => {
     setHasMounted(true);
+    // Narrow screens: collapse drawer by default (match after mount to avoid hydration mismatch).
+    try {
+      if (typeof window !== "undefined" && window.matchMedia("(max-width: 1279px)").matches) {
+        setDrawerOpen(false);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
+
+  useEffect(() => {
+    setActivePanel(statusToNavStage(encounter.status));
+  }, [encounter.status]);
 
   useEffect(() => {
     if (!hasMounted || !encounter.id) return;
@@ -210,15 +242,192 @@ export function SpineWorkspaceClient({
   const closed = Boolean(encounter.closedAt) || status === "recall_scheduled";
   const write = canWrite && !closed && !pending;
 
+  const insuranceVerification = encounter.insuranceVerifications[0] ?? null;
+  const billingPreview = useMemo(
+    () =>
+      buildSpineBillingPreview({
+        lines: encounter.procedureLines.map((line) => ({
+          id: line.id,
+          status: line.status,
+          billedInvoiceId: line.billedInvoiceId,
+          unitPrice: line.unitPrice,
+          procedureCatalog: line.procedureCatalog,
+          materialUsages: line.materialUsages.map((m) => ({
+            quantity: m.quantity,
+            unitCost: m.unitCost,
+            itemName: m.itemName,
+          })),
+        })),
+        interruptOutcome: encounter.interruptOutcome,
+        estimatedCoverage: insuranceVerification?.estimatedCoverage,
+        estimatedCopay: insuranceVerification?.estimatedCopay,
+      }),
+    [encounter.procedureLines, encounter.interruptOutcome, insuranceVerification],
+  );
+
+  const insuranceDrawerStatus = useMemo(():
+    | "verified"
+    | "stale"
+    | "overridden"
+    | "pending" => {
+    if (encounter.preAuthOverridden) return "overridden";
+    if (!insuranceVerification?.verifiedAt) return "pending";
+    if (!hasMounted) return "verified";
+    const verifiedMs = Date.parse(insuranceVerification.verifiedAt);
+    if (!Number.isFinite(verifiedMs)) return "pending";
+    const staleMs = insuranceVerification.staleAfterMinutes * 60_000;
+    if (Date.now() - verifiedMs > staleMs) return "stale";
+    return "verified";
+  }, [encounter.preAuthOverridden, insuranceVerification, hasMounted]);
+
+  const staleLabel =
+    insuranceDrawerStatus === "stale" && insuranceVerification?.verifiedAt && hasMounted
+      ? "stale"
+      : undefined;
+
+  const findings = initial.clinicalFindings;
+  const chartData = (findings?.chartData ?? {}) as ToothChartData;
+  const stageProgress = (panel: SpineNavPanelId): "current" | "completed" | "upcoming" => {
+    const order: SpineNavPanelId[] = [
+      "intake",
+      "gates",
+      "findings",
+      "procedures",
+      "close_out",
+      "billing",
+    ];
+    const current = statusToNavStage(status);
+    if (panel === "findings") {
+      if (order.indexOf(current) >= order.indexOf("procedures")) return "completed";
+      if (current === "gates" || activePanel === "findings") return "current";
+      return "upcoming";
+    }
+    const ci = order.indexOf(current);
+    const pi = order.indexOf(panel);
+    if (pi < ci) return "completed";
+    if (pi === ci) return "current";
+    return "upcoming";
+  };
+
+  function openTool(tool: SpineToolId, opts?: { tooth?: string }) {
+    setFocusTooth(opts?.tooth);
+    setOverlayTool(tool);
+  }
+
+  function selectPanel(panel: SpineNavPanelId) {
+    setActivePanel(panel);
+    if (typeof document !== "undefined") {
+      document.getElementById(`spine-stage-${panel}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }
+
+  const materialsSlot = canWrite && !closed && encounter.procedureLines.length > 0 ? (
+    <div className="space-y-2">
+      <p className={labelCls}>Log material</p>
+      <div className="grid gap-2">
+        <select
+          className={field}
+          value={draft.materialLineId || encounter.procedureLines[0]?.id || ""}
+          onChange={(e) => patchDraft({ materialLineId: e.target.value })}
+          disabled={pending}
+        >
+          {encounter.procedureLines.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.procedureCatalog.code}
+            </option>
+          ))}
+        </select>
+        <select
+          className={field}
+          value={draft.materialItemId}
+          onChange={(e) => patchDraft({ materialItemId: e.target.value })}
+          disabled={pending}
+        >
+          {inventoryItems.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={field}
+          value={draft.materialTier}
+          onChange={(e) =>
+            patchDraft({ materialTier: e.target.value as "tracked" | "consumable" })
+          }
+          disabled={pending}
+        >
+          <option value="consumable">consumable</option>
+          <option value="tracked">tracked</option>
+        </select>
+        <input
+          className={field}
+          type="number"
+          min={0.01}
+          step="0.01"
+          value={draft.materialQty}
+          onChange={(e) => patchDraft({ materialQty: e.target.value })}
+          disabled={pending}
+          placeholder="Qty"
+        />
+        <input
+          className={field}
+          value={draft.materialLot}
+          onChange={(e) => patchDraft({ materialLot: e.target.value })}
+          disabled={pending}
+          placeholder="Lot (tracked)"
+        />
+      </div>
+      <button
+        type="button"
+        className={btnSecondary}
+        disabled={!write || !draft.materialItemId}
+        onClick={() =>
+          run(
+            () =>
+              logSpineMaterial({
+                procedureLineId:
+                  draft.materialLineId || encounter.procedureLines[0]!.id,
+                itemId: draft.materialItemId,
+                tier: draft.materialTier,
+                quantity: Number(draft.materialQty) || 1,
+                lotNumber: draft.materialLot || null,
+              }),
+            "Material logged",
+          )
+        }
+      >
+        Log material
+      </button>
+    </div>
+  ) : null;
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6">
-      <header className="space-y-2 border-b border-slate-200 pb-4">
+    <div className="flex min-h-[calc(100vh-4rem)] w-full bg-slate-50/40">
+      <SpineStageNav
+        currentStatus={status}
+        activePanel={activePanel}
+        onSelectPanel={selectPanel}
+        collapsed={navCollapsed}
+        onToggleCollapsed={() => setNavCollapsed((v) => !v)}
+        onOpenTool={(tool) => openTool(tool)}
+      />
+
+      <div
+        className={`flex min-w-0 flex-1 flex-col gap-4 px-3 py-4 sm:px-4 ${
+          drawerOpen ? "xl:pr-[24rem]" : "xl:pr-16"
+        }`}
+      >
+      <header className="space-y-2 border-b border-slate-200 pb-3">
         <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
           Encounter spine
         </p>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <h1 className="font-serif text-3xl text-slate-900">
+            <h1 className="font-serif text-2xl text-slate-900 sm:text-3xl">
               {initial.patient.firstName} {initial.patient.lastName}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
@@ -237,7 +446,7 @@ export function SpineWorkspaceClient({
           </div>
           <Link
             href={`/clinical/encounter/${appointmentId}/timeline`}
-            className="text-sm text-teal-800 underline-offset-4 hover:underline"
+            className="min-h-10 text-sm text-teal-800 underline-offset-4 hover:underline"
           >
             Timeline
           </Link>
@@ -258,13 +467,57 @@ export function SpineWorkspaceClient({
             {encounter.billedInvoice.status}) · total {encounter.billedInvoice.total}
           </p>
         ) : null}
+        {billingPreview.gateMessage && !encounter.billedInvoice ? (
+          <p className="text-xs text-amber-800">{billingPreview.gateMessage}</p>
+        ) : null}
       </header>
 
-      {/* Intake */}
-      <section className="space-y-2">
+      {/* Status transitions stay outside collapsible cards so advances are always reachable. */}
+      <section className="space-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Intake summary
+          Status
         </h2>
+        <div className="flex flex-wrap gap-2">
+          {nextStatuses.map((to) => (
+            <button
+              key={to}
+              type="button"
+              className={btnPrimary}
+              disabled={!write}
+              onClick={() =>
+                run(async () => {
+                  if (status === "gates" && to === "procedure_execution") {
+                    await advanceSpinePastGates(encounter.id);
+                  } else {
+                    await transitionSpineEncounter({
+                      encounterId: encounter.id,
+                      toStatus: to,
+                    });
+                  }
+                }, `Moved to ${statusLabel(to)}`)
+              }
+            >
+              → {statusLabel(to)}
+            </button>
+          ))}
+          {nextStatuses.length === 0 && status !== "interrupted" ? (
+            <p className="text-sm text-slate-500">No forward transitions available.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <div id="spine-stage-intake">
+      <SpineStageCard
+        id="intake"
+        title="Intake summary"
+        summary={
+          initial.patient.allergies?.length
+            ? `Allergies: ${initial.patient.allergies.join(", ")}`
+            : "No allergies recorded"
+        }
+        state={stageProgress("intake")}
+      >
+      <section className="space-y-2">
         <dl className="grid gap-3 sm:grid-cols-2">
           <div>
             <dt className={labelCls}>Allergies</dt>
@@ -282,11 +535,21 @@ export function SpineWorkspaceClient({
           </div>
         </dl>
       </section>
+      </SpineStageCard>
+      </div>
 
       {/* Gates */}
+      <div id="spine-stage-gates">
+      <SpineStageCard
+        id="gates"
+        title="Gate summary"
+        summary={`R ${gates.risk} · C ${gates.consent} · I ${gates.insurance} · S ${gates.sterilization}`}
+        state={stageProgress("gates")}
+      >
       <div className="space-y-4">
         <EncounterGateSummary
           gates={gates}
+          insuranceOverridden={encounter.preAuthOverridden}
           footer={
             encounter.preAuthOverridden ? (
               <p className="text-xs text-amber-800">
@@ -482,46 +745,44 @@ export function SpineWorkspaceClient({
           </div>
         ) : null}
       </div>
+      </SpineStageCard>
+      </div>
 
-      {/* Status transitions */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Status
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {nextStatuses.map((to) => (
-            <button
-              key={to}
-              type="button"
-              className={btnPrimary}
-              disabled={!write}
-              onClick={() =>
-                run(async () => {
-                  if (status === "gates" && to === "procedure_execution") {
-                    await advanceSpinePastGates(encounter.id);
-                  } else {
-                    await transitionSpineEncounter({
-                      encounterId: encounter.id,
-                      toStatus: to,
-                    });
-                  }
-                }, `Moved to ${statusLabel(to)}`)
-              }
-            >
-              → {statusLabel(to)}
-            </button>
-          ))}
-          {nextStatuses.length === 0 && status !== "interrupted" ? (
-            <p className="text-sm text-slate-500">No forward transitions available.</p>
-          ) : null}
-        </div>
-      </section>
+      <div id="spine-stage-findings">
+        <SpineStageCard
+          id="findings"
+          title="Clinical findings"
+          summary={
+            findings?.perioSummary
+              ? `Perio on file · ${findings.radiographs.length} rad · ${findings.photos.length} photos`
+              : `${findings?.radiographs.length ?? 0} rad · ${findings?.photos.length ?? 0} photos`
+          }
+          state={stageProgress("findings")}
+        >
+          <SpineClinicalFindings
+            chartData={chartData}
+            perioSummary={findings?.perioSummary ?? null}
+            radiographs={findings?.radiographs ?? []}
+            photos={findings?.photos ?? []}
+            onOpenTool={openTool}
+          />
+        </SpineStageCard>
+      </div>
 
       {/* Procedures */}
+      <div id="spine-stage-procedures">
+      <SpineStageCard
+        id="procedures"
+        title="Procedure lines"
+        summary={
+          encounter.procedureLines.length
+            ? `${encounter.procedureLines.length} line(s) · ${encounter.procedureLines.filter((l) => l.status === "completed").length} completed`
+            : "No procedure lines yet"
+        }
+        state={stageProgress("procedures")}
+      >
       <section className="space-y-3">
-        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Procedure lines
-        </h2>
+        <h2 className="sr-only">Procedure lines</h2>
 
         {canWrite && !closed ? (
           <div className="space-y-3">
@@ -586,6 +847,20 @@ export function SpineWorkspaceClient({
                   <p className="text-sm font-medium text-slate-900">
                     {line.procedureCatalog.code} · {line.procedureCatalog.name}
                   </p>
+                  {line.toothNumbers?.length ? (
+                    <p className="mt-0.5 flex flex-wrap gap-1 text-xs text-slate-600">
+                      {line.toothNumbers.map((tooth) => (
+                        <button
+                          key={`${line.id}-${tooth}`}
+                          type="button"
+                          className="min-h-10 min-w-10 rounded-md px-2 font-medium text-teal-800 hover:bg-teal-50"
+                          onClick={() => openTool("odontogram", { tooth })}
+                        >
+                          Tooth {tooth}
+                        </button>
+                      ))}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-slate-500">
                     {statusLabel(line.status)}
                     {line.sterilizationLoggedAt
@@ -702,85 +977,8 @@ export function SpineWorkspaceClient({
           ) : null}
         </ul>
 
-        {canWrite && !closed && encounter.procedureLines.length > 0 ? (
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <p className={labelCls}>Log material</p>
-            <div className="grid gap-2 sm:grid-cols-5">
-              <select
-                className={field}
-                value={draft.materialLineId || encounter.procedureLines[0]?.id || ""}
-                onChange={(e) => patchDraft({ materialLineId: e.target.value })}
-                disabled={pending}
-              >
-                {encounter.procedureLines.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.procedureCatalog.code}
-                  </option>
-                ))}
-              </select>
-              <select
-                className={field}
-                value={draft.materialItemId}
-                onChange={(e) => patchDraft({ materialItemId: e.target.value })}
-                disabled={pending}
-              >
-                {inventoryItems.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className={field}
-                value={draft.materialTier}
-                onChange={(e) =>
-                  patchDraft({ materialTier: e.target.value as "tracked" | "consumable" })
-                }
-                disabled={pending}
-              >
-                <option value="consumable">consumable</option>
-                <option value="tracked">tracked</option>
-              </select>
-              <input
-                className={field}
-                type="number"
-                min={0.01}
-                step="0.01"
-                value={draft.materialQty}
-                onChange={(e) => patchDraft({ materialQty: e.target.value })}
-                disabled={pending}
-                placeholder="Qty"
-              />
-              <input
-                className={field}
-                value={draft.materialLot}
-                onChange={(e) => patchDraft({ materialLot: e.target.value })}
-                disabled={pending}
-                placeholder="Lot (tracked)"
-              />
-            </div>
-            <button
-              type="button"
-              className={btnSecondary}
-              disabled={!write || !draft.materialItemId}
-              onClick={() =>
-                run(
-                  () =>
-                    logSpineMaterial({
-                      procedureLineId:
-                        draft.materialLineId || encounter.procedureLines[0]!.id,
-                      itemId: draft.materialItemId,
-                      tier: draft.materialTier,
-                      quantity: Number(draft.materialQty) || 1,
-                      lotNumber: draft.materialLot || null,
-                    }),
-                  "Material logged",
-                )
-              }
-            >
-              Log material
-            </button>
-          </div>
+        {materialsSlot ? (
+          <div className="space-y-2 border-t border-slate-100 pt-3">{materialsSlot}</div>
         ) : null}
       </section>
 
@@ -924,12 +1122,23 @@ export function SpineWorkspaceClient({
           </p>
         )}
       </section>
+      </SpineStageCard>
+      </div>
 
       {/* Close-out: Rx allergy check, recall, notes/images reuse */}
+      <div id="spine-stage-close_out">
+      <SpineStageCard
+        id="close_out"
+        title="Close-out"
+        summary={
+          encounter.closedAt
+            ? `Closed · ${encounter.closedReason ?? "done"}`
+            : "Rx, notes, recall"
+        }
+        state={stageProgress("close_out")}
+      >
       <section className="space-y-3">
-        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Close-out
-        </h2>
+        <h2 className="sr-only">Close-out</h2>
         <p className="text-sm text-slate-600">
           Current meds:{" "}
           {initial.patient.medications?.length
@@ -1088,12 +1297,23 @@ export function SpineWorkspaceClient({
           </p>
         )}
       </section>
+      </SpineStageCard>
+      </div>
 
       {/* Close */}
+      <div id="spine-stage-billing">
+      <SpineStageCard
+        id="billing"
+        title="Billing"
+        summary={
+          encounter.billedInvoice
+            ? `${encounter.billedInvoice.invoiceNumber} · ${encounter.billedInvoice.total}`
+            : `Projected ${billingPreview.projectedTotal.toFixed(2)}`
+        }
+        state={stageProgress("billing")}
+      >
       <section className="space-y-3 border-t border-slate-200 pt-4">
-        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Close & invoice
-        </h2>
+        <h2 className="sr-only">Billing</h2>
         <button
           type="button"
           className={btnPrimary}
@@ -1116,6 +1336,38 @@ export function SpineWorkspaceClient({
           </p>
         ) : null}
       </section>
+      </SpineStageCard>
+      </div>
+      </div>
+
+      <SpineBillingDrawer
+        preview={billingPreview}
+        insuranceStatus={insuranceDrawerStatus}
+        staleLabel={staleLabel}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      >
+        <div className="hidden xl:block">{materialsSlot}</div>
+      </SpineBillingDrawer>
+
+      <SpineToolOverlay
+        open={overlayTool != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOverlayTool(null);
+            setFocusTooth(undefined);
+          }
+        }}
+        tool={overlayTool}
+        chartData={chartData}
+        focusTooth={focusTooth}
+        radiographs={findings?.radiographs ?? []}
+        photos={findings?.photos ?? []}
+        patientName={`${initial.patient.firstName} ${initial.patient.lastName}`}
+        patientId={initial.patient.id}
+        treatmentPlan={findings?.treatmentPlan ?? null}
+        perioMeasurements={(findings?.perioMeasurements ?? []) as PerioMeasurement[]}
+      />
     </div>
   );
 }

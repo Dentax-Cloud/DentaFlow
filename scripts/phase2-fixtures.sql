@@ -32,3 +32,10 @@ SELECT
 FROM "Patient" p
 WHERE p."firstName" = 'Emma' AND p."lastName" = 'Williams' AND p."tenantId" = 'tenant_a'
 ON CONFLICT (id) DO UPDATE SET status = 'CONFIRMED', "deletedAt" = NULL, "startTime" = EXCLUDED."startTime", "endTime" = EXCLUDED."endTime";
+
+INSERT INTO "ProcedureCatalog" (
+  id, "tenantId", code, name, category, price, "isActive", "createdAt", "updatedAt"
+) VALUES
+  ('proc_spine_prophy', 'tenant_a', 'D1110', 'Prophylaxis - adult', 'Preventive', 85.00, true, NOW(), NOW()),
+  ('proc_flagoff_resin', 'tenant_a', 'D2391', 'Resin composite - one surface', 'Restorative', 120.00, true, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;

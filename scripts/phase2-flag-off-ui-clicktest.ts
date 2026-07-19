@@ -41,6 +41,24 @@ async function main() {
   });
   report.runtimeTenantFeatureFlags = tenant.featureFlags;
 
+
+  // Soft-delete prior invoices and free unique invoiceRef so chairside finalize
+  // is not blocked by a spine invoice created earlier in the same DB.
+  const priorInvoices = await db.invoice.findMany({
+    where: { tenantId: "tenant_a", deletedAt: null },
+    select: { id: true },
+  });
+  for (const inv of priorInvoices) {
+    await db.invoice.update({
+      where: { id: inv.id },
+      data: {
+        deletedAt: new Date(),
+        encounterId: null,
+        invoiceRef: `deleted-${inv.id}`,
+        invoiceNumber: `DEL-${inv.id.slice(0, 12)}`,
+      },
+    });
+  }
   // Reset appointment + soft prior open chairside sessions for clean run
   await db.appointment.updateMany({
     where: { id: APPT, tenantId: "tenant_a" },

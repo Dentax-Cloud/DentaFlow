@@ -398,7 +398,11 @@ export function encounterSelectForWorkspace() {
     procedureLines: {
       include: {
         procedureCatalog: { select: { id: true, code: true, name: true, price: true } },
-        materialUsages: true,
+        materialUsages: {
+          include: {
+            item: { select: { id: true, name: true } },
+          },
+        },
         provider: {
           select: { id: true, firstName: true, lastName: true },
         },
