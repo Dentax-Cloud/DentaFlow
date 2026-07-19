@@ -11,7 +11,10 @@ import {
   staleAfterMinutesFromSettings,
 } from "./tenant-settings";
 import type { UserRole } from "@prisma/client";
+import { GateAssertionError } from "./errors";
 import type { GateSummary } from "./types";
+
+export { GateAssertionError } from "./errors";
 
 const UNKNOWN_GATES: GateSummary = {
   risk: "unknown",
@@ -68,7 +71,9 @@ export async function assertRiskClearedForEncounter(
   });
   const result = evaluateRiskGate(risk);
   if (!result.cleared) {
-    throw new Error(result.reason ?? "Risk assessment must be cleared before this step.");
+    throw new GateAssertionError(
+      result.reason ?? "Risk assessment must be cleared before this step.",
+    );
   }
 }
 
@@ -141,17 +146,23 @@ export async function assertProcedureStartGatesAllowed(params: {
   });
 
   if (!gates.risk.cleared) {
-    throw new Error(gates.risk.reason ?? "Risk assessment must be cleared first.");
+    throw new GateAssertionError(
+      gates.risk.reason ?? "Risk assessment must be cleared first.",
+    );
   }
   if (!gates.consent?.cleared) {
-    throw new Error(gates.consent?.reason ?? "Clinical consent is required.");
+    throw new GateAssertionError(
+      gates.consent?.reason ?? "Clinical consent is required.",
+    );
   }
   if (!gates.insurance?.cleared) {
-    throw new Error(gates.insurance?.reason ?? "Insurance verification is required.");
+    throw new GateAssertionError(
+      gates.insurance?.reason ?? "Insurance verification is required.",
+    );
   }
   const steril = gates.sterilization[0];
   if (steril && !steril.cleared) {
-    throw new Error(steril.reason);
+    throw new GateAssertionError(steril.reason);
   }
 }
 

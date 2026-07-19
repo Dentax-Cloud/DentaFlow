@@ -32,6 +32,11 @@ import {
   gateBundleToSummary,
   summarizeGatesFromRecords,
 } from "@/lib/encounter/gate-enforcement";
+import { GateAssertionError } from "@/lib/encounter/errors";
+import {
+  catchSpineExpectedFailure,
+  withSpineExpectedFailureCatch,
+} from "@/lib/encounter/spine-action-result";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 import { encounterSpinePath, encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import {
@@ -429,5 +434,59 @@ describe("close & invoice billable-line gates", () => {
     expect(() => {
       throw new EncounterBillingGateError(message!);
     }).toThrow(EncounterBillingGateError);
+  });
+});
+
+describe("spine action expected-failure catch (narrow)", () => {
+  it("converts GateAssertionError and EncounterBillingGateError to { ok: false }", () => {
+    expect(
+      catchSpineExpectedFailure(
+        new GateAssertionError("Insurance verification has not been recorded."),
+      ),
+    ).toEqual({
+      ok: false,
+      error: "Insurance verification has not been recorded.",
+    });
+    expect(
+      catchSpineExpectedFailure(
+        new EncounterBillingGateError(
+          "No billable procedure or material lines to invoice.",
+        ),
+      ),
+    ).toEqual({
+      ok: false,
+      error: "No billable procedure or material lines to invoice.",
+    });
+    expect(
+      catchSpineExpectedFailure(new EncounterDoubleInvoiceError("already invoiced")),
+    ).toEqual({ ok: false, error: "already invoiced" });
+  });
+
+  it("re-throws unexpected errors (e.g. DB failure) instead of returning { ok: false }", async () => {
+    const dbBoom = new Error("Can't reach database server at 127.0.0.1:5435");
+
+    expect(() => catchSpineExpectedFailure(dbBoom)).toThrow(
+      /Can't reach database server/,
+    );
+
+    // Same wrapper Start / Close & Invoice use — unexpected must propagate, not become ok:false.
+    let unexpectedResult: unknown = "not-assigned";
+    await expect(
+      withSpineExpectedFailureCatch(async () => {
+        throw dbBoom;
+      }).then((r) => {
+        unexpectedResult = r;
+        return r;
+      }),
+    ).rejects.toThrow("Can't reach database server at 127.0.0.1:5435");
+    expect(unexpectedResult).toBe("not-assigned");
+
+    const gateResult = await withSpineExpectedFailureCatch(async () => {
+      throw new GateAssertionError("Insurance verification has not been recorded.");
+    });
+    expect(gateResult).toEqual({
+      ok: false,
+      error: "Insurance verification has not been recorded.",
+    });
   });
 });
