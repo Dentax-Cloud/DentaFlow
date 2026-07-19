@@ -43,22 +43,18 @@ import {
   resolveEncounterSpineSettings,
   staleAfterMinutesFromSettings,
 } from "@/lib/encounter/tenant-settings";
+import {
+  withSpineExpectedFailureCatch,
+  type SpineActionResult,
+} from "@/lib/encounter/spine-action-result";
 import type { EncounterStatus, EncounterProcedureLineStatus, PlannedVsPerformed } from "@/lib/encounter/types";
 import type { InterruptOutcome } from "@/lib/encounter/state-machine";
 import type { GateSummary } from "@/lib/encounter/types";
 
+export type { SpineActionResult };
+
 const SPINE_DISABLED_MESSAGE =
   "Encounter spine is not enabled for this clinic. Contact your administrator.";
-
-/** Expected validation failures — return these instead of throwing so production Next.js does not mask them as Server Components digests. */
-export type SpineActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-function spineActionFailure(e: unknown): SpineActionResult<never> {
-  const message = e instanceof Error ? e.message : "Something went wrong.";
-  return { ok: false, error: message };
-}
 
 async function requireSpineWrite() {
   const ctx = await requireTenantContext();
@@ -708,7 +704,7 @@ export async function transitionSpineProcedureLine(input: {
   });
   if (!line) return { ok: false, error: "Procedure line not found." };
 
-  try {
+  return withSpineExpectedFailureCatch(async () => {
     const updated = await transitionProcedureLineStatus({
       tenantId: ctx.tenantId,
       lineId: input.lineId,
@@ -717,15 +713,8 @@ export async function transitionSpineProcedureLine(input: {
       userId: ctx.staffMember?.id,
     });
     revalidateSpinePaths(line.encounter.appointmentId);
-    return {
-      ok: true,
-      data: serializeDecimal(updated as Record<string, unknown>),
-    };
-  } catch (e) {
-    // Gate asserts (e.g. insurance not recorded) stay throws at the lib layer for
-    // illegal writes; convert here so the spine UI gets a clean validation message.
-    return spineActionFailure(e);
-  }
+    return serializeDecimal(updated as Record<string, unknown>);
+  });
 }
 
 export async function logSpineSterilization(input: { lineId: string }) {
@@ -819,7 +808,7 @@ export async function closeAndInvoiceSpineEncounter(
 ): Promise<SpineActionResult<Record<string, unknown>>> {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, encounterId);
-  try {
+  return withSpineExpectedFailureCatch(async () => {
     const invoice = await closeAndInvoiceEncounter({
       tenantId: ctx.tenantId,
       encounterId,
@@ -829,15 +818,8 @@ export async function closeAndInvoiceSpineEncounter(
     });
     revalidateSpinePaths(owned.appointmentId);
     revalidatePath("/billing");
-    return {
-      ok: true,
-      data: serializeDecimal(invoice as Record<string, unknown>),
-    };
-  } catch (e) {
-    // EncounterBillingGateError / EncounterDoubleInvoiceError / unexpected —
-    // never rethrow: production Next masks thrown Server Action errors as RSC digests.
-    return spineActionFailure(e);
-  }
+    return serializeDecimal(invoice as Record<string, unknown>);
+  });
 }
 
 export async function loadSpineWorkspaceData(
