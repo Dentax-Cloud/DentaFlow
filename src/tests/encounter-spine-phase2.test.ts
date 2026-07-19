@@ -17,6 +17,7 @@ import {
   assertNoInProgressLines,
   EncounterBillingGateError,
   EncounterDoubleInvoiceError,
+  getEncounterInvoiceGateMessage,
   isSpineLineIncludedInInvoice,
 } from "@/lib/encounter/billing";
 import {
@@ -318,7 +319,10 @@ describe("fresh encounter gate read-path (never throws)", () => {
     expect(evaluateConsentGate(null).cleared).toBe(false);
 
     expect(() => evaluateInsuranceGate(null)).not.toThrow();
-    expect(evaluateInsuranceGate(null).cleared).toBe(false);
+    expect(evaluateInsuranceGate(null)).toMatchObject({
+      cleared: false,
+      reason: "Insurance verification has not been recorded.",
+    });
 
     expect(() =>
       evaluateSterilizationGate({ procedureLineId: "p1", loggedAt: null }),
@@ -348,6 +352,37 @@ describe("fresh encounter gate read-path (never throws)", () => {
     });
   });
 
+  it("insurance unresolved (risk/consent cleared) still returns blocked status, never throws on read", () => {
+    const risk = {
+      clearedAt: new Date(),
+    } as RiskAssessment;
+    const consent = {
+      purpose: "clinical",
+      revokedAt: null,
+    } as ConsentRecord;
+
+    let summary;
+    expect(() => {
+      summary = summarizeGatesFromRecords({
+        risk,
+        consent,
+        insurance: null,
+        sterilizationLogs: [],
+        preAuthOverridden: false,
+      });
+    }).not.toThrow();
+    expect(summary).toMatchObject({
+      risk: "cleared",
+      consent: "cleared",
+      insurance: "blocked",
+    });
+
+    // Write-path assert still uses this reason string when Start is attempted.
+    expect(evaluateInsuranceGate(null).reason).toBe(
+      "Insurance verification has not been recorded.",
+    );
+  });
+
   it("gateBundleToSummary on short-circuited evaluateEncounterGates (risk missing) does not throw", () => {
     const bundle = evaluateEncounterGates({
       risk: null,
@@ -359,5 +394,40 @@ describe("fresh encounter gate read-path (never throws)", () => {
     expect(bundle.consent).toBeNull();
     expect(() => gateBundleToSummary(bundle)).not.toThrow();
     expect(gateBundleToSummary(bundle).risk).toBe("blocked");
+  });
+});
+
+describe("close & invoice billable-line gates", () => {
+  it("allows Close & Invoice when a completed line exists (insurance cleared separately)", () => {
+    expect(
+      getEncounterInvoiceGateMessage([
+        { status: "completed", billedInvoiceId: null },
+      ]),
+    ).toBeNull();
+    expect(
+      isSpineLineIncludedInInvoice({ status: "completed", billedInvoiceId: null }),
+    ).toBe(true);
+  });
+
+  it("blocks Close & Invoice for started (in_progress) lines — not billable until completed", () => {
+    expect(
+      getEncounterInvoiceGateMessage([
+        { status: "in_progress", billedInvoiceId: null },
+      ]),
+    ).toMatch(/still in progress/i);
+    expect(
+      isSpineLineIncludedInInvoice({ status: "in_progress", billedInvoiceId: null }),
+    ).toBe(false);
+  });
+
+  it("surfaces a clean validation message for genuinely zero billable lines (planned-only)", () => {
+    const message = getEncounterInvoiceGateMessage([
+      { status: "planned", billedInvoiceId: null },
+    ]);
+    expect(message).toMatch(/No billable procedure or material lines to invoice/);
+    expect(message).toMatch(/Complete at least one procedure line/);
+    expect(() => {
+      throw new EncounterBillingGateError(message!);
+    }).toThrow(EncounterBillingGateError);
   });
 });

@@ -183,7 +183,19 @@ export function SpineWorkspaceClient({
     setMessage(null);
     startTransition(async () => {
       try {
-        await action();
+        const result = await action();
+        // Spine actions return { ok:false, error } for expected validation failures
+        // (gates / billing) so production Next.js does not mask them as RSC digests.
+        if (
+          result &&
+          typeof result === "object" &&
+          "ok" in result &&
+          (result as { ok: unknown }).ok === false &&
+          "error" in result
+        ) {
+          setError(String((result as { error: unknown }).error));
+          return;
+        }
         await refresh();
         if (successMsg) setMessage(successMsg);
       } catch (e) {
