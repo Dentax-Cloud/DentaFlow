@@ -270,6 +270,8 @@ export function SpineWorkspaceClient({
     [encounter.procedureLines, encounter.interruptOutcome, insuranceVerification],
   );
 
+  // Client-only echo of draft dropdowns. Prices match invoice sources:
+  // procedure → ProcedureCatalog.price; material → InventoryItem.cost (= MaterialUsage.unitCost).
   const pendingPriceRows = useMemo((): SpinePendingPriceRow[] => {
     if (closed) return [];
     const rows: SpinePendingPriceRow[] = [];
@@ -289,7 +291,7 @@ export function SpineWorkspaceClient({
         id: "pending-material",
         kind: "material",
         label: `${selectedItem.name} × ${qty}`,
-        amount: Math.round(selectedItem.cost * qty * 100) / 100,
+        amount: Math.round(selectedItem.unitCost * qty * 100) / 100,
       });
     }
     return rows;

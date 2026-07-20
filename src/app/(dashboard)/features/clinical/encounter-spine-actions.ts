@@ -203,6 +203,11 @@ export type SpineCatalogSnippet = {
   code: string;
   name: string;
   category: string;
+  /**
+   * Pending procedure preview price — same `ProcedureCatalog.price` that
+   * `buildInvoiceItemsFromEncounter` uses via `line.unitPrice ?? line.procedureCatalog.price`.
+   * Serialized via `serializeDecimal` in `loadSpineWorkspaceData`.
+   */
   price: number;
 };
 
@@ -211,8 +216,15 @@ export type SpineInventorySnippet = {
   name: string;
   itemRef: string | null;
   unit: string | null;
-  /** Unit cost used when logging material (same source as invoice materials). */
-  cost: number;
+  /**
+   * Pending material preview unit price.
+   * Provenance (must match invoice generation):
+   * `InventoryItem.cost` is stamped onto `MaterialUsage.unitCost` in
+   * `logMaterialUsage` (`procedure-execution.ts`), and
+   * `buildInvoiceItemsFromEncounter` bills materials from `usage.unitCost`.
+   * Serialized via `serializeDecimal` in `loadSpineWorkspaceData`.
+   */
+  unitCost: number;
 };
 
 export type SpineClinicalFindingsData = {
@@ -961,9 +973,11 @@ export async function loadSpineWorkspaceData(
       select: { id: true, code: true, name: true, category: true, price: true },
     }),
     db.inventoryItem.findMany({
+      // Tenant-scoped via requireSpineRead() → requireTenantContext(); never omit tenantId.
       where: { tenantId: ctx.tenantId, deletedAt: null },
       orderBy: { name: "asc" },
       take: 100,
+      // `cost` is the InventoryItem field that becomes MaterialUsage.unitCost at log time.
       select: { id: true, name: true, itemRef: true, unit: true, cost: true },
     }),
     db.settings.findUnique({
@@ -1064,7 +1078,8 @@ export async function loadSpineWorkspaceData(
         name: i.name,
         itemRef: i.itemRef,
         unit: i.unit,
-        cost: asNumber(s.cost),
+        // Prisma Decimal → number for the client pending preview (one-shot page load).
+        unitCost: asNumber(s.cost),
       };
     }),
     clinicalImages: media.slice(0, 12),
