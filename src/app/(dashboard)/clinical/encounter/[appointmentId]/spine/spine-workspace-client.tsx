@@ -50,7 +50,7 @@ import {
 } from "./spine-stage-nav";
 import { SpineStageCard } from "./spine-stage-card";
 import { SpineClinicalFindings } from "./spine-clinical-findings";
-import { SpineBillingDrawer } from "./spine-billing-drawer";
+import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
 
 type DraftState = {
@@ -158,8 +158,8 @@ export function SpineWorkspaceClient({
     painScore:
       initial.encounter.painScore != null ? String(initial.encounter.painScore) : "",
     painNextAction: initial.encounter.painNextAction ?? "",
-    catalogId: initial.procedures[0]?.id ?? "",
-    materialItemId: initial.inventoryItems[0]?.id ?? "",
+    catalogId: "",
+    materialItemId: "",
   }));
 
   useEffect(() => {
@@ -210,7 +210,11 @@ export function SpineWorkspaceClient({
     router.refresh();
   }
 
-  function run(action: () => Promise<unknown>, successMsg?: string) {
+  function run(
+    action: () => Promise<unknown>,
+    successMsg?: string,
+    afterSuccess?: () => void,
+  ) {
     setError(null);
     setMessage(null);
     startTransition(async () => {
@@ -229,6 +233,7 @@ export function SpineWorkspaceClient({
           return;
         }
         await refresh();
+        afterSuccess?.();
         if (successMsg) setMessage(successMsg);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -264,6 +269,38 @@ export function SpineWorkspaceClient({
       }),
     [encounter.procedureLines, encounter.interruptOutcome, insuranceVerification],
   );
+
+  const pendingPriceRows = useMemo((): SpinePendingPriceRow[] => {
+    if (closed) return [];
+    const rows: SpinePendingPriceRow[] = [];
+    const selectedProc = procedures.find((p) => p.id === draft.catalogId);
+    if (selectedProc) {
+      rows.push({
+        id: "pending-procedure",
+        kind: "procedure",
+        label: `${selectedProc.code} · ${selectedProc.name}`,
+        amount: Math.round(selectedProc.price * 100) / 100,
+      });
+    }
+    const selectedItem = inventoryItems.find((i) => i.id === draft.materialItemId);
+    const qty = Number(draft.materialQty);
+    if (selectedItem && Number.isFinite(qty) && qty > 0) {
+      rows.push({
+        id: "pending-material",
+        kind: "material",
+        label: `${selectedItem.name} × ${qty}`,
+        amount: Math.round(selectedItem.cost * qty * 100) / 100,
+      });
+    }
+    return rows;
+  }, [
+    closed,
+    procedures,
+    inventoryItems,
+    draft.catalogId,
+    draft.materialItemId,
+    draft.materialQty,
+  ]);
 
   const insuranceDrawerStatus = useMemo(():
     | "verified"
@@ -346,6 +383,7 @@ export function SpineWorkspaceClient({
           onChange={(e) => patchDraft({ materialItemId: e.target.value })}
           disabled={pending}
         >
+          <option value="">Select material…</option>
           {inventoryItems.map((i) => (
             <option key={i.id} value={i.id}>
               {i.name}
@@ -397,6 +435,12 @@ export function SpineWorkspaceClient({
                 lotNumber: draft.materialLot || null,
               }),
             "Material logged",
+            () =>
+              patchDraft({
+                materialItemId: "",
+                materialQty: "1",
+                materialLot: "",
+              }),
           )
         }
       >
@@ -801,6 +845,7 @@ export function SpineWorkspaceClient({
                   }}
                   disabled={pending}
                 >
+                  <option value="">Select procedure…</option>
                   {procedures.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.code} — {p.name}
@@ -820,6 +865,7 @@ export function SpineWorkspaceClient({
                         procedureCatalogId: draft.catalogId,
                       }),
                     "Procedure line added",
+                    () => patchDraft({ catalogId: "" }),
                   )
                 }
               >
@@ -1342,6 +1388,7 @@ export function SpineWorkspaceClient({
 
       <SpineBillingDrawer
         preview={billingPreview}
+        pendingRows={pendingPriceRows}
         insuranceStatus={insuranceDrawerStatus}
         staleLabel={staleLabel}
         open={drawerOpen}

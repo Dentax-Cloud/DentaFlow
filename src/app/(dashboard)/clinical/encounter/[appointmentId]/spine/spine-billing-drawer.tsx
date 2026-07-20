@@ -6,6 +6,13 @@ import { GateStatusChip, type GateChipStatus } from "@/components/clinical/gate-
 import type { SpineBillingPreview } from "@/lib/encounter/billing-preview";
 import { cn } from "@/lib/utils";
 
+export type SpinePendingPriceRow = {
+  id: string;
+  kind: "procedure" | "material";
+  label: string;
+  amount: number;
+};
+
 function money(n: number): string {
   return n.toFixed(2);
 }
@@ -28,6 +35,7 @@ function insuranceToChipStatus(
 
 export function SpineBillingDrawer({
   preview,
+  pendingRows = [],
   insuranceStatus,
   staleLabel,
   open,
@@ -35,6 +43,8 @@ export function SpineBillingDrawer({
   children,
 }: {
   preview: SpineBillingPreview;
+  /** Client-only draft selections — not included in billable/projected totals. */
+  pendingRows?: SpinePendingPriceRow[];
   insuranceStatus: "verified" | "stale" | "overridden" | "pending";
   staleLabel?: string;
   open: boolean;
@@ -156,6 +166,38 @@ export function SpineBillingDrawer({
                 </p>
               ) : null}
             </div>
+
+            {pendingRows.length > 0 ? (
+              <div
+                className="space-y-2 border-t border-dashed border-slate-200 pt-3"
+                data-pending-prices
+              >
+                <h3 className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Pending (not yet added)
+                </h3>
+                <ul className="space-y-2">
+                  {pendingRows.map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex items-start justify-between gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50/80 px-2.5 py-2 text-sm text-slate-600"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{row.label}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Pending · {row.kind}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right tabular-nums">
+                        {money(row.amount)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-slate-500">
+                  Does not affect billable subtotal or projected total
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2 border-t border-slate-100 pt-3">
               <h3 className="text-xs font-medium uppercase tracking-wide text-slate-500">

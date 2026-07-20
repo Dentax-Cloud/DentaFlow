@@ -98,7 +98,19 @@ async function main() {
       await page.waitForTimeout(300);
     }
 
-    // Add procedure (first catalog option already selected)
+    // Pending price preview: select procedure without adding
+    const procSelect = page.locator("#proc");
+    await procSelect.selectOption({ index: 1 });
+    await page.waitForTimeout(400);
+    report.pendingProcedureVisible =
+      (await page.locator("[data-pending-prices]").getByText(/Pending · procedure/i).count()) > 0;
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.screenshot({
+      path: `${OUT}/phase2b-pending-procedure.png`,
+      fullPage: false,
+    });
+
+    // Add procedure (selected catalog option)
     await clickExact(page, "Add line");
     await page.waitForTimeout(1500);
     await page
@@ -125,6 +137,34 @@ async function main() {
       await page.waitForTimeout(1500);
     }
     await procCard.getByText(/COMPLETED/i).first().waitFor({ timeout: 15000 });
+
+    // Pending material preview before log
+    const materialItemSelect = procCard.locator("select").nth(1);
+    const qtyInput = procCard.locator('input[placeholder="Qty"]');
+    if ((await materialItemSelect.count()) > 0 && (await qtyInput.count()) > 0) {
+      await materialItemSelect.selectOption({ index: 1 });
+      await qtyInput.fill("2");
+      await page.waitForTimeout(300);
+      report.pendingMaterialVisible =
+        (await page.locator("[data-pending-prices]").getByText(/Pending · material/i).count()) > 0;
+      await page.screenshot({
+        path: `${OUT}/phase2b-pending-material.png`,
+        fullPage: false,
+      });
+      await qtyInput.fill("3");
+      await page.waitForTimeout(200);
+      report.pendingMaterialQtyLive =
+        (await page.locator("[data-pending-prices]").getByText(/× 3/i).count()) > 0;
+      // Clear selection — pending row should vanish client-side
+      await materialItemSelect.selectOption({ value: "" });
+      await page.waitForTimeout(200);
+      report.pendingClearsWithoutRoundTrip =
+        (await page.locator("[data-pending-prices]").getByText(/Pending · material/i).count()) ===
+        0;
+      // Re-select for log
+      await materialItemSelect.selectOption({ index: 1 });
+      await qtyInput.fill("1");
+    }
 
     // Material if selects present
     const logMat = page.getByRole("button", { name: /Log material/i });

@@ -211,6 +211,8 @@ export type SpineInventorySnippet = {
   name: string;
   itemRef: string | null;
   unit: string | null;
+  /** Unit cost used when logging material (same source as invoice materials). */
+  cost: number;
 };
 
 export type SpineClinicalFindingsData = {
@@ -962,7 +964,7 @@ export async function loadSpineWorkspaceData(
       where: { tenantId: ctx.tenantId, deletedAt: null },
       orderBy: { name: "asc" },
       take: 100,
-      select: { id: true, name: true, itemRef: true, unit: true },
+      select: { id: true, name: true, itemRef: true, unit: true, cost: true },
     }),
     db.settings.findUnique({
       where: { tenantId: ctx.tenantId },
@@ -1055,12 +1057,16 @@ export async function loadSpineWorkspaceData(
         price: asNumber(s.price),
       };
     }),
-    inventoryItems: inventoryItems.map((i) => ({
-      id: i.id,
-      name: i.name,
-      itemRef: i.itemRef,
-      unit: i.unit,
-    })),
+    inventoryItems: inventoryItems.map((i) => {
+      const s = serializeDecimal(i as Record<string, unknown>);
+      return {
+        id: i.id,
+        name: i.name,
+        itemRef: i.itemRef,
+        unit: i.unit,
+        cost: asNumber(s.cost),
+      };
+    }),
     clinicalImages: media.slice(0, 12),
     clinicalFindings: {
       chartData: chartData as SpineClinicalFindingsData["chartData"],

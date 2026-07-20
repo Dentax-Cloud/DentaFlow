@@ -95,13 +95,25 @@ export function SpineToolOverlay({
         </DialogHeader>
 
         {activeTool === "odontogram" && (
-          <Odontogram
-            data={chartData}
-            notation="FDI"
-            selectedTooth={focusTooth}
-            disabled
-            onToothClick={() => {}}
-          />
+          <div className="space-y-3">
+            <Odontogram
+              data={chartData}
+              notation="FDI"
+              selectedTooth={focusTooth}
+              disabled
+              onToothClick={() => {}}
+            />
+            {patientId ? (
+              <Link
+                href={`/clinical?patientId=${encodeURIComponent(patientId)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-10 items-center text-sm font-medium text-teal-800 hover:underline"
+              >
+                Open full odontogram (new tab)
+              </Link>
+            ) : null}
+          </div>
         )}
 
         {activeTool === "perio" && (
