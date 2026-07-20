@@ -58,7 +58,7 @@ export function WaitingRoomList({
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge className="bg-yellow-100 text-yellow-800">ARRIVED</Badge>
-                  {apt.hasInsuranceVerification ? (
+                  {spineEnabled && apt.hasInsuranceVerification ? (
                     <Badge variant="outline" className="border-emerald-300 text-emerald-800">
                       Insurance verified
                     </Badge>
