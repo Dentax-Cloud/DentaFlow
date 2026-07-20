@@ -53,6 +53,15 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.RECEPTIONIST, "write", "clinical_chart")).toBe(false);
   });
 
+  it("receptionist has insurance.write but doctor does not (uses clinical_chart.write instead)", () => {
+    expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.insurance.write)).toBe(true);
+    expect(can(UserRole.RECEPTIONIST, "write", "insurance")).toBe(true);
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.insurance.write)).toBe(false);
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.clinical_chart.write)).toBe(true);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.insurance.write)).toBe(false);
+    expect(hasPermission(UserRole.ADMIN, PERMISSIONS.insurance.write)).toBe(true);
+  });
+
   it("finance has billing full access and reports export", () => {
     expect(can(UserRole.FINANCE, "write", "billing")).toBe(true);
     expect(can(UserRole.FINANCE, "refund", "billing")).toBe(true);
