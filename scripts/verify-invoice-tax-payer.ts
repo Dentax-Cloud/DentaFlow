@@ -13,11 +13,47 @@ import { calculateInvoiceTaxAndLines } from "../src/lib/billing/calculate-invoic
 const db = new PrismaClient();
 
 async function main() {
-  const tenant = await db.tenant.findFirst({
-    where: { deletedAt: null, subscriptionStatus: { in: ["ACTIVE", "TRIALING"] } },
-    orderBy: { createdAt: "asc" },
+  const insuredPatient = await db.patient.findFirst({
+    where: {
+      deletedAt: null,
+      patientInsurancePolicies: {
+        some: { isActive: true, rank: PolicyRank.PRIMARY },
+      },
+      tenant: { deletedAt: null },
+    },
+    include: { tenant: true },
   });
-  if (!tenant) throw new Error("No tenant found");
+  if (!insuredPatient) throw new Error("No insured patient with primary policy found");
+
+  const tenant = insuredPatient.tenant;
+
+  const selfPayPatient = await db.patient.findFirst({
+    where: {
+      tenantId: tenant.id,
+      deletedAt: null,
+      id: { not: insuredPatient.id },
+      patientInsurancePolicies: { none: { isActive: true, rank: PolicyRank.PRIMARY } },
+      OR: [
+        { insuranceProvider: null },
+        { insuranceProvider: "SELF_PAY" },
+        { insuranceProvider: "" },
+      ],
+    },
+  });
+
+  // Fallback: any patient in tenant without an active primary policy
+  const selfPayFallback =
+    selfPayPatient ??
+    (await db.patient.findFirst({
+      where: {
+        tenantId: tenant.id,
+        deletedAt: null,
+        id: { not: insuredPatient.id },
+        patientInsurancePolicies: { none: { isActive: true, rank: PolicyRank.PRIMARY } },
+      },
+    }));
+
+  if (!selfPayFallback) throw new Error("No self-pay patient found");
 
   const tax = await getTenantInvoiceTax(tenant.id);
   console.log("tenant_tax", {
@@ -26,32 +62,6 @@ async function main() {
     taxName: tax.taxName,
     taxRatePercent: tax.taxRatePercent,
   });
-
-  const selfPayPatient = await db.patient.findFirst({
-    where: {
-      tenantId: tenant.id,
-      deletedAt: null,
-      OR: [
-        { insuranceProvider: null },
-        { insuranceProvider: "SELF_PAY" },
-        { insuranceProvider: "" },
-      ],
-      patientInsurancePolicies: { none: { isActive: true, rank: PolicyRank.PRIMARY } },
-    },
-  });
-
-  const insuredPatient = await db.patient.findFirst({
-    where: {
-      tenantId: tenant.id,
-      deletedAt: null,
-      patientInsurancePolicies: {
-        some: { isActive: true, rank: PolicyRank.PRIMARY },
-      },
-    },
-  });
-
-  if (!selfPayPatient) throw new Error("No self-pay patient found");
-  if (!insuredPatient) throw new Error("No insured patient with primary policy found");
 
   const items = [
     {
@@ -65,7 +75,7 @@ async function main() {
 
   const taxViaBilling = await calculateInvoiceTaxAndLines({
     tenantId: tenant.id,
-    patientId: selfPayPatient.id,
+    patientId: selfPayFallback.id,
     items,
   });
   console.log("tax_path_billing_createInvoiceFromItems", {
@@ -76,7 +86,7 @@ async function main() {
 
   const selfPayInv = await createInvoiceFromItems({
     tenantId: tenant.id,
-    patientId: selfPayPatient.id,
+    patientId: selfPayFallback.id,
     items,
     notes: "verify-invoice-tax-payer self-pay",
     status: "DRAFT",
