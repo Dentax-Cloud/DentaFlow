@@ -963,6 +963,8 @@ model Invoice {
   invoiceNumber         String
   invoiceRef            String?
   status                InvoiceStatus @default(DRAFT)
+  /// Reporting tag set at creation from insurance-split result (not InsuranceVerification).
+  payerType             InvoicePayerType @default(SELF_PAY)
   subtotal              Decimal       @default(0) @db.Decimal(12, 2)
   tax                   Decimal       @default(0) @db.Decimal(12, 2)
   discount              Decimal       @default(0) @db.Decimal(12, 2)
@@ -2134,6 +2136,13 @@ enum InvoiceStatus {
   OVERDUE
   VOID
   REFUNDED
+}
+
+/// Invoice payer classification for reporting (uppercase DB enum, matching InvoiceStatus / SELF_PAY provider code).
+enum InvoicePayerType {
+  SELF_PAY
+  INSURANCE
+  CO_PAY
 }
 
 enum PaymentMethod {

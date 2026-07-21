@@ -221,13 +221,11 @@ export const updateClinicSettings = createAction({
       create: {
         tenantId: ctx.tenant.id,
         currency: input.currency,
-        taxRate: input.taxRate,
         enablePatientPortal: input.enablePatientPortal,
         enableOnlinePayments: input.enableOnlinePayments,
       },
       update: {
         currency: input.currency,
-        taxRate: input.taxRate,
         enablePatientPortal: input.enablePatientPortal,
         enableOnlinePayments: input.enableOnlinePayments,
       },
@@ -241,7 +239,6 @@ export const updateClinicSettings = createAction({
       entityId: settings.id,
       metadata: {
         currency: input.currency,
-        taxRate: input.taxRate,
         enablePatientPortal: input.enablePatientPortal,
         enableOnlinePayments: input.enableOnlinePayments,
       },

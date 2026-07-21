@@ -24,7 +24,10 @@ import { Button } from "@/components/ui/button";
 
 import { TeamManagementSection } from "./components/team-management-section";
 
-import { ClinicSettingsForm } from "./components/clinic-settings-form";
+import {
+  ClinicSettingsForm,
+  type TenantTaxDisplay,
+} from "./components/clinic-settings-form";
 
 import { RecallSettingsSection } from "./components/recall-settings-section";
 import { AuditLogSection } from "./components/audit-log-section";
@@ -55,6 +58,8 @@ export function AdminClient({
 
   settings,
 
+  tenantTax,
+
   pendingInvitations,
 
   currentUserRole,
@@ -84,6 +89,8 @@ export function AdminClient({
   branches: BranchRow[];
 
   settings: Settings | null;
+
+  tenantTax: TenantTaxDisplay;
 
   pendingInvitations: PendingInvitation[];
 
@@ -209,7 +216,11 @@ export function AdminClient({
 
 
 
-      <ClinicSettingsForm settings={settings} canEdit={canEditSettings} />
+      <ClinicSettingsForm
+        settings={settings}
+        tenantTax={tenantTax}
+        canEdit={canEditSettings}
+      />
 
 
 

@@ -37,7 +37,15 @@ export default async function AdminPage() {
       getBranches(ctx.tenant.id),
       db.settings.findUnique({ where: { tenantId: ctx.tenant.id } }),
       canManageTeam ? getPendingInvitations(ctx.tenant.id) : Promise.resolve([]),
-      db.tenant.findUnique({ where: { id: ctx.tenant.id }, select: { metadata: true } }),
+      db.tenant.findUnique({
+        where: { id: ctx.tenant.id },
+        select: {
+          metadata: true,
+          taxName: true,
+          taxRate: true,
+          taxOnDental: true,
+        },
+      }),
     ]);
 
   const clinicalStaffIds = users
@@ -74,6 +82,11 @@ export default async function AdminPage() {
       auditLogTotal={auditLogTotal}
       branches={branches}
       settings={settings ? serializeDecimal(settings) : null}
+      tenantTax={{
+        taxName: tenant?.taxName ?? "VAT",
+        taxRate: Number(tenant?.taxRate ?? 0),
+        taxOnDental: tenant?.taxOnDental ?? true,
+      }}
       pendingInvitations={pendingInvitations}
       currentUserRole={role}
       currentUserId={userId}
