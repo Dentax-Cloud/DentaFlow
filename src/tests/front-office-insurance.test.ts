@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { UserRole } from "@prisma/client";
 import { hasPermission, PERMISSIONS, can } from "@/lib/rbac/permissions";
+import { canOverridePreAuth } from "@/lib/encounter/gates";
+
+/** Mirrors the server/UI gate for insurance approve/edit after the role-scope fix. */
+function canApproveOrEditInsurance(role: UserRole): boolean {
+  return hasPermission(role, PERMISSIONS.insurance.write);
+}
 
 describe("front-office insurance verification permissions", () => {
   it("grants insurance.write to receptionist only among clinical/front-office roles", () => {
@@ -19,13 +25,19 @@ describe("front-office insurance verification permissions", () => {
     expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.clinical_chart.write)).toBe(false);
   });
 
-  it("lets doctors use the new action via clinical_chart.write without insurance.write", () => {
+  it("does not let doctors approve/edit insurance via clinical_chart.write", () => {
     expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.clinical_chart.write)).toBe(true);
     expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.insurance.write)).toBe(false);
-    const allowed =
-      hasPermission(UserRole.DOCTOR, PERMISSIONS.insurance.write) ||
-      hasPermission(UserRole.DOCTOR, PERMISSIONS.clinical_chart.write);
-    expect(allowed).toBe(true);
+    expect(canApproveOrEditInsurance(UserRole.DOCTOR)).toBe(false);
+    expect(canApproveOrEditInsurance(UserRole.DENTIST)).toBe(false);
+    expect(canApproveOrEditInsurance(UserRole.RECEPTIONIST)).toBe(true);
+  });
+
+  it("keeps pre-auth override as a separate doctor-capable path", () => {
+    expect(canOverridePreAuth(UserRole.DOCTOR)).toBe(true);
+    expect(canOverridePreAuth(UserRole.DENTIST)).toBe(true);
+    expect(canOverridePreAuth(UserRole.RECEPTIONIST)).toBe(false);
+    expect(canApproveOrEditInsurance(UserRole.DOCTOR)).toBe(false);
   });
 });
 
@@ -36,8 +48,16 @@ describe("front-office insurance action isolation (static)", () => {
   const spinePath = resolve(
     "src/app/(dashboard)/features/clinical/encounter-spine-actions.ts",
   );
+  const spinePagePath = resolve(
+    "src/app/(dashboard)/clinical/encounter/[appointmentId]/spine/page.tsx",
+  );
+  const spineClientPath = resolve(
+    "src/app/(dashboard)/clinical/encounter/[appointmentId]/spine/spine-workspace-client.tsx",
+  );
   const actionSrc = readFileSync(actionPath, "utf8");
   const spineSrc = readFileSync(spinePath, "utf8");
+  const spinePageSrc = readFileSync(spinePagePath, "utf8");
+  const spineClientSrc = readFileSync(spineClientPath, "utf8");
 
   it("front-office action never calls assertRiskClearedForEncounter", () => {
     expect(actionSrc.includes("assertRiskClearedForEncounter(")).toBe(false);
@@ -52,13 +72,32 @@ describe("front-office insurance action isolation (static)", () => {
     expect(actionSrc.includes("serializeDecimal")).toBe(true);
   });
 
-  it("doctor spine upsert still asserts risk cleared", () => {
-    expect(spineSrc.includes("export async function upsertSpineInsuranceVerification")).toBe(
+  it("front-office and spine insurance upserts require insurance.write only", () => {
+    expect(actionSrc.includes("PERMISSIONS.clinical_chart.write")).toBe(false);
+    expect(actionSrc.includes("PERMISSIONS.insurance.write")).toBe(true);
+
+    const upsertIdx = spineSrc.indexOf("export async function upsertSpineInsuranceVerification");
+    const slice = spineSrc.slice(upsertIdx, upsertIdx + 900);
+    expect(slice.includes("requireSpineInsuranceWrite") || slice.includes("PERMISSIONS.insurance.write")).toBe(
       true,
     );
-    const upsertIdx = spineSrc.indexOf("export async function upsertSpineInsuranceVerification");
-    const slice = spineSrc.slice(upsertIdx, upsertIdx + 1200);
-    expect(slice.includes("assertRiskClearedForEncounter")).toBe(true);
-    expect(slice.includes("requirePermission(PERMISSIONS.clinical_chart.write)") || slice.includes("requireSpineWrite")).toBe(true);
+    expect(slice.includes("requireSpineWrite()")).toBe(false);
+  });
+
+  it("spine UI gates insurance save on canWriteInsurance, override on canWrite", () => {
+    expect(spinePageSrc.includes("canWriteInsurance")).toBe(true);
+    expect(spinePageSrc.includes("PERMISSIONS.insurance.write")).toBe(true);
+    expect(spineClientSrc.includes("canWriteInsurance")).toBe(true);
+    expect(spineClientSrc.includes("Save insurance verification")).toBe(true);
+    // Insurance block must not be keyed only on canWrite
+    const insuranceBlock = spineClientSrc.slice(
+      spineClientSrc.indexOf("Insurance verification"),
+      spineClientSrc.indexOf("Insurance verification") + 400,
+    );
+    expect(spineClientSrc.includes("{canWriteInsurance ? (")).toBe(true);
+    expect(insuranceBlock.includes("canWriteInsurance") || spineClientSrc.includes("canWriteInsurance ?")).toBe(
+      true,
+    );
+    expect(spineClientSrc.includes("Override pre-auth")).toBe(true);
   });
 });

@@ -17,9 +17,7 @@ export default async function ReceptionPage() {
   const role = requireStaffMemberRole(ctx);
   const spineEnabled = isEncounterSpineEnabled(ctx.tenant);
   const canVerifyInsurance =
-    spineEnabled &&
-    (hasPermission(role, PERMISSIONS.insurance.write) ||
-      hasPermission(role, PERMISSIONS.clinical_chart.write));
+    spineEnabled && hasPermission(role, PERMISSIONS.insurance.write);
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);

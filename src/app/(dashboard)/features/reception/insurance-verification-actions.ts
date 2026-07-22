@@ -24,17 +24,15 @@ const SPINE_DISABLED_MESSAGE =
 /**
  * Front-office insurance verification (Module 6).
  *
- * Accepts `insurance.write` (receptionist) OR `clinical_chart.write` (clinical staff).
- * Does NOT call assertRiskClearedForEncounter — that remains on the doctor spine path only.
- * Does NOT modify upsertSpineInsuranceVerification.
+ * Accepts `insurance.write` only (receptionist / admin). Doctors must not approve
+ * or edit verifications — they use the separate pre-auth override path instead.
+ * Does NOT call assertRiskClearedForEncounter — that remains on clinical spine actions.
+ * Does NOT modify upsertSpineInsuranceVerification's clinical helpers beyond permission.
  */
 async function requireFrontOfficeInsuranceWrite() {
   const ctx = await requireTenantContext();
   const role = requireStaffMemberRole(ctx);
-  const allowed =
-    hasPermission(role, PERMISSIONS.insurance.write) ||
-    hasPermission(role, PERMISSIONS.clinical_chart.write);
-  if (!allowed) {
+  if (!hasPermission(role, PERMISSIONS.insurance.write)) {
     throw new Error("FORBIDDEN");
   }
   if (!isEncounterSpineEnabled(ctx.tenant)) {
