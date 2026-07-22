@@ -1,17 +1,25 @@
-import Link from "next/link";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { db } from "@/lib/db";
+import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 import { QuickScan } from "@/components/reception/quick-scan";
 import { WalkInPanel } from "@/components/reception/walk-in-panel";
+import { WaitingRoomList } from "@/components/reception/waiting-room-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
 export default async function ReceptionPage() {
   const ctx = await requireRouteAccess("appointments", "read");
+  const role = requireStaffMemberRole(ctx);
+  const spineEnabled = isEncounterSpineEnabled(ctx.tenant);
+  const canVerifyInsurance =
+    spineEnabled &&
+    (hasPermission(role, PERMISSIONS.insurance.write) ||
+      hasPermission(role, PERMISSIONS.clinical_chart.write));
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -45,6 +53,19 @@ export default async function ReceptionPage() {
         patient: { select: { firstName: true, lastName: true, patientId: true } },
         doctor: { include: { user: { select: { firstName: true, lastName: true } } } },
         chair: { select: { name: true } },
+        encounters: {
+          where: { closedAt: null },
+          select: {
+            id: true,
+            insuranceVerifications: {
+              select: { id: true },
+              take: 1,
+              orderBy: { createdAt: "desc" },
+            },
+          },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
       },
       orderBy: { updatedAt: "asc" },
     }),
@@ -57,54 +78,30 @@ export default async function ReceptionPage() {
           <h1 className="text-2xl font-bold">Reception</h1>
           <p className="text-muted-foreground">
             Scan patient IDs for quick check-in, or add a same-day walk-in
+            {spineEnabled
+              ? " — verify insurance after check-in when the encounter spine is on"
+              : ""}
           </p>
         </div>
       </div>
 
       <WalkInPanel />
 
-      <QuickScan />
+      <QuickScan spineEnabled={spineEnabled} canVerifyInsurance={canVerifyInsurance} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Waiting room</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Patients checked in and waiting to be seen
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {waitingRoom.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No patients waiting</p>
-          ) : (
-            waitingRoom.map((apt) => (
-              <div
-                key={apt.id}
-                className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50/50 p-3"
-              >
-                <div>
-                  <div className="font-medium">
-                    {apt.patient!.firstName} {apt.patient!.lastName}
-                  </div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    {apt.patient!.patientId ?? apt.appointmentRef}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Chair: {apt.chair?.name ?? "Unassigned"}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <Badge className="bg-yellow-100 text-yellow-800">ARRIVED</Badge>
-                  <div className="mt-2">
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/appointments?appointmentId=${apt.id}`}>Open</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <WaitingRoomList
+        spineEnabled={spineEnabled}
+        canVerifyInsurance={canVerifyInsurance}
+        patients={waitingRoom.map((apt) => ({
+          id: apt.id,
+          patientName: `${apt.patient!.firstName} ${apt.patient!.lastName}`,
+          patientIdLabel: apt.patient!.patientId ?? apt.appointmentRef ?? apt.id,
+          chairName: apt.chair?.name ?? null,
+          hasInsuranceVerification: Boolean(
+            apt.encounters[0]?.insuranceVerifications[0]?.id,
+          ),
+        }))}
+      />
 
       <Card>
         <CardHeader>

@@ -21,6 +21,10 @@ export const PERMISSIONS = {
     read: "clinical_chart:read",
     write: "clinical_chart:write",
   },
+  /** Front-office encounter insurance verification (Module 6). */
+  insurance: {
+    write: "insurance:write",
+  },
   billing: {
     read: "billing:read",
     write: "billing:write",
@@ -59,6 +63,7 @@ export const RESOURCES = {
   appointments: "appointments",
   clinical_schedule: "clinical_schedule",
   clinical_chart: "clinical_chart",
+  insurance: "insurance",
   billing: "billing",
   inventory: "inventory",
   reports: "reports",
@@ -115,6 +120,7 @@ export function normalizeDashboardRole(role: UserRole): DashboardRole {
  *
  * clinical_schedule: plan/status summaries (reception read-only)
  * clinical_chart: odontogram, perio, imaging, chairside (clinical staff)
+ * insurance: front-office encounter insurance verification (receptionist write)
  */
 export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLevel>> = {
   ADMIN: {
@@ -122,6 +128,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "full",
     clinical_schedule: "full",
     clinical_chart: "full",
+    insurance: "full",
     billing: "full",
     inventory: "full",
     reports: "full",
@@ -135,6 +142,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "read",
     clinical_chart: "full",
+    insurance: "none",
     billing: "read",
     inventory: "read",
     reports: "limited",
@@ -148,6 +156,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "read",
     clinical_chart: "read",
+    insurance: "none",
     billing: "read",
     inventory: "read",
     reports: "limited",
@@ -161,6 +170,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "full",
     clinical_schedule: "read",
     clinical_chart: "none",
+    insurance: "write",
     billing: "read",
     inventory: "read",
     reports: "limited",
@@ -174,6 +184,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "none",
     clinical_chart: "none",
+    insurance: "none",
     billing: "full",
     inventory: "read",
     reports: "full",
@@ -187,6 +198,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "none",
     clinical_chart: "none",
+    insurance: "none",
     billing: "read",
     inventory: "full",
     reports: "limited",
@@ -270,6 +282,8 @@ function permissionKeyToCheck(permission: PermissionKey): { resource: Resource; 
       return { resource: "clinical_chart", action: "read" };
     case PERMISSIONS.clinical_chart.write:
       return { resource: "clinical_chart", action: "write" };
+    case PERMISSIONS.insurance.write:
+      return { resource: "insurance", action: "write" };
     case PERMISSIONS.billing.read:
       return { resource: "billing", action: "read" };
     case PERMISSIONS.billing.write:
