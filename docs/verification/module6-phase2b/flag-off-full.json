@@ -1,0 +1,66 @@
+{
+  "startedAt": "2026-07-22T12:11:29.166Z",
+  "envENCOUNTER_SPINE_ENABLED": "false",
+  "runtimeTenantFeatureFlags": {},
+  "spineUrl": "http://127.0.0.1:3600/clinical/encounter/seed_appt_flagoff_phase2",
+  "spineUnreachable": true,
+  "timelineUrl": "http://127.0.0.1:3600/clinical/encounter/seed_appt_flagoff_phase2",
+  "timelineRedirectedAway": true,
+  "legacyUrl": "http://127.0.0.1:3600/clinical/encounter/seed_appt_flagoff_phase2",
+  "legacyOk": true,
+  "completeButtonVisible": true,
+  "invoice": {
+    "id": "cmrw1l4v10005rr3c4rvunj64",
+    "number": "INV-000002",
+    "encounterId": null,
+    "total": "126",
+    "tax": "6",
+    "subtotal": "120",
+    "items": [
+      {
+        "description": "Resin composite - one surface",
+        "total": "120",
+        "code": "D2391"
+      }
+    ]
+  },
+  "finalizedSession": {
+    "id": "cmrw1kw910001rr3cddx3vk9d",
+    "status": "FINALIZED",
+    "invoiceId": "cmrw1l4v10005rr3c4rvunj64",
+    "finalizedAt": "2026-07-22T12:12:00.291Z",
+    "closedReason": "manual_finalize"
+  },
+  "recentSessions": [
+    {
+      "id": "cmrw1l8il000drr3c4x6roau7",
+      "status": "ACTIVE",
+      "invoiceId": null,
+      "finalizedAt": null,
+      "closedReason": null
+    },
+    {
+      "id": "cmrw1kw910001rr3cddx3vk9d",
+      "status": "FINALIZED",
+      "invoiceId": "cmrw1l4v10005rr3c4rvunj64",
+      "finalizedAt": "2026-07-22T12:12:00.291Z",
+      "closedReason": "manual_finalize"
+    }
+  ],
+  "invoiceCreated": true,
+  "completeButtonAfterFinalize": false,
+  "invoiceCountUnchangedOnReload": true,
+  "nullEncounterIdSecondInvoice": {
+    "ok": true,
+    "id": "cmrw1lbyo00017k5ghcxl5ktr",
+    "encounterId": null
+  },
+  "hydrationWarnings": [],
+  "console": [
+    "[error] Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[pageerror] Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "[pageerror] Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "[pageerror] Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "[pageerror] Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+  ]
+}

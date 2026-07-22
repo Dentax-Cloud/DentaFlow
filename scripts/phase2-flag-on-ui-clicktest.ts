@@ -23,8 +23,15 @@ async function login(page: Page) {
 }
 
 async function clickExact(page: Page, name: string) {
-  const btn = page.getByRole("button", { name, exact: true });
-  await btn.first().click({ timeout: 10000 });
+  const btn = page.getByRole("button", { name, exact: true }).first();
+  // Spine actions set client `pending`; buttons use disabled={!canWrite || pending}.
+  await btn.waitFor({ state: "visible", timeout: 15000 });
+  await page.waitForFunction(
+    (el) => el instanceof HTMLButtonElement && !el.disabled,
+    await btn.elementHandle(),
+    { timeout: 30000 },
+  );
+  await btn.click({ timeout: 10000 });
   await page.waitForTimeout(900);
 }
 
@@ -138,10 +145,22 @@ async function main() {
     }
     await procCard.getByText(/COMPLETED/i).first().waitFor({ timeout: 15000 });
 
-    // Pending material preview before log
-    const materialItemSelect = procCard.locator("select").nth(1);
-    const qtyInput = procCard.locator('input[placeholder="Qty"]');
-    if ((await materialItemSelect.count()) > 0 && (await qtyInput.count()) > 0) {
+    // Pending material preview before log (material selects live in billing drawer / materials slot)
+    const materialItemSelect = page
+      .locator("select")
+      .filter({ has: page.locator('option', { hasText: /Select material/i }) })
+      .first();
+    const qtyInput = page.locator('input[placeholder="Qty"]').first();
+    const materialOptionCount =
+      (await materialItemSelect.count()) > 0
+        ? await materialItemSelect.locator("option").count()
+        : 0;
+    report.materialOptionCount = materialOptionCount;
+    if (
+      materialOptionCount > 1 &&
+      (await materialItemSelect.count()) > 0 &&
+      (await qtyInput.count()) > 0
+    ) {
       await materialItemSelect.selectOption({ index: 1 });
       await qtyInput.fill("2");
       await page.waitForTimeout(300);
@@ -164,6 +183,9 @@ async function main() {
       // Re-select for log
       await materialItemSelect.selectOption({ index: 1 });
       await qtyInput.fill("1");
+    } else {
+      report.pendingMaterialVisible = false;
+      report.pendingMaterialSkipped = "no inventory options in material select";
     }
 
     // Material if selects present
@@ -235,6 +257,11 @@ async function main() {
       orderBy: { createdAt: "desc" },
       include: { items: true },
     });
+    // PR #7 interaction: billing drawer / invoice must carry payerType + tax fields
+    report.invoicePayerType = invoice
+      ? ((invoice as { payerType?: string | null }).payerType ?? null)
+      : null;
+    report.invoiceTax = invoice ? invoice.tax.toString() : null;
 
     let double = "n/a";
     const billedEncounter = encounters.find((e) => e.id === invoice?.encounterId);
@@ -268,6 +295,7 @@ async function main() {
           number: invoice.invoiceNumber,
           total: invoice.total.toString(),
           tax: invoice.tax.toString(),
+          payerType: (invoice as { payerType?: string | null }).payerType ?? null,
           items: invoice.items.map((i) => ({
             description: i.description,
             total: i.total.toString(),

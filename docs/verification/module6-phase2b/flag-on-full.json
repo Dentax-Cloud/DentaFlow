@@ -1,21 +1,29 @@
 {
-  "startedAt": "2026-07-19T17:02:27.083Z",
+  "startedAt": "2026-07-22T12:08:56.867Z",
   "redirectedToSpine": true,
   "threeZoneLayout": true,
   "gateSummary": true,
   "hydrationWarnings": [],
+  "pendingProcedureVisible": true,
+  "materialOptionCount": 83,
+  "pendingMaterialVisible": true,
+  "pendingMaterialQtyLive": true,
+  "pendingClearsWithoutRoundTrip": true,
   "invoiceEnabled": true,
+  "invoicePayerType": "SELF_PAY",
+  "invoiceTax": "5.85",
   "encounters": [
     {
-      "id": "cmrs1na77001o7km0j706xq3m",
-      "closedAt": "2026-07-19T17:02:57.870Z",
+      "id": "cmrw1hl6r001zl83bial7vkht",
+      "closedAt": "2026-07-22T12:09:45.923Z",
       "status": "recall_scheduled"
     }
   ],
   "invoice": {
     "number": "INV-000001",
-    "total": "102.38",
-    "tax": "4.88",
+    "total": "122.85",
+    "tax": "5.85",
+    "payerType": "SELF_PAY",
     "items": [
       {
         "description": "Prophylaxis - adult",
@@ -23,13 +31,13 @@
         "code": "D1110"
       },
       {
-        "description": "Material · Composite resin capsule",
-        "total": "12.5",
+        "description": "Material · Alginate Impression Material",
+        "total": "32",
         "code": null
       }
     ]
   },
-  "double": "rejected:\nInvalid `prisma.invoice.create()` invocation:\n\n\nUnique constraint failed on the fields: (`encounter",
+  "double": "rejected:\nInvalid `db.invoice.create()` invocation in\nD:\\ai_projects\\dentaflow\\scripts\\phase2-flag-on-ui-clic",
   "closedVisible": true,
   "console": [
     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
