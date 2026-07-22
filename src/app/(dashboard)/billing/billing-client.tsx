@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/utils";
 import { formatCurrency } from "@/lib/countries";
+import { invoicePayerTypeLabel } from "@/lib/billing/invoice-payer-type";
 import {
   createInvoice,
   markInvoiceSent,
@@ -341,6 +342,7 @@ export function BillingClient({ invoices, patients, procedures, countryCode }: P
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{money(Number(inv.total))}</span>
+                  <Badge variant="outline">{invoicePayerTypeLabel(inv.payerType)}</Badge>
                   <Badge variant={statusColors[inv.status] ?? "secondary"}>{inv.status}</Badge>
                   {inv.status === "DRAFT" && (
                     <Button type="button" size="sm" variant="outline" onClick={() => handleMarkSent(inv.id)}>

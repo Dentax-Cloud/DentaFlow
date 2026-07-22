@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
+import { resolveInvoicePayerType } from "@/lib/billing/invoice-payer-type";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { sendInvoiceEmailToPatient } from "@/lib/notifications/invoice-notifications";
@@ -59,6 +60,7 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
     procedureCodes,
     totalAmount: taxResult.total,
   });
+  const payerType = resolveInvoicePayerType(insuranceSplit);
 
   const count = await db.invoice.count({ where: { tenantId: params.tenantId } });
 
@@ -70,6 +72,7 @@ export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParam
       invoiceNumber: generateInvoiceNumber(count + 1),
       invoiceRef: await generateInvoiceRef(params.tenantId),
       status: params.status ?? "DRAFT",
+      payerType,
       subtotal: taxResult.subtotal,
       tax: taxResult.tax,
       total: taxResult.total,

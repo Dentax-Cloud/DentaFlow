@@ -9,6 +9,8 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateInvoiceNumber } from "@/lib/utils";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
+import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
+import { resolveInvoicePayerType } from "@/lib/billing/invoice-payer-type";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import { getVisitNumber, normalizeItemStatus } from "@/lib/clinical/treatment-plan-types";
 import { assertCanStartTreatment } from "@/lib/insurance/pre-auth-gate";
@@ -401,6 +403,18 @@ export async function generateInvoiceFromPlan(
     })),
   });
 
+  const procedureCodes = plan.items
+    .map((i) => i.procedureCode)
+    .filter((c): c is string => Boolean(c));
+
+  const insuranceSplit = await calculateInsuranceSplit({
+    tenantId: ctx.tenantId,
+    patientId: plan.patientId,
+    procedureCodes,
+    totalAmount: taxResult.total,
+  });
+  const payerType = resolveInvoicePayerType(insuranceSplit);
+
   const count = await db.invoice.count({ where: { tenantId: ctx.tenantId } });
   const invoice = await db.invoice.create({
     data: {
@@ -408,6 +422,7 @@ export async function generateInvoiceFromPlan(
       patientId: plan.patientId,
       invoiceNumber: generateInvoiceNumber(count + 1),
       status: "DRAFT",
+      payerType,
       subtotal: taxResult.subtotal,
       tax: taxResult.tax,
       total: taxResult.total,
@@ -420,6 +435,12 @@ export async function generateInvoiceFromPlan(
       taxName: taxResult.taxName,
       taxRateApplied: taxResult.taxRateApplied,
       taxNumber: taxResult.taxNumber,
+      insuranceAmount: insuranceSplit?.insurerAmount ?? 0,
+      patientAmount: insuranceSplit?.patientAmount ?? taxResult.total,
+      coPayPercent: insuranceSplit?.coPayPercent ?? null,
+      providerCode: insuranceSplit?.providerName ?? null,
+      networkType: insuranceSplit?.networkName ?? null,
+      preAuthCode: insuranceSplit?.preAuthReference ?? null,
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       notes: `Treatment Plan: ${plan.title}${
         options?.visitNumber ? ` — Visit ${options.visitNumber}` : ""

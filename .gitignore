@@ -56,7 +56,9 @@ prisma/*.db
 # clerk configuration (can include secrets)
 /.clerk/
 .env.docker
-".tmp/" 
+# Local agent/ops scratch (VPS helpers, bundles, raw logs) — never commit
+.tmp/
+.tmp-*
 .pnpm-store/
 backups/
 set-smtp-pass.js
