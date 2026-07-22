@@ -13,15 +13,22 @@ import { updateClinicSettings } from "@/app/(dashboard)/features/admin/actions";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AUD", "CAD"] as const;
 
+export type TenantTaxDisplay = {
+  taxName: string;
+  taxRate: number;
+  taxOnDental: boolean;
+};
+
 export function ClinicSettingsForm({
   settings,
+  tenantTax,
   canEdit,
 }: {
   settings: Settings | null;
+  tenantTax: TenantTaxDisplay;
   canEdit: boolean;
 }) {
   const [currency, setCurrency] = useState(settings?.currency ?? "USD");
-  const [taxRate, setTaxRate] = useState(String(settings?.taxRate ?? 0));
   const [enablePatientPortal, setEnablePatientPortal] = useState(
     settings?.enablePatientPortal ?? true,
   );
@@ -30,6 +37,10 @@ export function ClinicSettingsForm({
   );
   const [loading, setLoading] = useState(false);
 
+  const taxDisplay = tenantTax.taxOnDental
+    ? `${tenantTax.taxName} ${tenantTax.taxRate}%`
+    : `${tenantTax.taxName} ${tenantTax.taxRate}% (dental exempt)`;
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!canEdit) return;
@@ -37,7 +48,6 @@ export function ClinicSettingsForm({
     setLoading(true);
     const result = await updateClinicSettings({
       currency,
-      taxRate: Number(taxRate),
       enablePatientPortal,
       enableOnlinePayments,
     });
@@ -80,17 +90,12 @@ export function ClinicSettingsForm({
               </datalist>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="taxRate">Tax rate (%)</Label>
-              <Input
-                id="taxRate"
-                type="number"
-                min={0}
-                max={100}
-                step={0.01}
-                value={taxRate}
-                onChange={(e) => setTaxRate(e.target.value)}
-                disabled={!canEdit}
-              />
+              <Label htmlFor="taxRateDisplay">Tax rate</Label>
+              <Input id="taxRateDisplay" value={taxDisplay} disabled readOnly />
+              <p className="text-xs text-muted-foreground">
+                Determined by your registered country profile. Contact support to update your
+                country.
+              </p>
             </div>
           </div>
 

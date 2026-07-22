@@ -12,6 +12,7 @@ import { AuditAction, InvoiceStatus, PaymentMethod } from "@prisma/client";
 import { getStripeClient } from "@/lib/stripe";
 import { calculateInsuranceSplit } from "@/lib/billing/insurance-calculator";
 import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax";
+import { resolveInvoicePayerType } from "@/lib/billing/invoice-payer-type";
 import { notifyInvoicePaid, sendInvoiceEmailToPatient, sendPaymentReceiptEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import { getStaffActor } from "@/lib/tenant/context";
@@ -65,6 +66,7 @@ export const createInvoice = createAction({
       procedureCodes,
       totalAmount: taxResult.total,
     });
+    const payerType = resolveInvoicePayerType(insuranceSplit);
 
     const invoice = await db.invoice.create({
       data: {
@@ -73,6 +75,7 @@ export const createInvoice = createAction({
         invoiceNumber: (await import("@/lib/utils")).generateInvoiceNumber(count + 1),
         invoiceRef: await generateInvoiceRef(ctx.tenant.id),
         status: input.sendNow ? InvoiceStatus.SENT : InvoiceStatus.DRAFT,
+        payerType,
         subtotal: taxResult.subtotal,
         tax: taxResult.tax,
         total: taxResult.total,
