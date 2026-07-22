@@ -50,6 +50,7 @@ import {
 import type { EncounterStatus, EncounterProcedureLineStatus, PlannedVsPerformed } from "@/lib/encounter/types";
 import type { InterruptOutcome } from "@/lib/encounter/state-machine";
 import type { GateSummary } from "@/lib/encounter/types";
+import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
 
 export type { SpineActionResult };
 
@@ -125,6 +126,7 @@ export type SpineProcedureLineSerialized = {
     name: string;
     price: number;
   };
+  billedInvoiceId: string | null;
   materialUsages: Array<{
     id: string;
     itemId: string;
@@ -134,6 +136,7 @@ export type SpineProcedureLineSerialized = {
     lotNumber: string | null;
     expiryDate: string | null;
     deductedAt: string;
+    itemName: string | null;
   }>;
   provider: {
     id: string;
@@ -200,6 +203,11 @@ export type SpineCatalogSnippet = {
   code: string;
   name: string;
   category: string;
+  /**
+   * Pending procedure preview price — same `ProcedureCatalog.price` that
+   * `buildInvoiceItemsFromEncounter` uses via `line.unitPrice ?? line.procedureCatalog.price`.
+   * Serialized via `serializeDecimal` in `loadSpineWorkspaceData`.
+   */
   price: number;
 };
 
@@ -208,6 +216,49 @@ export type SpineInventorySnippet = {
   name: string;
   itemRef: string | null;
   unit: string | null;
+  /**
+   * Pending material preview unit price.
+   * Provenance (must match invoice generation):
+   * `InventoryItem.cost` is stamped onto `MaterialUsage.unitCost` in
+   * `logMaterialUsage` (`procedure-execution.ts`), and
+   * `buildInvoiceItemsFromEncounter` bills materials from `usage.unitCost`.
+   * Serialized via `serializeDecimal` in `loadSpineWorkspaceData`.
+   */
+  unitCost: number;
+};
+
+export type SpineClinicalFindingsData = {
+  chartData: Record<string, { conditions: Array<{
+    id: string;
+    type: string;
+    surfaces?: string[];
+    severity?: number | null;
+    notes?: string | null;
+    recordedAt: string;
+    recordedBy?: string | null;
+    recordedByName?: string | null;
+  }> }>;
+  perioSummary: {
+    chartDate: string | null;
+    worstPocket: number | null;
+    bleedingSites: number | null;
+  } | null;
+  perioMeasurements: unknown[];
+  radiographs: Array<{
+    id: string;
+    url: string;
+    type: string;
+    fileName: string | null;
+    takenAt: string | null;
+  }>;
+  photos: Array<{
+    id: string;
+    url: string;
+    type: string;
+    fileName: string | null;
+    takenAt: string | null;
+  }>;
+  treatmentPlan: { id: string; title: string } | null;
 };
 
 export type SpineWorkspaceData = {
@@ -222,8 +273,9 @@ export type SpineWorkspaceData = {
     fileName: string | null;
     takenAt: string | null;
   }>;
-    patient: {
-      id: string;
+  clinicalFindings: SpineClinicalFindingsData;
+  patient: {
+    id: string;
     firstName: string;
     lastName: string;
     patientNumber: string | null;
@@ -246,6 +298,7 @@ function serializeProcedureLine(line: {
   plannedVsPerformed: string;
   providerId: string | null;
   unitPrice: unknown;
+  billedInvoiceId?: string | null;
   sterilizationLoggedAt: Date | null;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -260,6 +313,7 @@ function serializeProcedureLine(line: {
     lotNumber: string | null;
     expiryDate: Date | null;
     deductedAt: Date;
+    item?: { id: string; name: string } | null;
   }>;
   provider: { id: string; firstName: string | null; lastName: string | null } | null;
 }): SpineProcedureLineSerialized {
@@ -276,6 +330,7 @@ function serializeProcedureLine(line: {
     plannedVsPerformed: line.plannedVsPerformed,
     providerId: line.providerId,
     unitPrice: line.unitPrice != null ? asNumber(serializeDecimal({ unitPrice: line.unitPrice }).unitPrice) : null,
+    billedInvoiceId: line.billedInvoiceId ?? null,
     sterilizationLoggedAt: toIso(line.sterilizationLoggedAt),
     startedAt: toIso(line.startedAt),
     completedAt: toIso(line.completedAt),
@@ -297,6 +352,7 @@ function serializeProcedureLine(line: {
         lotNumber: u.lotNumber,
         expiryDate: toIso(u.expiryDate),
         deductedAt: toIso(u.deductedAt)!,
+        itemName: u.item?.name ?? null,
       };
     }),
     provider: line.provider,
@@ -897,7 +953,18 @@ export async function loadSpineWorkspaceData(
 
   if (!encounterRow) throw new Error("Encounter not found.");
 
-  const [gates, procedures, inventoryItems, settingsRow, clinicalImages] = await Promise.all([
+  const patientId = appointment.patient.id;
+
+  const [
+    gates,
+    procedures,
+    inventoryItems,
+    settingsRow,
+    clinicalImages,
+    chartData,
+    latestPerio,
+    activePlan,
+  ] = await Promise.all([
     buildLiveGateSummary(ctx.tenantId, encounterRow.id),
     db.procedureCatalog.findMany({
       where: { tenantId: ctx.tenantId, isActive: true },
@@ -906,10 +973,12 @@ export async function loadSpineWorkspaceData(
       select: { id: true, code: true, name: true, category: true, price: true },
     }),
     db.inventoryItem.findMany({
+      // Tenant-scoped via requireSpineRead() → requireTenantContext(); never omit tenantId.
       where: { tenantId: ctx.tenantId, deletedAt: null },
       orderBy: { name: "asc" },
       take: 100,
-      select: { id: true, name: true, itemRef: true, unit: true },
+      // `cost` is the InventoryItem field that becomes MaterialUsage.unitCost at log time.
+      select: { id: true, name: true, itemRef: true, unit: true, cost: true },
     }),
     db.settings.findUnique({
       where: { tenantId: ctx.tenantId },
@@ -918,12 +987,44 @@ export async function loadSpineWorkspaceData(
     db.clinicalImage.findMany({
       where: {
         tenantId: ctx.tenantId,
-        patientId: appointment.patient.id,
+        patientId,
       },
       orderBy: { takenAt: "desc" },
-      take: 12,
+      take: 24,
       select: { id: true, url: true, type: true, fileName: true, takenAt: true },
     }),
+    // Read-only clinical findings for Phase 2b cockpit (no write paths).
+    getPatientChart(ctx.tenantId, patientId).catch(() => ({})),
+    db.perioChart
+      .findFirst({
+        where: { tenantId: ctx.tenantId, patientId },
+        orderBy: { chartDate: "desc" },
+        select: { chartDate: true, measurements: true },
+      })
+      .catch(() => null),
+    encounterRow.treatmentPlanId
+      ? db.treatmentPlan
+          .findFirst({
+            where: {
+              id: encounterRow.treatmentPlanId,
+              tenantId: ctx.tenantId,
+              deletedAt: null,
+            },
+            select: { id: true, title: true },
+          })
+          .catch(() => null)
+      : db.treatmentPlan
+          .findFirst({
+            where: {
+              tenantId: ctx.tenantId,
+              patientId,
+              deletedAt: null,
+              status: { in: ["DRAFT", "PROPOSED", "ACCEPTED", "IN_PROGRESS"] },
+            },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true, title: true },
+          })
+          .catch(() => null),
   ]);
 
   const spineSettings = resolveEncounterSpineSettings({
@@ -939,6 +1040,24 @@ export async function loadSpineWorkspaceData(
         ? appointment.patient.medicalHistory
         : null;
 
+  const media = clinicalImages.map((img) => ({
+    id: img.id,
+    url: img.url,
+    type: img.type,
+    fileName: img.fileName,
+    takenAt: img.takenAt?.toISOString() ?? null,
+  }));
+  const radiographs = media.filter((m) => m.type !== "PHOTO").slice(0, 12);
+  const photos = media.filter((m) => m.type === "PHOTO").slice(0, 12);
+
+  const perioMeasurements = Array.isArray(latestPerio?.measurements)
+    ? (latestPerio!.measurements as unknown[])
+    : [];
+  const perioSummary = summarizePerioForSpine(
+    latestPerio?.chartDate?.toISOString() ?? null,
+    perioMeasurements,
+  );
+
   return {
     encounter: serializeEncounterWorkspace(encounterRow),
     gates,
@@ -952,19 +1071,28 @@ export async function loadSpineWorkspaceData(
         price: asNumber(s.price),
       };
     }),
-    inventoryItems: inventoryItems.map((i) => ({
-      id: i.id,
-      name: i.name,
-      itemRef: i.itemRef,
-      unit: i.unit,
-    })),
-    clinicalImages: clinicalImages.map((img) => ({
-      id: img.id,
-      url: img.url,
-      type: img.type,
-      fileName: img.fileName,
-      takenAt: img.takenAt?.toISOString() ?? null,
-    })),
+    inventoryItems: inventoryItems.map((i) => {
+      const s = serializeDecimal(i as Record<string, unknown>);
+      return {
+        id: i.id,
+        name: i.name,
+        itemRef: i.itemRef,
+        unit: i.unit,
+        // Prisma Decimal → number for the client pending preview (one-shot page load).
+        unitCost: asNumber(s.cost),
+      };
+    }),
+    clinicalImages: media.slice(0, 12),
+    clinicalFindings: {
+      chartData: chartData as SpineClinicalFindingsData["chartData"],
+      perioSummary,
+      perioMeasurements,
+      radiographs,
+      photos,
+      treatmentPlan: activePlan
+        ? { id: activePlan.id, title: activePlan.title ?? "Treatment plan" }
+        : null,
+    },
     patient: {
       id: appointment.patient.id,
       firstName: appointment.patient.firstName,
@@ -975,6 +1103,37 @@ export async function loadSpineWorkspaceData(
       medications: appointment.patient.medications ?? [],
     },
     painScoreThreshold: spineSettings.painScoreThreshold,
+  };
+}
+
+function summarizePerioForSpine(
+  chartDate: string | null,
+  measurements: unknown[],
+): SpineClinicalFindingsData["perioSummary"] {
+  if (!measurements.length && !chartDate) return null;
+  let worstPocket: number | null = null;
+  let bleedingSites = 0;
+  for (const raw of measurements) {
+    if (!raw || typeof raw !== "object") continue;
+    const m = raw as {
+      buccalDepths?: number[];
+      lingualDepths?: number[];
+      buccalBleeding?: boolean[];
+      lingualBleeding?: boolean[];
+    };
+    for (const d of [...(m.buccalDepths ?? []), ...(m.lingualDepths ?? [])]) {
+      if (typeof d === "number" && Number.isFinite(d)) {
+        worstPocket = worstPocket == null ? d : Math.max(worstPocket, d);
+      }
+    }
+    for (const b of [...(m.buccalBleeding ?? []), ...(m.lingualBleeding ?? [])]) {
+      if (b) bleedingSites += 1;
+    }
+  }
+  return {
+    chartDate,
+    worstPocket,
+    bleedingSites,
   };
 }
 

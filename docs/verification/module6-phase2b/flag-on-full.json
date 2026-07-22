@@ -1,0 +1,45 @@
+{
+  "startedAt": "2026-07-22T12:08:56.867Z",
+  "redirectedToSpine": true,
+  "threeZoneLayout": true,
+  "gateSummary": true,
+  "hydrationWarnings": [],
+  "pendingProcedureVisible": true,
+  "materialOptionCount": 83,
+  "pendingMaterialVisible": true,
+  "pendingMaterialQtyLive": true,
+  "pendingClearsWithoutRoundTrip": true,
+  "invoiceEnabled": true,
+  "invoicePayerType": "SELF_PAY",
+  "invoiceTax": "5.85",
+  "encounters": [
+    {
+      "id": "cmrw1hl6r001zl83bial7vkht",
+      "closedAt": "2026-07-22T12:09:45.923Z",
+      "status": "recall_scheduled"
+    }
+  ],
+  "invoice": {
+    "number": "INV-000001",
+    "total": "122.85",
+    "tax": "5.85",
+    "payerType": "SELF_PAY",
+    "items": [
+      {
+        "description": "Prophylaxis - adult",
+        "total": "85",
+        "code": "D1110"
+      },
+      {
+        "description": "Material · Alginate Impression Material",
+        "total": "32",
+        "code": null
+      }
+    ]
+  },
+  "double": "rejected:\nInvalid `db.invoice.create()` invocation in\nD:\\ai_projects\\dentaflow\\scripts\\phase2-flag-on-ui-clic",
+  "closedVisible": true,
+  "console": [
+    "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

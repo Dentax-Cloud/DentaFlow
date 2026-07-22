@@ -23,8 +23,15 @@ async function login(page: Page) {
 }
 
 async function clickExact(page: Page, name: string) {
-  const btn = page.getByRole("button", { name, exact: true });
-  await btn.first().click({ timeout: 10000 });
+  const btn = page.getByRole("button", { name, exact: true }).first();
+  // Spine actions set client `pending`; buttons use disabled={!canWrite || pending}.
+  await btn.waitFor({ state: "visible", timeout: 15000 });
+  await page.waitForFunction(
+    (el) => el instanceof HTMLButtonElement && !el.disabled,
+    await btn.elementHandle(),
+    { timeout: 30000 },
+  );
+  await btn.click({ timeout: 10000 });
   await page.waitForTimeout(900);
 }
 
@@ -66,11 +73,24 @@ async function main() {
 
     await page.goto(`${BASE}/clinical/encounter/${APPT}/spine`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1000);
+    report.threeZoneLayout =
+      (await page.locator("[data-stage]").count()) >= 4 &&
+      (await page.getByRole("navigation").count()) +
+        (await page.getByLabel(/Encounter stages|Billing preview|Running total/i).count()) >
+        0;
     report.gateSummary = (await page.getByText("Gate summary").count()) > 0;
+    report.hydrationWarnings = logs.filter((l) => /hydrat/i.test(l)).length;
 
-    // Advance intake → exam → gates
+    // Advance intake → exam → gates (status strip is outside collapsible cards)
     await clickExact(page, "→ CHIEF COMPLAINT EXAM");
     await clickExact(page, "→ GATES");
+
+    // Phase 2b: expand Gate summary stage card if collapsed
+    const gateCardToggle = page.locator('[data-stage="gates"] button').first();
+    if ((await gateCardToggle.getAttribute("aria-expanded")) === "false") {
+      await gateCardToggle.click();
+      await page.waitForTimeout(300);
+    }
 
     await page.locator("#asa").fill("II");
     await clickExact(page, "Clear risk");
@@ -79,18 +99,94 @@ async function main() {
 
     await clickExact(page, "→ PROCEDURE EXECUTION");
 
-    // Add procedure (first catalog option already selected)
+    const procToggle = page.locator('[data-stage="procedures"] button').first();
+    if ((await procToggle.getAttribute("aria-expanded")) === "false") {
+      await procToggle.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Pending price preview: select procedure without adding
+    const procSelect = page.locator("#proc");
+    await procSelect.selectOption({ index: 1 });
+    await page.waitForTimeout(400);
+    report.pendingProcedureVisible =
+      (await page.locator("[data-pending-prices]").getByText(/Pending · procedure/i).count()) > 0;
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.screenshot({
+      path: `${OUT}/phase2b-pending-procedure.png`,
+      fullPage: false,
+    });
+
+    // Add procedure (selected catalog option)
     await clickExact(page, "Add line");
+    await page.waitForTimeout(1500);
+    await page
+      .locator('[data-stage="procedures"]')
+      .getByText(/PLANNED|IN PROGRESS|COMPLETED/i)
+      .first()
+      .waitFor({ timeout: 15000 });
+
+    const procCard = page.locator('[data-stage="procedures"]');
     // Sterilize + start + complete first line buttons
-    const sterilize = page.getByRole("button", { name: /Steriliz/i });
-    if ((await sterilize.count()) > 0) await sterilize.first().click();
-    await page.waitForTimeout(700);
-    const start = page.getByRole("button", { name: /^Start$/i });
-    if ((await start.count()) > 0) await start.first().click();
-    await page.waitForTimeout(700);
-    const complete = page.getByRole("button", { name: /^Complete$/i });
-    if ((await complete.count()) > 0) await complete.first().click();
-    await page.waitForTimeout(700);
+    const sterilize = procCard.getByRole("button", { name: /^Sterilize$/i });
+    if ((await sterilize.count()) > 0) {
+      await sterilize.first().click();
+      await page.waitForTimeout(1500);
+    }
+    const start = procCard.getByRole("button", { name: /^Start$/i });
+    if ((await start.count()) > 0) {
+      await start.first().click();
+      await page.waitForTimeout(1500);
+    }
+    const complete = procCard.getByRole("button", { name: /^Complete$/i });
+    if ((await complete.count()) > 0) {
+      await complete.first().click();
+      await page.waitForTimeout(1500);
+    }
+    await procCard.getByText(/COMPLETED/i).first().waitFor({ timeout: 15000 });
+
+    // Pending material preview before log (material selects live in billing drawer / materials slot)
+    const materialItemSelect = page
+      .locator("select")
+      .filter({ has: page.locator('option', { hasText: /Select material/i }) })
+      .first();
+    const qtyInput = page.locator('input[placeholder="Qty"]').first();
+    const materialOptionCount =
+      (await materialItemSelect.count()) > 0
+        ? await materialItemSelect.locator("option").count()
+        : 0;
+    report.materialOptionCount = materialOptionCount;
+    if (
+      materialOptionCount > 1 &&
+      (await materialItemSelect.count()) > 0 &&
+      (await qtyInput.count()) > 0
+    ) {
+      await materialItemSelect.selectOption({ index: 1 });
+      await qtyInput.fill("2");
+      await page.waitForTimeout(300);
+      report.pendingMaterialVisible =
+        (await page.locator("[data-pending-prices]").getByText(/Pending · material/i).count()) > 0;
+      await page.screenshot({
+        path: `${OUT}/phase2b-pending-material.png`,
+        fullPage: false,
+      });
+      await qtyInput.fill("3");
+      await page.waitForTimeout(200);
+      report.pendingMaterialQtyLive =
+        (await page.locator("[data-pending-prices]").getByText(/× 3/i).count()) > 0;
+      // Clear selection — pending row should vanish client-side
+      await materialItemSelect.selectOption({ value: "" });
+      await page.waitForTimeout(200);
+      report.pendingClearsWithoutRoundTrip =
+        (await page.locator("[data-pending-prices]").getByText(/Pending · material/i).count()) ===
+        0;
+      // Re-select for log
+      await materialItemSelect.selectOption({ index: 1 });
+      await qtyInput.fill("1");
+    } else {
+      report.pendingMaterialVisible = false;
+      report.pendingMaterialSkipped = "no inventory options in material select";
+    }
 
     // Material if selects present
     const logMat = page.getByRole("button", { name: /Log material/i });
@@ -100,12 +196,45 @@ async function main() {
     }
 
     await clickExact(page, "→ CLOSE OUT");
+    const closeToggle = page.locator('[data-stage="close_out"] button').first();
+    if ((await closeToggle.getAttribute("aria-expanded")) === "false") {
+      await closeToggle.click();
+      await page.waitForTimeout(300);
+    }
     await page.locator("#rx").fill("Ibuprofen 400mg PRN");
     await clickExact(page, "Save close-out note");
     await clickExact(page, "Schedule recall");
     await clickExact(page, "→ BILLING");
 
-    const invoiceBtn = page.getByRole("button", { name: "Close & invoice", exact: true });
+    const billToggle = page.locator('[data-stage="billing"] button').first();
+    if ((await billToggle.getAttribute("aria-expanded")) === "false") {
+      await billToggle.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Layout evidence screenshots (Phase 2b)
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.screenshot({ path: `${OUT}/phase2b-desktop-three-zone.png`, fullPage: false });
+    const collapseNav = page.getByRole("button", { name: /Collapse stage navigation/i });
+    if ((await collapseNav.count()) > 0) {
+      await collapseNav.click();
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: `${OUT}/phase2b-nav-collapsed.png`, fullPage: false });
+      await page.getByRole("button", { name: /Expand stage navigation/i }).click();
+    }
+    const odontoTool = page.getByRole("button", { name: /^Odontogram$/i });
+    if ((await odontoTool.count()) > 0) {
+      await odontoTool.first().click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `${OUT}/phase2b-odontogram-overlay.png`, fullPage: false });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(200);
+    }
+    await page.screenshot({ path: `${OUT}/phase2b-billing-drawer.png`, fullPage: false });
+
+    const invoiceBtn = page
+      .locator('[data-stage="billing"]')
+      .getByRole("button", { name: "Close & invoice", exact: true });
     report.invoiceEnabled = await invoiceBtn.isEnabled();
     if (await invoiceBtn.isEnabled()) {
       await invoiceBtn.click();
@@ -128,6 +257,11 @@ async function main() {
       orderBy: { createdAt: "desc" },
       include: { items: true },
     });
+    // PR #7 interaction: billing drawer / invoice must carry payerType + tax fields
+    report.invoicePayerType = invoice
+      ? ((invoice as { payerType?: string | null }).payerType ?? null)
+      : null;
+    report.invoiceTax = invoice ? invoice.tax.toString() : null;
 
     let double = "n/a";
     const billedEncounter = encounters.find((e) => e.id === invoice?.encounterId);
@@ -161,6 +295,7 @@ async function main() {
           number: invoice.invoiceNumber,
           total: invoice.total.toString(),
           tax: invoice.tax.toString(),
+          payerType: (invoice as { payerType?: string | null }).payerType ?? null,
           items: invoice.items.map((i) => ({
             description: i.description,
             total: i.total.toString(),
