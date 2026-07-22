@@ -58,6 +58,7 @@ prisma/*.db
 .env.docker
 # Local agent/ops scratch (VPS helpers, bundles, raw logs) — never commit
 .tmp/
+.tmp-*
 .pnpm-store/
 backups/
 set-smtp-pass.js
