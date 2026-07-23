@@ -53,7 +53,7 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.RECEPTIONIST, "write", "clinical_chart")).toBe(false);
   });
 
-  it("receptionist has insurance.write but doctor does not (uses clinical_chart.write instead)", () => {
+  it("receptionist has insurance.write; doctor does not (override is a separate path)", () => {
     expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.insurance.write)).toBe(true);
     expect(can(UserRole.RECEPTIONIST, "write", "insurance")).toBe(true);
     expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.insurance.write)).toBe(false);

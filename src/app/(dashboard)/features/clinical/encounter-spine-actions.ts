@@ -75,6 +75,16 @@ async function requireSpineRead() {
   return ctx;
 }
 
+/** Insurance approve/edit — `insurance.write` only (not clinical_chart.write). */
+async function requireSpineInsuranceWrite() {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.insurance.write);
+  if (!isEncounterSpineEnabled(ctx.tenant)) {
+    throw new Error(SPINE_DISABLED_MESSAGE);
+  }
+  return ctx;
+}
+
 function revalidateSpinePaths(appointmentId?: string | null) {
   revalidatePath("/clinical");
   if (appointmentId) {
@@ -605,11 +615,8 @@ export async function upsertSpineInsuranceVerification(input: {
   estimatedCopay?: number;
   verifiedAt?: string | Date | null;
 }) {
-  const ctx = await requireSpineWrite();
+  const ctx = await requireSpineInsuranceWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
-
-  const { assertRiskClearedForEncounter } = await import("@/lib/encounter/gate-enforcement");
-  await assertRiskClearedForEncounter(ctx.tenantId, input.encounterId);
 
   const [settingsRow, tenant] = await Promise.all([
     db.settings.findUnique({

@@ -129,10 +129,13 @@ const labelCls = "block text-xs font-medium uppercase tracking-wide text-slate-5
 export function SpineWorkspaceClient({
   appointmentId,
   canWrite,
+  canWriteInsurance = false,
   initial,
 }: {
   appointmentId: string;
   canWrite: boolean;
+  /** Approve/edit insurance verification — insurance.write only (not clinical write). */
+  canWriteInsurance?: boolean;
   initial: SpineWorkspaceData;
 }) {
   const router = useRouter();
@@ -608,186 +611,197 @@ export function SpineWorkspaceClient({
           }
         />
 
-        {canWrite && !closed ? (
+        {(canWrite || canWriteInsurance) && !closed ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className={labelCls} htmlFor="asa">
-                ASA class
-              </label>
-              <input
-                id="asa"
-                className={field}
-                value={draft.asaClass}
-                onChange={(e) => patchDraft({ asaClass: e.target.value })}
-                placeholder="e.g. II"
-                disabled={pending}
-              />
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={!write}
-                onClick={() =>
-                  run(
-                    () =>
-                      clearSpineRisk({
-                        encounterId: encounter.id,
-                        asaClass: draft.asaClass || undefined,
-                      }),
-                    "Risk cleared",
-                  )
-                }
-              >
-                Clear risk
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <p className={labelCls}>Consent</p>
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={!write}
-                onClick={() =>
-                  run(() => grantSpineConsent({ encounterId: encounter.id }), "Consent granted")
-                }
-              >
-                Grant clinical consent
-              </button>
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <p className={labelCls}>Insurance verification</p>
-              <div className="grid gap-2 sm:grid-cols-4">
-                <div>
-                  <label className={labelCls} htmlFor="elig">
-                    Eligibility
-                  </label>
-                  <select
-                    id="elig"
-                    className={field}
-                    value={draft.insuranceEligibility}
-                    onChange={(e) => patchDraft({ insuranceEligibility: e.target.value })}
-                    disabled={pending}
-                  >
-                    {["pending", "eligible", "ineligible", "unknown", "error"].map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="preauth">
-                    Pre-auth
-                  </label>
-                  <select
-                    id="preauth"
-                    className={field}
-                    value={draft.insurancePreAuth}
-                    onChange={(e) => patchDraft({ insurancePreAuth: e.target.value })}
-                    disabled={pending}
-                  >
-                    {["not_required", "pending", "approved", "denied", "expired"].map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="cov">
-                    Est. coverage
+            {canWrite ? (
+              <>
+                <div className="space-y-2">
+                  <label className={labelCls} htmlFor="asa">
+                    ASA class
                   </label>
                   <input
-                    id="cov"
+                    id="asa"
                     className={field}
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={draft.estimatedCoverage}
-                    onChange={(e) => patchDraft({ estimatedCoverage: e.target.value })}
+                    value={draft.asaClass}
+                    onChange={(e) => patchDraft({ asaClass: e.target.value })}
+                    placeholder="e.g. II"
                     disabled={pending}
                   />
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    disabled={!write}
+                    onClick={() =>
+                      run(
+                        () =>
+                          clearSpineRisk({
+                            encounterId: encounter.id,
+                            asaClass: draft.asaClass || undefined,
+                          }),
+                        "Risk cleared",
+                      )
+                    }
+                  >
+                    Clear risk
+                  </button>
                 </div>
-                <div>
-                  <label className={labelCls} htmlFor="copay">
-                    Est. copay
-                  </label>
-                  <input
-                    id="copay"
-                    className={field}
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={draft.estimatedCopay}
-                    onChange={(e) => patchDraft({ estimatedCopay: e.target.value })}
-                    disabled={pending}
-                  />
+
+                <div className="space-y-2">
+                  <p className={labelCls}>Consent</p>
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    disabled={!write}
+                    onClick={() =>
+                      run(
+                        () => grantSpineConsent({ encounterId: encounter.id }),
+                        "Consent granted",
+                      )
+                    }
+                  >
+                    Grant clinical consent
+                  </button>
                 </div>
+              </>
+            ) : null}
+
+            {canWriteInsurance ? (
+              <div className="space-y-2 sm:col-span-2">
+                <p className={labelCls}>Insurance verification</p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div>
+                    <label className={labelCls} htmlFor="elig">
+                      Eligibility
+                    </label>
+                    <select
+                      id="elig"
+                      className={field}
+                      value={draft.insuranceEligibility}
+                      onChange={(e) => patchDraft({ insuranceEligibility: e.target.value })}
+                      disabled={pending}
+                    >
+                      {["pending", "eligible", "ineligible", "unknown", "error"].map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls} htmlFor="preauth">
+                      Pre-auth
+                    </label>
+                    <select
+                      id="preauth"
+                      className={field}
+                      value={draft.insurancePreAuth}
+                      onChange={(e) => patchDraft({ insurancePreAuth: e.target.value })}
+                      disabled={pending}
+                    >
+                      {["not_required", "pending", "approved", "denied", "expired"].map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls} htmlFor="cov">
+                      Est. coverage
+                    </label>
+                    <input
+                      id="cov"
+                      className={field}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={draft.estimatedCoverage}
+                      onChange={(e) => patchDraft({ estimatedCoverage: e.target.value })}
+                      disabled={pending}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls} htmlFor="copay">
+                      Est. copay
+                    </label>
+                    <input
+                      id="copay"
+                      className={field}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={draft.estimatedCopay}
+                      onChange={(e) => patchDraft({ estimatedCopay: e.target.value })}
+                      disabled={pending}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  disabled={pending || closed || !canWriteInsurance}
+                  onClick={() =>
+                    run(
+                      () =>
+                        upsertSpineInsuranceVerification({
+                          encounterId: encounter.id,
+                          eligibilityStatus: draft.insuranceEligibility,
+                          preAuthStatus: draft.insurancePreAuth,
+                          estimatedCoverage: draft.estimatedCoverage
+                            ? Number(draft.estimatedCoverage)
+                            : undefined,
+                          estimatedCopay: draft.estimatedCopay
+                            ? Number(draft.estimatedCopay)
+                            : undefined,
+                        }),
+                      "Insurance saved",
+                    )
+                  }
+                >
+                  Save insurance verification
+                </button>
               </div>
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={!write}
-                onClick={() =>
-                  run(
-                    () =>
-                      upsertSpineInsuranceVerification({
-                        encounterId: encounter.id,
-                        eligibilityStatus: draft.insuranceEligibility,
-                        preAuthStatus: draft.insurancePreAuth,
-                        estimatedCoverage: draft.estimatedCoverage
-                          ? Number(draft.estimatedCoverage)
-                          : undefined,
-                        estimatedCopay: draft.estimatedCopay
-                          ? Number(draft.estimatedCopay)
-                          : undefined,
-                      }),
-                    "Insurance saved",
-                  )
-                }
-              >
-                Save insurance verification
-              </button>
-            </div>
+            ) : null}
 
-            <div className="space-y-2 sm:col-span-2">
-              <p className={labelCls}>Pre-auth override</p>
-              <input
-                className={field}
-                value={draft.overrideReason}
-                onChange={(e) => patchDraft({ overrideReason: e.target.value })}
-                placeholder="Reason for override"
-                disabled={pending}
-              />
-              <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+            {canWrite ? (
+              <div className="space-y-2 sm:col-span-2">
+                <p className={labelCls}>Pre-auth override</p>
                 <input
-                  type="checkbox"
-                  checked={draft.patientAck}
-                  onChange={(e) => patchDraft({ patientAck: e.target.checked })}
+                  className={field}
+                  value={draft.overrideReason}
+                  onChange={(e) => patchDraft({ overrideReason: e.target.value })}
+                  placeholder="Reason for override"
                   disabled={pending}
                 />
-                Patient acknowledged financial responsibility
-              </label>
-              <button
-                type="button"
-                className={btnSecondary}
-                disabled={!write || !draft.overrideReason.trim() || !draft.patientAck}
-                onClick={() =>
-                  run(
-                    () =>
-                      overrideSpinePreAuth({
-                        encounterId: encounter.id,
-                        reason: draft.overrideReason,
-                        patientAcknowledged: draft.patientAck,
-                      }),
-                    "Pre-auth overridden",
-                  )
-                }
-              >
-                Override pre-auth
-              </button>
-            </div>
+                <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.patientAck}
+                    onChange={(e) => patchDraft({ patientAck: e.target.checked })}
+                    disabled={pending}
+                  />
+                  Patient acknowledged financial responsibility
+                </label>
+                <button
+                  type="button"
+                  className={btnSecondary}
+                  disabled={!write || !draft.overrideReason.trim() || !draft.patientAck}
+                  onClick={() =>
+                    run(
+                      () =>
+                        overrideSpinePreAuth({
+                          encounterId: encounter.id,
+                          reason: draft.overrideReason,
+                          patientAcknowledged: draft.patientAck,
+                        }),
+                      "Pre-auth overridden",
+                    )
+                  }
+                >
+                  Override pre-auth
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

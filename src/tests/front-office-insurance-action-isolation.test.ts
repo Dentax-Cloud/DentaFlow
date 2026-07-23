@@ -6,7 +6,7 @@
  * mocking `requireTenantContext` so spine/"use server" actions that call it
  * directly (not through createAction) run under a RECEPTIONIST role.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SubscriptionStatus,
   TenantStatus,
@@ -23,6 +23,8 @@ const mockUpdateInsuranceVerificationAudited = vi.hoisted(() => vi.fn());
 const mockInsuranceFindFirst = vi.hoisted(() => vi.fn());
 const mockSettingsFindUnique = vi.hoisted(() => vi.fn());
 const mockTenantFindFirst = vi.hoisted(() => vi.fn());
+const mockEncounterFindFirst = vi.hoisted(() => vi.fn());
+const mockApplyPreAuthOverride = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/tenant/context", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/tenant/context")>();
@@ -43,8 +45,14 @@ vi.mock("@/lib/db", () => ({
     settings: { findUnique: (...a: unknown[]) => mockSettingsFindUnique(...a) },
     tenant: { findFirst: (...a: unknown[]) => mockTenantFindFirst(...a) },
     riskAssessment: { findFirst: vi.fn() },
-    encounter: { findFirst: vi.fn() },
+    encounter: { findFirst: (...a: unknown[]) => mockEncounterFindFirst(...a) },
   },
+}));
+
+vi.mock("@/lib/encounter/gate-enforcement", () => ({
+  applyPreAuthOverride: (...a: unknown[]) => mockApplyPreAuthOverride(...a),
+  buildLiveGateSummary: vi.fn(),
+  assertRiskClearedForEncounter: vi.fn(),
 }));
 
 vi.mock("@/lib/encounter/lifecycle", () => ({
@@ -62,16 +70,16 @@ vi.mock("@/lib/encounter/repository", () => ({
   createConsentRecordAudited: vi.fn(),
 }));
 
-function receptionistContext(): TenantContext {
+function staffContext(role: UserRole, idSuffix: string): TenantContext {
   const staffMember = {
-    id: "staff_reception",
+    id: `staff_${idSuffix}`,
     tenantId: "tenant_test",
-    authUserId: "user_reception",
-    email: "reception@example.com",
-    firstName: "Priya",
-    lastName: "Gupta",
+    authUserId: `user_${idSuffix}`,
+    email: `${idSuffix}@example.com`,
+    firstName: idSuffix,
+    lastName: "User",
     avatarUrl: null,
-    role: UserRole.RECEPTIONIST,
+    role,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -103,7 +111,7 @@ function receptionistContext(): TenantContext {
     } as TenantContext["tenant"],
     staffMember,
     user: staffMember,
-    authUserId: "user_reception",
+    authUserId: `user_${idSuffix}`,
     tenantSlug: "test-clinic",
     tenantId: "tenant_test",
     isSuperAdmin: false,
@@ -120,16 +128,39 @@ function receptionistContext(): TenantContext {
   };
 }
 
+function receptionistContext(): TenantContext {
+  return staffContext(UserRole.RECEPTIONIST, "reception");
+}
+
+function doctorContext(): TenantContext {
+  return staffContext(UserRole.DOCTOR, "doctor");
+}
+
 describe("front-office insurance — action-level permission isolation", () => {
-  // Spine actions module is large; first import under parallel suite load can exceed 5s.
-  const ACTION_MS = 20_000;
+  // Spine actions module is large; first import under parallel suite load can exceed 20s.
+  const ACTION_MS = 60_000;
 
   let clearSpineRisk: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").clearSpineRisk;
   let upsertSpineInsuranceVerification: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").upsertSpineInsuranceVerification;
+  let overrideSpinePreAuth: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").overrideSpinePreAuth;
   let grantSpineConsent: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").grantSpineConsent;
   let upsertFrontOfficeInsuranceVerification: typeof import("@/app/(dashboard)/features/reception/insurance-verification-actions").upsertFrontOfficeInsuranceVerification;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
+    process.env.ENCOUNTER_SPINE_ENABLED = "true";
+    const spine = await import(
+      "@/app/(dashboard)/features/clinical/encounter-spine-actions"
+    );
+    clearSpineRisk = spine.clearSpineRisk;
+    upsertSpineInsuranceVerification = spine.upsertSpineInsuranceVerification;
+    overrideSpinePreAuth = spine.overrideSpinePreAuth;
+    grantSpineConsent = spine.grantSpineConsent;
+    ({ upsertFrontOfficeInsuranceVerification } = await import(
+      "@/app/(dashboard)/features/reception/insurance-verification-actions"
+    ));
+  }, ACTION_MS);
+
+  beforeEach(() => {
     process.env.ENCOUNTER_SPINE_ENABLED = "true";
     mockRequireTenantContext.mockReset();
     mockRequireTenantContext.mockResolvedValue(receptionistContext());
@@ -140,19 +171,9 @@ describe("front-office insurance — action-level permission isolation", () => {
     mockInsuranceFindFirst.mockReset();
     mockSettingsFindUnique.mockReset();
     mockTenantFindFirst.mockReset();
-
-    if (!clearSpineRisk) {
-      const spine = await import(
-        "@/app/(dashboard)/features/clinical/encounter-spine-actions"
-      );
-      clearSpineRisk = spine.clearSpineRisk;
-      upsertSpineInsuranceVerification = spine.upsertSpineInsuranceVerification;
-      grantSpineConsent = spine.grantSpineConsent;
-      ({ upsertFrontOfficeInsuranceVerification } = await import(
-        "@/app/(dashboard)/features/reception/insurance-verification-actions"
-      ));
-    }
-  }, ACTION_MS);
+    mockEncounterFindFirst.mockReset();
+    mockApplyPreAuthOverride.mockReset();
+  });
 
   afterEach(() => {
     delete process.env.ENCOUNTER_SPINE_ENABLED;
@@ -182,8 +203,9 @@ describe("front-office insurance — action-level permission isolation", () => {
   );
 
   it(
-    "denies upsertSpineInsuranceVerification (clinical_chart.write) for RECEPTIONIST",
+    "denies upsertSpineInsuranceVerification for DOCTOR (no insurance.write)",
     async () => {
+      mockRequireTenantContext.mockResolvedValue(doctorContext());
       let caught: unknown;
       try {
         await upsertSpineInsuranceVerification({
@@ -197,14 +219,30 @@ describe("front-office insurance — action-level permission isolation", () => {
         caught = e;
       }
 
-      // eslint-disable-next-line no-console
-      console.log("[isolation] upsertSpineInsuranceVerification →", {
-        type: caught instanceof Error ? caught.constructor.name : typeof caught,
-        message: caught instanceof Error ? caught.message : caught,
-      });
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe("FORBIDDEN");
+    },
+    ACTION_MS,
+  );
+
+  it(
+    "denies upsertFrontOfficeInsuranceVerification for DOCTOR (no insurance.write)",
+    async () => {
+      mockRequireTenantContext.mockResolvedValue(doctorContext());
+      let caught: unknown;
+      try {
+        await upsertFrontOfficeInsuranceVerification({
+          appointmentId: "appt_test",
+          eligibilityStatus: "eligible",
+          preAuthStatus: "not_required",
+        });
+      } catch (e) {
+        caught = e;
+      }
 
       expect(caught).toBeInstanceOf(Error);
       expect((caught as Error).message).toBe("FORBIDDEN");
+      expect(mockCreateInsuranceVerificationAudited).not.toHaveBeenCalled();
     },
     ACTION_MS,
   );
@@ -274,6 +312,51 @@ describe("front-office insurance — action-level permission isolation", () => {
 
       expect(caught).toBeInstanceOf(Error);
       expect((caught as Error).message).toBe("FORBIDDEN");
+    },
+    ACTION_MS,
+  );
+
+  it(
+    "allows overrideSpinePreAuth for DOCTOR (separate from insurance approve)",
+    async () => {
+      mockRequireTenantContext.mockResolvedValue(doctorContext());
+      mockEncounterFindFirst.mockResolvedValue({
+        id: "enc_test",
+        appointmentId: "appt_test",
+        patientId: "pat_test",
+      });
+      mockApplyPreAuthOverride.mockResolvedValue(undefined);
+
+      const result = await overrideSpinePreAuth({
+        encounterId: "enc_test",
+        reason: "Patient accepted cash pay after denial",
+        patientAcknowledged: true,
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(mockApplyPreAuthOverride).toHaveBeenCalled();
+    },
+    ACTION_MS,
+  );
+
+  it(
+    "denies overrideSpinePreAuth for RECEPTIONIST (needs clinical_chart.write)",
+    async () => {
+      mockRequireTenantContext.mockResolvedValue(receptionistContext());
+      let caught: unknown;
+      try {
+        await overrideSpinePreAuth({
+          encounterId: "enc_test",
+          reason: "Should not work",
+          patientAcknowledged: true,
+        });
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe("FORBIDDEN");
+      expect(mockApplyPreAuthOverride).not.toHaveBeenCalled();
     },
     ACTION_MS,
   );
