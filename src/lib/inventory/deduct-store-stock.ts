@@ -78,6 +78,7 @@ export async function logMaterialUsageWithStoreDeduction(params: {
   const location = await getDefaultStoreLocation(params.tenantId);
   const transactionRef = await generateStockRef(params.tenantId);
 
+  // 20s: store deduction does several round-trips; remote tunnel verify can exceed Prisma's 5s default.
   return db.$transaction(async (tx) => {
     const line = await tx.encounterProcedureLine.findFirst({
       where: { id: params.procedureLineId, tenantId: params.tenantId },
@@ -189,7 +190,7 @@ export async function logMaterialUsageWithStoreDeduction(params: {
     });
 
     return usage;
-  });
+  }, { timeout: 20_000 });
 }
 
 export class MaterialUsageReturnBlockedError extends Error {
@@ -214,6 +215,7 @@ export async function returnMaterialUsageToStore(params: {
 }) {
   const transactionRef = await generateStockRef(params.tenantId);
 
+  // 20s: return does several round-trips; remote tunnel verify can exceed Prisma's 5s default.
   return db.$transaction(async (tx) => {
     const usage = await tx.materialUsage.findFirst({
       where: { id: params.materialUsageId, tenantId: params.tenantId },
@@ -310,6 +312,6 @@ export async function returnMaterialUsageToStore(params: {
     });
 
     return { usage: updated, stockTransactionId: stockTx.id, quantityReturned: returnQty };
-  });
+  }, { timeout: 20_000 });
 }
 
