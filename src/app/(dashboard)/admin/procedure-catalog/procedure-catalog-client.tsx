@@ -29,6 +29,7 @@ import {
   updateBundle,
 } from "@/app/(dashboard)/admin/procedure-actions"
 import { messageFromActionError } from "@/lib/rbac/action-errors"
+import { ProcedureBomPanel } from "./procedure-bom-panel"
 
 function parseOptionalPrice(value: string): number | null {
   if (value === "" || value === null) return null
@@ -452,6 +453,7 @@ export default function ProcedureCatalogClient({
     useState<string | null>(null)
   const [editingProcedure, setEditingProcedure] =
     useState<Procedure | null>(null)
+  const [bomProcedure, setBomProcedure] = useState<Procedure | null>(null)
   const [selectedGPMR, setSelectedGPMR] =
     useState<Set<string>>(new Set())
   const [importSearch, setImportSearch] = useState("")
@@ -986,6 +988,14 @@ export default function ProcedureCatalogClient({
                                 <Settings2 className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => setBomProcedure(proc)}
+                                className="p-1.5 hover:bg-gray-100
+                                  rounded-lg transition-colors"
+                                title="Bill of materials"
+                              >
+                                <Package className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() =>
                                   handleToggleActive(
                                     proc.id,
@@ -1324,6 +1334,15 @@ export default function ProcedureCatalogClient({
             router.refresh()
           }}
           onClose={() => setEditingProcedure(null)}
+        />
+      )}
+
+      {bomProcedure && (
+        <ProcedureBomPanel
+          procedureId={bomProcedure.id}
+          procedureCode={bomProcedure.code}
+          procedureName={bomProcedure.name}
+          onClose={() => setBomProcedure(null)}
         />
       )}
 

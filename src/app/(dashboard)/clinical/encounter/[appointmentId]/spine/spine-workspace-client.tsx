@@ -147,6 +147,7 @@ export function SpineWorkspaceClient({
   const [gates, setGates] = useState<GateSummary>(initial.gates);
   const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
+  const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
   const [preCheckOk, setPreCheckOk] = useState(true);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -366,13 +367,65 @@ export function SpineWorkspaceClient({
     }
   }
 
+  const selectedMaterialLineId =
+    draft.materialLineId || encounter.procedureLines[0]?.id || "";
+  const selectedMaterialLine =
+    encounter.procedureLines.find((l) => l.id === selectedMaterialLineId) ??
+    encounter.procedureLines[0];
+  const selectedBomLines = selectedMaterialLine
+    ? bomByProcedureId[selectedMaterialLine.procedureCatalogId] ?? []
+    : [];
+
+  const bomChecklistSlot =
+    encounter.procedureLines.length > 0 ? (
+      <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+        <p className={labelCls}>Prep checklist (BoM)</p>
+        {selectedBomLines.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-500">
+            No bill of materials configured for this procedure
+          </p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-xs text-slate-700">
+            {selectedBomLines.map((b) => (
+              <li key={b.id} className="flex justify-between gap-2">
+                <span>
+                  {b.itemName}{" "}
+                  <span className="text-slate-400">
+                    ({b.isOptional ? "optional" : "required"})
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium">
+                  {b.defaultQuantity} {b.unit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {encounter.procedureLines.length > 1 ? (
+          <select
+            className={`${field} mt-2`}
+            value={selectedMaterialLineId}
+            onChange={(e) => patchDraft({ materialLineId: e.target.value })}
+            disabled={pending}
+          >
+            {encounter.procedureLines.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.procedureCatalog.code}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+    ) : null;
+
   const materialsSlot = canWrite && !closed && encounter.procedureLines.length > 0 ? (
     <div className="space-y-2">
+      {bomChecklistSlot}
       <p className={labelCls}>Log material</p>
       <div className="grid gap-2">
         <select
           className={field}
-          value={draft.materialLineId || encounter.procedureLines[0]?.id || ""}
+          value={selectedMaterialLineId}
           onChange={(e) => patchDraft({ materialLineId: e.target.value })}
           disabled={pending}
         >
@@ -452,7 +505,7 @@ export function SpineWorkspaceClient({
         Log material
       </button>
     </div>
-  ) : null;
+  ) : bomChecklistSlot;
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] w-full bg-slate-50/40">

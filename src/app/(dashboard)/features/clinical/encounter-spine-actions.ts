@@ -271,11 +271,24 @@ export type SpineClinicalFindingsData = {
   treatmentPlan: { id: string; title: string } | null;
 };
 
+export type SpineBomLineSnippet = {
+  id: string;
+  inventoryItemId: string;
+  itemName: string;
+  sku: string;
+  unit: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  stockOnHand: number;
+};
+
 export type SpineWorkspaceData = {
   encounter: SpineEncounterSerialized;
   gates: GateSummary;
   procedures: SpineCatalogSnippet[];
   inventoryItems: SpineInventorySnippet[];
+  /** procedureCatalogId → BoM lines for prep checklist */
+  bomByProcedureId: Record<string, SpineBomLineSnippet[]>;
   clinicalImages: Array<{
     id: string;
     url: string;
@@ -819,18 +832,26 @@ export async function logSpineMaterial(input: {
         ? input.expiryDate
         : new Date(input.expiryDate);
 
-  const usage = await logMaterialUsage({
-    tenantId: ctx.tenantId,
-    procedureLineId: input.procedureLineId,
-    itemId: input.itemId,
-    tier: input.tier,
-    quantity: input.quantity,
-    lotNumber: input.lotNumber,
-    expiryDate,
-    userId: ctx.staffMember?.id,
+  const { withSpineExpectedFailureCatch } = await import(
+    "@/lib/encounter/spine-action-result"
+  );
+  const result = await withSpineExpectedFailureCatch(async () => {
+    const usage = await logMaterialUsage({
+      tenantId: ctx.tenantId,
+      procedureLineId: input.procedureLineId,
+      itemId: input.itemId,
+      tier: input.tier,
+      quantity: input.quantity,
+      lotNumber: input.lotNumber,
+      expiryDate,
+      userId: ctx.staffMember?.id,
+    });
+    return serializeDecimal(usage as Record<string, unknown>);
   });
-  revalidateSpinePaths(line.encounter.appointmentId);
-  return serializeDecimal(usage as Record<string, unknown>);
+  if (result.ok) {
+    revalidateSpinePaths(line.encounter.appointmentId);
+  }
+  return result;
 }
 
 export async function recordSpinePainScore(input: {
@@ -1034,6 +1055,18 @@ export async function loadSpineWorkspaceData(
           .catch(() => null),
   ]);
 
+  const { listProcedureBomByCatalogIds } = await import("@/lib/inventory/procedure-bom");
+  const bomCatalogIds = [
+    ...new Set([
+      ...encounterRow.procedureLines.map((l) => l.procedureCatalogId),
+      ...procedures.map((p) => p.id),
+    ]),
+  ];
+  const bomByProcedureId = await listProcedureBomByCatalogIds(
+    ctx.tenantId,
+    bomCatalogIds,
+  );
+
   const spineSettings = resolveEncounterSpineSettings({
     settingsJson: settingsRow?.encounterSpineSettings as Record<string, unknown> | null,
     featureFlags: ctx.tenant.featureFlags as Record<string, unknown> | null,
@@ -1089,6 +1122,21 @@ export async function loadSpineWorkspaceData(
         unitCost: asNumber(s.cost),
       };
     }),
+    bomByProcedureId: Object.fromEntries(
+      Object.entries(bomByProcedureId).map(([procId, lines]) => [
+        procId,
+        lines.map((l) => ({
+          id: l.id,
+          inventoryItemId: l.inventoryItemId,
+          itemName: l.itemName,
+          sku: l.sku,
+          unit: l.unit,
+          defaultQuantity: l.defaultQuantity,
+          isOptional: l.isOptional,
+          stockOnHand: l.stockOnHand,
+        })),
+      ]),
+    ),
     clinicalImages: media.slice(0, 12),
     clinicalFindings: {
       chartData: chartData as SpineClinicalFindingsData["chartData"],

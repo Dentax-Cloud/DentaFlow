@@ -147,6 +147,8 @@ model Tenant {
   labCases              LabCase[]
   clinicalAlerts        ClinicalAlert[]
   providerPresences     ProviderPresence[]
+  inventoryLocations    InventoryLocation[]
+  procedureBomItems     ProcedureBomItem[]
 }
 
 model TenantApprovalRequest {
@@ -952,6 +954,7 @@ model ProcedureCatalog {
   sortOrder        Int       @default(0)
   globalProcedure  GlobalProcedure? @relation(fields: [gpmrId], references: [id], onDelete: SetNull)
   encounterProcedureLines EncounterProcedureLine[]
+  bomItems                ProcedureBomItem[]
 }
 
 model Invoice {
@@ -1317,16 +1320,62 @@ model InventoryItem {
   purchaseOrderItems PurchaseOrderItem[]
   invoiceItems       InvoiceItem[]
   materialUsages     MaterialUsage[]
+  bomItems           ProcedureBomItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([gtin])
 }
 
+/// Physical stock location. This pass only creates `store` locations;
+/// `chair` is reserved for a future chair-setup inventory slice.
+enum InventoryLocationType {
+  store
+  chair
+}
+
+model InventoryLocation {
+  id        String                @id @default(cuid())
+  tenantId  String
+  type      InventoryLocationType @default(store)
+  name      String
+  isDefault Boolean               @default(false)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stockTransactions StockTransaction[]
+  materialUsages    MaterialUsage[]
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, isDefault])
+}
+
+/// Tenant-configurable procedure → consumable bill of materials.
+model ProcedureBomItem {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  procedureCatalogId String
+  inventoryItemId    String
+  defaultQuantity    Decimal          @db.Decimal(12, 4)
+  isOptional         Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procedureCatalog   ProcedureCatalog @relation(fields: [procedureCatalogId], references: [id], onDelete: Cascade)
+  inventoryItem      InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([procedureCatalogId, inventoryItemId])
+  @@index([tenantId])
+  @@index([tenantId, procedureCatalogId])
+}
+
 model StockTransaction {
   id              String               @id @default(cuid())
   tenantId        String
   itemId          String
+  /// Inventory location for this movement (defaults to tenant store).
+  locationId      String?
   type            StockTransactionType
   quantity        Int
   notes           String?
@@ -1343,8 +1392,10 @@ model StockTransaction {
   item            InventoryItem        @relation(fields: [itemId], references: [id])
   tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   batch           InventoryBatch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  location        InventoryLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, itemId])
+  @@index([tenantId, locationId])
 }
 
 model DailyCounter {
@@ -2482,6 +2533,8 @@ model MaterialUsage {
   tenantId        String
   procedureLineId String
   itemId          String
+  /// Inventory location deducted from (tenant default store in this pass).
+  locationId      String?
   /// tracked | consumable
   tier            String    @default("consumable")
   lotNumber       String?
@@ -2494,9 +2547,11 @@ model MaterialUsage {
   tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   procedureLine EncounterProcedureLine @relation(fields: [procedureLineId], references: [id], onDelete: Cascade)
   item          InventoryItem          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  location      InventoryLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, procedureLineId])
   @@index([tenantId, itemId])
+  @@index([tenantId, locationId])
 }
 
 model InsuranceVerification {
