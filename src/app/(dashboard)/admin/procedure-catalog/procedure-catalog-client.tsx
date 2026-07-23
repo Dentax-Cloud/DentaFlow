@@ -29,7 +29,7 @@ import {
   updateBundle,
 } from "@/app/(dashboard)/admin/procedure-actions"
 import { messageFromActionError } from "@/lib/rbac/action-errors"
-import { ProcedureBomPanel } from "./procedure-bom-panel"
+import { ProcedureBomEditor, ProcedureBomPanel } from "./procedure-bom-panel"
 
 function parseOptionalPrice(value: string): number | null {
   if (value === "" || value === null) return null
@@ -399,6 +399,19 @@ function EditPricingPanel({
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Bill of materials — same modal admins use for pricing/settings */}
+          <div className="border-t pt-5">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <Package className="h-4 w-4 text-teal-700" />
+              Bill of materials
+            </label>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Default consumables to pull for this procedure (prep checklist).
+              Changes here save immediately — separate from pricing Save.
+            </p>
+            <ProcedureBomEditor procedureId={procedure.id} compact />
           </div>
         </div>
 
@@ -989,11 +1002,14 @@ export default function ProcedureCatalogClient({
                               </button>
                               <button
                                 onClick={() => setBomProcedure(proc)}
-                                className="p-1.5 hover:bg-gray-100
-                                  rounded-lg transition-colors"
+                                className="inline-flex items-center gap-1 rounded-lg
+                                  border px-2 py-1 text-xs font-medium
+                                  text-teal-800 hover:bg-teal-50
+                                  transition-colors"
                                 title="Bill of materials"
                               >
-                                <Package className="w-4 h-4" />
+                                <Package className="w-3.5 h-3.5" />
+                                BoM
                               </button>
                               <button
                                 onClick={() =>
