@@ -12,11 +12,13 @@ import {
   getEncounterInvoiceGateMessage,
   isSpineLineIncludedInInvoice,
 } from "./billing-selection";
+import { isMaterialUsageBillableOnInvoice } from "./billing-materials";
 
 export {
   getEncounterInvoiceGateMessage,
   isSpineLineIncludedInInvoice,
 } from "./billing-selection";
+export { isMaterialUsageBillableOnInvoice } from "./billing-materials";
 
 export class EncounterDoubleInvoiceError extends Error {
   constructor(message = "This encounter already has an invoice.") {
@@ -115,10 +117,10 @@ export async function buildInvoiceItemsFromEncounter(
     });
 
     for (const usage of line.materialUsages) {
+      if (!isMaterialUsageBillableOnInvoice(usage)) continue;
       const qty = decimalToNumber(usage.quantity);
       const cost = decimalToNumber(usage.unitCost);
       const lineTotal = Math.round(qty * cost * 100) / 100;
-      if (lineTotal <= 0) continue;
       items.push({
         description: `Material · ${usage.item.name}`,
         quantity: qty,

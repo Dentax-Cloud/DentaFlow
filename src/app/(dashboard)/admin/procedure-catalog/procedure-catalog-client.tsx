@@ -29,6 +29,7 @@ import {
   updateBundle,
 } from "@/app/(dashboard)/admin/procedure-actions"
 import { messageFromActionError } from "@/lib/rbac/action-errors"
+import { ProcedureBomEditor, ProcedureBomPanel } from "./procedure-bom-panel"
 
 function parseOptionalPrice(value: string): number | null {
   if (value === "" || value === null) return null
@@ -399,6 +400,19 @@ function EditPricingPanel({
               ))}
             </div>
           </div>
+
+          {/* Bill of materials — same modal admins use for pricing/settings */}
+          <div className="border-t pt-5">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <Package className="h-4 w-4 text-teal-700" />
+              Bill of materials
+            </label>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Default consumables to pull for this procedure (prep checklist).
+              Changes here save immediately — separate from pricing Save.
+            </p>
+            <ProcedureBomEditor procedureId={procedure.id} compact />
+          </div>
         </div>
 
         {/* Footer */}
@@ -452,6 +466,7 @@ export default function ProcedureCatalogClient({
     useState<string | null>(null)
   const [editingProcedure, setEditingProcedure] =
     useState<Procedure | null>(null)
+  const [bomProcedure, setBomProcedure] = useState<Procedure | null>(null)
   const [selectedGPMR, setSelectedGPMR] =
     useState<Set<string>>(new Set())
   const [importSearch, setImportSearch] = useState("")
@@ -986,6 +1001,17 @@ export default function ProcedureCatalogClient({
                                 <Settings2 className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => setBomProcedure(proc)}
+                                className="inline-flex items-center gap-1 rounded-lg
+                                  border px-2 py-1 text-xs font-medium
+                                  text-teal-800 hover:bg-teal-50
+                                  transition-colors"
+                                title="Bill of materials"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                                BoM
+                              </button>
+                              <button
                                 onClick={() =>
                                   handleToggleActive(
                                     proc.id,
@@ -1324,6 +1350,15 @@ export default function ProcedureCatalogClient({
             router.refresh()
           }}
           onClose={() => setEditingProcedure(null)}
+        />
+      )}
+
+      {bomProcedure && (
+        <ProcedureBomPanel
+          procedureId={bomProcedure.id}
+          procedureCode={bomProcedure.code}
+          procedureName={bomProcedure.name}
+          onClose={() => setBomProcedure(null)}
         />
       )}
 

@@ -5,7 +5,6 @@ import {
   createClinicalAlertAudited,
   createEncounterProcedureBundleAudited,
   createEncounterProcedureLineAudited,
-  createMaterialUsageAudited,
   updateEncounterAudited,
   updateEncounterProcedureLineAudited,
 } from "./repository";
@@ -189,42 +188,28 @@ export async function logMaterialUsage(params: {
   itemId: string;
   tier: "tracked" | "consumable";
   quantity: number;
+  isBillable?: boolean;
   lotNumber?: string | null;
   expiryDate?: Date | null;
   userId?: string;
 }) {
   if (!(params.quantity > 0)) throw new Error("Quantity must be greater than zero.");
 
-  const line = await db.encounterProcedureLine.findFirst({
-    where: { id: params.procedureLineId, tenantId: params.tenantId },
-  });
-  if (!line) throw new Error("Procedure line not found.");
-
-  const item = await db.inventoryItem.findFirst({
-    where: { id: params.itemId, tenantId: params.tenantId, deletedAt: null },
-  });
-  if (!item) throw new Error("Inventory item not found.");
-
-  if (params.tier === "tracked" && !params.lotNumber?.trim()) {
-    throw new Error("Lot number is required for tracked materials.");
-  }
-
-  const unitCost = item.cost ?? new Prisma.Decimal(0);
-
-  return createMaterialUsageAudited(
-    {
-      tenant: { connect: { id: params.tenantId } },
-      procedureLine: { connect: { id: line.id } },
-      item: { connect: { id: item.id } },
-      tier: params.tier,
-      quantity: new Prisma.Decimal(params.quantity),
-      unitCost,
-      lotNumber: params.lotNumber?.trim() || null,
-      expiryDate: params.expiryDate ?? null,
-      deductedAt: new Date(),
-    },
-    { tenantId: params.tenantId, userId: params.userId },
+  const { logMaterialUsageWithStoreDeduction } = await import(
+    "@/lib/inventory/deduct-store-stock"
   );
+  return logMaterialUsageWithStoreDeduction(params);
+}
+
+export async function returnMaterialUsage(params: {
+  tenantId: string;
+  materialUsageId: string;
+  userId?: string;
+}) {
+  const { returnMaterialUsageToStore } = await import(
+    "@/lib/inventory/deduct-store-stock"
+  );
+  return returnMaterialUsageToStore(params);
 }
 
 export const PAIN_NEXT_ACTIONS = [
