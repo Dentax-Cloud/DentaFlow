@@ -131,7 +131,6 @@ export default async function ClinicalPage({
         templates={templates}
         countryCode={ctx.tenant.countryCode}
         blockVisitInvoice={Boolean(openEncounter)}
-        spineReturnAppointmentId={spineReturnAppointmentId}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { encounterSpinePath, resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
+import { resolveClinicalSessionPath } from "@/lib/clinical/encounter-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Odontogram } from "@/components/clinical/dental-chart";
@@ -54,7 +54,6 @@ export function ClinicalPageClient({
   templates,
   countryCode,
   blockVisitInvoice = false,
-  spineReturnAppointmentId,
 }: {
   canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
@@ -66,9 +65,8 @@ export function ClinicalPageClient({
   clinicName?: string;
   templates: ClinicalTemplateOption[];
   countryCode: string;
-  /** True when an open spine Encounter exists for this patient — hide visit invoice panel. */
+  /** True when an open spine Encounter exists for this patient — omit visit invoice UI entirely. */
   blockVisitInvoice?: boolean;
-  spineReturnAppointmentId?: string;
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
   const [chartData, setChartData] = useState<ToothChartData>(initialChartData);
@@ -491,35 +489,13 @@ export function ClinicalPageClient({
               onAutoFromChartChange={setAutoFromChart}
             />
 
-            {patientId && canWriteClinical && !blockVisitInvoice && (
+            {patientId && canWriteClinical && !blockVisitInvoice ? (
               <ProcedureVisitPanel
                 patientId={patientId}
                 appointmentId={appointmentId}
                 procedures={procedures}
                 countryCode={countryCode}
               />
-            )}
-            {patientId && canWriteClinical && blockVisitInvoice && spineReturnAppointmentId ? (
-              <Card className="border-amber-300 bg-amber-50/60">
-                <CardHeader>
-                  <CardTitle className="text-base text-amber-950">
-                    Visit invoice locked
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm text-amber-950/90">
-                  <p>
-                    An active encounter spine is open for this patient. Generate
-                    the visit invoice from Close &amp; invoice on that encounter —
-                    not from this classic clinical panel.
-                  </p>
-                  <Link
-                    href={encounterSpinePath(spineReturnAppointmentId)}
-                    className="inline-flex min-h-10 items-center font-medium text-teal-800 underline-offset-4 hover:underline"
-                  >
-                    Back to encounter spine
-                  </Link>
-                </CardContent>
-              </Card>
             ) : null}
           </div>
 

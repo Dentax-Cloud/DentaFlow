@@ -44,6 +44,15 @@ function toImageRecords(
   }));
 }
 
+function spineReturnQuery(patientId: string, appointmentId?: string) {
+  const params = new URLSearchParams({
+    patientId,
+    fromSpine: "1",
+  });
+  if (appointmentId) params.set("returnAppointmentId", appointmentId);
+  return params.toString();
+}
+
 const TOOL_TITLES: Record<SpineToolId, string> = {
   odontogram: "Odontogram",
   perio: "Periodontal chart",
@@ -81,26 +90,22 @@ export function SpineToolOverlay({
 }) {
   const router = useRouter();
   const activeTool = tool ?? "odontogram";
-  const [expanded, setExpanded] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-
-  const isChartTool = activeTool === "odontogram" || activeTool === "perio";
+  const returnQs =
+    patientId != null ? spineReturnQuery(patientId, appointmentId) : null;
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          setExpanded(false);
-          setShowUpload(false);
-        }
+        if (!next) setShowUpload(false);
         onOpenChange(next);
       }}
     >
       <DialogContent
         className={
-          expanded || isChartTool
-            ? "max-h-[95vh] w-[min(96vw,72rem)] max-w-[96vw] overflow-y-auto"
+          activeTool === "odontogram" || activeTool === "perio"
+            ? "max-h-[90vh] max-w-4xl overflow-y-auto"
             : "max-h-[90vh] max-w-3xl overflow-y-auto"
         }
       >
@@ -111,25 +116,11 @@ export function SpineToolOverlay({
             {focusTooth && activeTool === "odontogram"
               ? ` · Tooth ${focusTooth}`
               : ""}
-            {" · stays in this encounter"}
           </DialogDescription>
         </DialogHeader>
 
         {activeTool === "odontogram" && (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setExpanded((v) => !v)}
-              >
-                {expanded ? "Compact view" : "Expand full view"}
-              </Button>
-              <p className="text-xs text-slate-500">
-                Chart stays in the spine workspace — no jump to classic clinical.
-              </p>
-            </div>
             <Odontogram
               data={chartData}
               notation="FDI"
@@ -137,21 +128,23 @@ export function SpineToolOverlay({
               disabled
               onToothClick={() => {}}
             />
+            {returnQs ? (
+              <Link
+                href={`/clinical?${returnQs}`}
+                className="inline-flex min-h-10 items-center text-sm font-medium text-teal-800 hover:underline"
+              >
+                Expand full view
+              </Link>
+            ) : null}
+            <p className="text-xs text-slate-500">
+              Opens the classic odontogram with full charting. Use Back to
+              encounter to return to this visit.
+            </p>
           </div>
         )}
 
         {activeTool === "perio" && (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setExpanded((v) => !v)}
-              >
-                {expanded ? "Compact view" : "Expand full view"}
-              </Button>
-            </div>
             {perioMeasurements && perioMeasurements.length > 0 ? (
               <PerioChartGrid
                 initialMeasurements={perioMeasurements}
@@ -159,11 +152,22 @@ export function SpineToolOverlay({
               />
             ) : (
               <p className="text-sm text-slate-600">
-                No periodontal measurements loaded for this visit yet. Capture
-                charting from the Perio tool when measurements are available —
-                this overlay stays inside the encounter.
+                Periodontal measurements are not loaded in this overlay. Open the
+                full perio chart to review or update charting.
               </p>
             )}
+            {returnQs ? (
+              <Link
+                href={`/clinical/perio?${returnQs}`}
+                className="inline-flex min-h-10 items-center text-sm font-medium text-teal-800 hover:underline"
+              >
+                Expand full view
+              </Link>
+            ) : null}
+            <p className="text-xs text-slate-500">
+              Opens the classic perio chart. Use Back to encounter to return to
+              this visit.
+            </p>
           </div>
         )}
 
