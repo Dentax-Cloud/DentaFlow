@@ -3,7 +3,7 @@ import {
   EncounterBillingGateError,
   EncounterDoubleInvoiceError,
 } from "@/lib/encounter/billing";
-import { InsufficientStockError } from "@/lib/inventory/deduct-store-stock";
+import { InsufficientStockError, MaterialUsageReturnBlockedError } from "@/lib/inventory/deduct-store-stock";
 
 /** Expected validation failures — return these instead of throwing so production Next.js does not mask them as Server Components digests. */
 export type SpineActionResult<T> =
@@ -19,7 +19,8 @@ export function catchSpineExpectedFailure(e: unknown): SpineActionResult<never> 
     e instanceof GateAssertionError ||
     e instanceof EncounterBillingGateError ||
     e instanceof EncounterDoubleInvoiceError ||
-    e instanceof InsufficientStockError
+    e instanceof InsufficientStockError ||
+    e instanceof MaterialUsageReturnBlockedError
   ) {
     return { ok: false, error: e.message };
   }

@@ -30,6 +30,7 @@ import {
   logSpineSterilization,
   logSpineMaterial,
   listSpineFefoLots,
+  returnSpineMaterial,
   recordSpinePainScore,
   advanceSpinePastGates,
   closeAndInvoiceSpineEncounter,
@@ -274,6 +275,7 @@ export function SpineWorkspaceClient({
             unitCost: m.unitCost,
             itemName: m.itemName,
             isBillable: m.isBillable,
+            status: m.status,
           })),
         })),
         interruptOutcome: encounter.interruptOutcome,
@@ -498,7 +500,10 @@ export function SpineWorkspaceClient({
   const materialsSlot = canWrite && !closed && encounter.procedureLines.length > 0 ? (
     <div className="space-y-2">
       {bomChecklistSlot}
-      <p className={labelCls}>Log material</p>
+      <p className={labelCls}>Add item (BoM or ad-hoc)</p>
+      <p className="text-xs text-slate-500">
+        Pick a checklist line, or any inventory item not on the BoM.
+      </p>
       <div className="grid gap-2">
         <select
           className={field}
@@ -523,6 +528,9 @@ export function SpineWorkspaceClient({
             <option key={i.id} value={i.id}>
               {i.name}
               {i.defaultTier === "tracked" ? " (tracked)" : ""}
+              {selectedBomLines.some((b) => b.inventoryItemId === i.id)
+                ? ""
+                : " · ad-hoc"}
             </option>
           ))}
         </select>
@@ -654,7 +662,7 @@ export function SpineWorkspaceClient({
           )
         }
       >
-        Log material
+        Add item
       </button>
     </div>
   ) : bomChecklistSlot;
@@ -1228,12 +1236,33 @@ export function SpineWorkspaceClient({
                 ) : null}
               </div>
               {line.materialUsages.length > 0 ? (
-                <ul className="pl-3 text-xs text-slate-600">
+                <ul className="space-y-1.5 pl-3 text-xs text-slate-600">
                   {line.materialUsages.map((m) => (
-                    <li key={m.id}>
-                      Material · qty {m.quantity}
-                      {m.lotNumber ? ` · lot ${m.lotNumber}` : ""}
-                      {m.isBillable ? " · billable" : " · bundled"}
+                    <li key={m.id} className="flex flex-wrap items-center gap-2">
+                      <span>
+                        {m.itemName ?? "Material"} · qty {m.quantity}
+                        {m.lotNumber ? ` · lot ${m.lotNumber}` : ""}
+                        {m.isBillable ? " · billable" : " · bundled"}
+                        {m.status === "returned" ? (
+                          <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-700">
+                            returned
+                          </span>
+                        ) : null}
+                      </span>
+                      {m.status !== "returned" && write && !encounter.billedInvoice ? (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-teal-800 underline-offset-2 hover:underline"
+                          onClick={() =>
+                            run(
+                              () => returnSpineMaterial(m.id),
+                              "Returned to store",
+                            )
+                          }
+                        >
+                          Mark as not used — return to store
+                        </button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

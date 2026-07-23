@@ -25,6 +25,7 @@ import {
   transitionProcedureLineStatus,
   logSterilizationForLine,
   logMaterialUsage,
+  returnMaterialUsage,
   recordEncounterPainScore,
   type PainNextAction,
 } from "@/lib/encounter/procedure-execution";
@@ -144,6 +145,8 @@ export type SpineProcedureLineSerialized = {
     quantity: number;
     unitCost: number;
     isBillable: boolean;
+    status: string;
+    returnedAt: string | null;
     lotNumber: string | null;
     expiryDate: string | null;
     deductedAt: string;
@@ -339,6 +342,8 @@ function serializeProcedureLine(line: {
     quantity: unknown;
     unitCost: unknown;
     isBillable?: boolean;
+    status?: string;
+    returnedAt?: Date | null;
     lotNumber: string | null;
     expiryDate: Date | null;
     deductedAt: Date;
@@ -379,6 +384,8 @@ function serializeProcedureLine(line: {
         quantity: asNumber(s.quantity),
         unitCost: asNumber(s.unitCost),
         isBillable: u.isBillable !== false,
+        status: u.status === "returned" ? "returned" : "used",
+        returnedAt: toIso(u.returnedAt ?? null),
         lotNumber: u.lotNumber,
         expiryDate: toIso(u.expiryDate),
         deductedAt: toIso(u.deductedAt)!,
@@ -859,6 +866,36 @@ export async function logSpineMaterial(input: {
   });
   if (result.ok) {
     revalidateSpinePaths(line.encounter.appointmentId);
+  }
+  return result;
+}
+
+export async function returnSpineMaterial(materialUsageId: string) {
+  const ctx = await requireSpineWrite();
+  const usage = await db.materialUsage.findFirst({
+    where: { id: materialUsageId, tenantId: ctx.tenantId },
+    select: {
+      id: true,
+      procedureLine: {
+        select: { encounter: { select: { appointmentId: true } } },
+      },
+    },
+  });
+  if (!usage) throw new Error("Material usage not found.");
+
+  const { withSpineExpectedFailureCatch } = await import(
+    "@/lib/encounter/spine-action-result"
+  );
+  const result = await withSpineExpectedFailureCatch(async () => {
+    const returned = await returnMaterialUsage({
+      tenantId: ctx.tenantId,
+      materialUsageId: usage.id,
+      userId: ctx.staffMember?.id,
+    });
+    return serializeDecimal(returned.usage as Record<string, unknown>);
+  });
+  if (result.ok) {
+    revalidateSpinePaths(usage.procedureLine.encounter.appointmentId);
   }
   return result;
 }

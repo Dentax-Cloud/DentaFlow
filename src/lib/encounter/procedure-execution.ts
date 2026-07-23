@@ -201,6 +201,17 @@ export async function logMaterialUsage(params: {
   return logMaterialUsageWithStoreDeduction(params);
 }
 
+export async function returnMaterialUsage(params: {
+  tenantId: string;
+  materialUsageId: string;
+  userId?: string;
+}) {
+  const { returnMaterialUsageToStore } = await import(
+    "@/lib/inventory/deduct-store-stock"
+  );
+  return returnMaterialUsageToStore(params);
+}
+
 export const PAIN_NEXT_ACTIONS = [
   "extra_anesthetic",
   "paused",

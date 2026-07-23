@@ -15,6 +15,8 @@ export type SpineBillingLineInput = {
     itemName?: string | null;
     /** Missing/undefined treated as true (legacy usages). */
     isBillable?: boolean;
+    /** Returned materials never contribute to invoice/preview totals. */
+    status?: string | null;
   }>;
 };
 
@@ -52,9 +54,9 @@ function lineUnitPrice(line: SpineBillingLineInput): number {
 function lineMaterialsCost(
   usages: SpineBillingLineInput["materialUsages"],
 ): number {
-  // Align with buildInvoiceItemsFromEncounter: only billable materials.
+  // Align with buildInvoiceItemsFromEncounter: only billable, non-returned materials.
   return usages
-    .filter((u) => u.isBillable !== false)
+    .filter((u) => u.status !== "returned" && u.isBillable !== false)
     .reduce((sum, u) => sum + u.quantity * u.unitCost, 0);
 }
 

@@ -191,3 +191,125 @@ export async function logMaterialUsageWithStoreDeduction(params: {
     return usage;
   });
 }
+
+export class MaterialUsageReturnBlockedError extends Error {
+  readonly code = "MATERIAL_RETURN_BLOCKED" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "MaterialUsageReturnBlockedError";
+  }
+}
+
+/**
+ * Reverse a logged MaterialUsage back to central store.
+ * - Does NOT delete or mutate quantity/cost on the original row.
+ * - Sets status=returned + returnedAt.
+ * - Creates StockTransaction RETURN (+ stock).
+ * - Blocked once the encounter already has an invoice (billing closed).
+ */
+export async function returnMaterialUsageToStore(params: {
+  tenantId: string;
+  materialUsageId: string;
+  userId?: string;
+}) {
+  const transactionRef = await generateStockRef(params.tenantId);
+
+  return db.$transaction(async (tx) => {
+    const usage = await tx.materialUsage.findFirst({
+      where: { id: params.materialUsageId, tenantId: params.tenantId },
+      include: {
+        item: { select: { id: true, name: true, quantity: true } },
+        procedureLine: {
+          select: {
+            id: true,
+            encounterId: true,
+            encounter: {
+              select: {
+                id: true,
+                appointmentId: true,
+                patientId: true,
+                closedAt: true,
+                billedInvoice: { select: { id: true, invoiceNumber: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!usage) throw new Error("Material usage not found.");
+    if (usage.status === "returned") {
+      throw new MaterialUsageReturnBlockedError("This material was already returned to store.");
+    }
+
+    const encounter = usage.procedureLine.encounter;
+    if (encounter.billedInvoice) {
+      throw new MaterialUsageReturnBlockedError(
+        `Cannot return materials after billing closed (${encounter.billedInvoice.invoiceNumber}).`,
+      );
+    }
+
+    const returnQty = stockUnitsFromUsageQuantity(Number(usage.quantity));
+    const locationId = usage.locationId;
+
+    // Lock inventory row for the increment.
+    const locked = await tx.$queryRaw<Array<{ id: string; quantity: number }>>`
+      SELECT id, quantity
+      FROM "InventoryItem"
+      WHERE id = ${usage.itemId}
+        AND "tenantId" = ${params.tenantId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE
+    `;
+    if (!locked[0]) throw new Error("Inventory item not found.");
+
+    await tx.inventoryItem.update({
+      where: { id: usage.itemId },
+      data: { quantity: { increment: returnQty } },
+    });
+
+    const stockTx = await tx.stockTransaction.create({
+      data: {
+        tenantId: params.tenantId,
+        itemId: usage.itemId,
+        locationId,
+        type: StockTransactionType.RETURN,
+        quantity: returnQty,
+        transactionRef,
+        appointmentId: encounter.appointmentId,
+        patientId: encounter.patientId,
+        notes: `Return unused material ${usage.id} to store (procedure line ${usage.procedureLineId})`,
+      },
+    });
+
+    const updated = await tx.materialUsage.update({
+      where: { id: usage.id },
+      data: {
+        status: "returned",
+        returnedAt: new Date(),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: params.tenantId,
+        userId: params.userId,
+        performedById: params.userId,
+        action: AuditAction.UPDATE,
+        entity: "MaterialUsage",
+        entityId: usage.id,
+        metadata: {
+          action: "return_to_store",
+          procedureLineId: usage.procedureLineId,
+          encounterId: encounter.id,
+          itemId: usage.itemId,
+          quantityReturned: returnQty,
+          stockTransactionId: stockTx.id,
+          previousStatus: usage.status,
+        },
+      },
+    });
+
+    return { usage: updated, stockTransactionId: stockTx.id, quantityReturned: returnQty };
+  });
+}
+

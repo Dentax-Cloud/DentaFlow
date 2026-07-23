@@ -4,6 +4,7 @@ import { join } from "path";
 import {
   assertSufficientStoreStock,
   InsufficientStockError,
+  MaterialUsageReturnBlockedError,
   stockUnitsFromUsageQuantity,
 } from "@/lib/inventory/deduct-store-stock";
 import {
@@ -11,6 +12,7 @@ import {
   bomPrepChecklist,
 } from "@/lib/inventory/procedure-bom";
 import { catchSpineExpectedFailure } from "@/lib/encounter/spine-action-result";
+import { isMaterialUsageBillableOnInvoice } from "@/lib/encounter/billing-materials";
 import { DEFAULT_STORE_LOCATION_NAME } from "@/lib/inventory/locations";
 
 describe("procedure BoM prep checklist display", () => {
@@ -240,5 +242,58 @@ describe("billable + defaultTier migration", () => {
     expect(sql).toMatch(/InventoryItem[\s\S]*"defaultTier"/);
     expect(sql).toMatch(/SET "defaultTier" = 'tracked'/);
     expect(sql).toMatch(/"trackByBatch" = true/);
+  });
+});
+
+describe("ad-hoc material logging + return-to-store", () => {
+  it("treats non-BoM inventory selection as ad-hoc (billable choice at log time)", () => {
+    const bomItemIds = new Set(["inv_bom_1"]);
+    const selectedId = "inv_adhoc_gloves";
+    const isAdHoc = !bomItemIds.has(selectedId);
+    expect(isAdHoc).toBe(true);
+  });
+
+  it("return-to-store migration adds status + returnedAt without dropping rows", () => {
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        "prisma/migrations/20260723140000_material_usage_return_to_store/migration.sql",
+      ),
+      "utf8",
+    );
+    expect(sql).toMatch(/"status" TEXT NOT NULL DEFAULT 'used'/);
+    expect(sql).toMatch(/"returnedAt"/);
+    expect(sql).not.toMatch(/DELETE FROM "MaterialUsage"/);
+  });
+
+  it("blocks invoice lines for returned materials", () => {
+    expect(
+      isMaterialUsageBillableOnInvoice({
+        isBillable: true,
+        quantity: 2,
+        unitCost: 10,
+        status: "returned",
+      }),
+    ).toBe(false);
+    expect(
+      isMaterialUsageBillableOnInvoice({
+        isBillable: true,
+        quantity: 2,
+        unitCost: 10,
+        status: "used",
+      }),
+    ).toBe(true);
+  });
+
+  it("surfaces return-blocked errors as spine { ok:false }", () => {
+    const result = catchSpineExpectedFailure(
+      new MaterialUsageReturnBlockedError(
+        "Cannot return materials after billing closed (INV-1).",
+      ),
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: "Cannot return materials after billing closed (INV-1).",
+    });
   });
 });
