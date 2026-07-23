@@ -222,3 +222,23 @@ describe("InventoryLocation migration backfill", () => {
     expect(sql).not.toMatch(/INSERT INTO "ProcedureBomItem"/);
   });
 });
+
+describe("billable + defaultTier migration", () => {
+  const migrationPath = join(
+    process.cwd(),
+    "prisma/migrations/20260723120000_bom_billable_and_item_tier/migration.sql",
+  );
+
+  it("adds isBillable defaults that preserve existing invoice behavior", () => {
+    const sql = readFileSync(migrationPath, "utf8");
+    expect(sql).toMatch(
+      /ProcedureBomItem[\s\S]*"isBillable" BOOLEAN NOT NULL DEFAULT false/,
+    );
+    expect(sql).toMatch(
+      /MaterialUsage[\s\S]*"isBillable" BOOLEAN NOT NULL DEFAULT true/,
+    );
+    expect(sql).toMatch(/InventoryItem[\s\S]*"defaultTier"/);
+    expect(sql).toMatch(/SET "defaultTier" = 'tracked'/);
+    expect(sql).toMatch(/"trackByBatch" = true/);
+  });
+});

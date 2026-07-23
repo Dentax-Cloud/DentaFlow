@@ -8,6 +8,7 @@ import {
   getProcedureBomAction,
   listInventoryItemsForBom,
   removeProcedureBomItem,
+  setProcedureBomItemBillable,
   upsertProcedureBomItem,
 } from "@/app/(dashboard)/admin/procedure-bom-actions";
 import type { ProcedureBomLine } from "@/lib/inventory/procedure-bom";
@@ -35,6 +36,7 @@ export function ProcedureBomEditor({
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState("1");
   const [optional, setOptional] = useState(false);
+  const [billable, setBillable] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -79,11 +81,13 @@ export function ProcedureBomEditor({
           inventoryItemId: itemId,
           defaultQuantity: n,
           isOptional: optional,
+          isBillable: billable,
         });
         setLines(next);
         setItemId("");
         setQty("1");
         setOptional(false);
+        setBillable(false);
         toast.success("BOM updated");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Could not save BOM item");
@@ -106,6 +110,22 @@ export function ProcedureBomEditor({
     });
   }
 
+  function handleToggleBillable(bomItemId: string, nextBillable: boolean) {
+    startTransition(async () => {
+      try {
+        const next = await setProcedureBomItemBillable({
+          procedureCatalogId: procedureId,
+          bomItemId,
+          isBillable: nextBillable,
+        });
+        setLines(next);
+        toast.success(nextBillable ? "Marked billable" : "Marked bundled");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not update billable flag");
+      }
+    });
+  }
+
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
       {!loaded ? (
@@ -121,13 +141,23 @@ export function ProcedureBomEditor({
               key={line.id}
               className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{line.itemName}</p>
                 <p className="text-xs text-muted-foreground">
                   {line.defaultQuantity} {line.unit}
                   {line.isOptional ? " · optional" : " · required"} · stock{" "}
                   {line.stockOnHand}
+                  {line.isBillable ? " · billable" : " · bundled"}
                 </p>
+                <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={line.isBillable}
+                    disabled={pending}
+                    onChange={(e) => handleToggleBillable(line.id, e.target.checked)}
+                  />
+                  Billable (separate invoice line)
+                </label>
               </div>
               <button
                 type="button"
@@ -160,7 +190,7 @@ export function ProcedureBomEditor({
             </option>
           ))}
         </select>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <input
             type="number"
             min={0.01}
@@ -179,6 +209,15 @@ export function ProcedureBomEditor({
               disabled={pending || !loaded}
             />
             Optional
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={billable}
+              onChange={(e) => setBillable(e.target.checked)}
+              disabled={pending || !loaded}
+            />
+            Billable
           </label>
         </div>
         <Button

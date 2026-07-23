@@ -1305,6 +1305,8 @@ model InventoryItem {
   isSellable         Boolean             @default(false)
   trackByBatch       Boolean             @default(false)
   trackByExpiry      Boolean             @default(true)
+  /// consumable | tracked — default for spine/BoM logging (lot/expiry only when tracked).
+  defaultTier        String              @default("consumable")
   storageLocation    String?
   storageConditions  String?
   minStockAlert      Int?
@@ -1359,6 +1361,8 @@ model ProcedureBomItem {
   inventoryItemId    String
   defaultQuantity    Decimal          @db.Decimal(12, 4)
   isOptional         Boolean          @default(false)
+  /// When false (default), cost is bundled into the procedure fee — no separate invoice line.
+  isBillable         Boolean          @default(false)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2537,6 +2541,9 @@ model MaterialUsage {
   locationId      String?
   /// tracked | consumable
   tier            String    @default("consumable")
+  /// When true, qty×unitCost becomes a separate GOOD invoice line. Default true preserves
+  /// legacy MaterialUsage rows already billed; new BoM logs set false unless BoM isBillable.
+  isBillable      Boolean   @default(true)
   lotNumber       String?
   expiryDate      DateTime?
   quantity        Decimal   @db.Decimal(12, 4)

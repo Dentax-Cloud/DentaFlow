@@ -9,7 +9,13 @@ export type SpineBillingLineInput = {
   billedInvoiceId?: string | null;
   unitPrice: number | null;
   procedureCatalog: { code: string; name: string; price: number };
-  materialUsages: Array<{ quantity: number; unitCost: number; itemName?: string | null }>;
+  materialUsages: Array<{
+    quantity: number;
+    unitCost: number;
+    itemName?: string | null;
+    /** Missing/undefined treated as true (legacy usages). */
+    isBillable?: boolean;
+  }>;
 };
 
 export type SpineBillingPreview = {
@@ -46,7 +52,10 @@ function lineUnitPrice(line: SpineBillingLineInput): number {
 function lineMaterialsCost(
   usages: SpineBillingLineInput["materialUsages"],
 ): number {
-  return usages.reduce((sum, u) => sum + u.quantity * u.unitCost, 0);
+  // Align with buildInvoiceItemsFromEncounter: only billable materials.
+  return usages
+    .filter((u) => u.isBillable !== false)
+    .reduce((sum, u) => sum + u.quantity * u.unitCost, 0);
 }
 
 export function buildSpineBillingPreview(params: {

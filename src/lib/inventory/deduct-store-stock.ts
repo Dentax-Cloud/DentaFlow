@@ -65,6 +65,8 @@ export async function logMaterialUsageWithStoreDeduction(params: {
   itemId: string;
   tier: "tracked" | "consumable";
   quantity: number;
+  /** When false, inventory still deducts but invoice generation skips this usage. */
+  isBillable?: boolean;
   lotNumber?: string | null;
   expiryDate?: Date | null;
   userId?: string;
@@ -133,6 +135,8 @@ export async function logMaterialUsageWithStoreDeduction(params: {
         itemId: item.id,
         locationId: ownedLocation.id,
         tier: params.tier,
+        // Default true preserves legacy ad-hoc billing when caller omits the flag.
+        isBillable: params.isBillable !== false,
         quantity: new Prisma.Decimal(params.quantity),
         unitCost,
         lotNumber: params.lotNumber?.trim() || null,
@@ -179,6 +183,7 @@ export async function logMaterialUsageWithStoreDeduction(params: {
           quantityDeducted: deductQty,
           stockTransactionId: stockTx.id,
           tier: params.tier,
+          isBillable: params.isBillable !== false,
         },
       },
     });

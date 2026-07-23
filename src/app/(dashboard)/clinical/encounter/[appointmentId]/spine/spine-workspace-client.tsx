@@ -29,6 +29,7 @@ import {
   transitionSpineProcedureLine,
   logSpineSterilization,
   logSpineMaterial,
+  listSpineFefoLots,
   recordSpinePainScore,
   advanceSpinePastGates,
   closeAndInvoiceSpineEncounter,
@@ -40,6 +41,7 @@ import { findPrescriptionAllergyConflicts } from "@/lib/encounter/close-out";
 import { PreClinicalChecks } from "@/components/clinical/pre-clinical-checks";
 import { ImageGallery } from "@/components/clinical/image-gallery";
 import { buildSpineBillingPreview } from "@/lib/encounter/billing-preview";
+import { lotExpiryWarning, type InventoryLotSuggestion } from "@/lib/inventory/lots";
 import type { ToothChartData } from "@/lib/clinical/chart-types";
 import type { PerioMeasurement } from "@/lib/clinical/types";
 import {
@@ -70,6 +72,8 @@ type DraftState = {
   materialTier: "tracked" | "consumable";
   materialQty: string;
   materialLot: string;
+  materialExpiry: string;
+  materialBillable: boolean;
   prescriptionText: string;
   closeOutNote: string;
   ackAllergyConflict: boolean;
@@ -93,6 +97,8 @@ const EMPTY_DRAFT: DraftState = {
   materialTier: "consumable",
   materialQty: "1",
   materialLot: "",
+  materialExpiry: "",
+  materialBillable: true,
   prescriptionText: "",
   closeOutNote: "",
   ackAllergyConflict: false,
@@ -156,6 +162,8 @@ export function SpineWorkspaceClient({
   );
   const [overlayTool, setOverlayTool] = useState<SpineToolId | null>(null);
   const [focusTooth, setFocusTooth] = useState<string | undefined>();
+  const [fefoLots, setFefoLots] = useState<InventoryLotSuggestion[]>([]);
+  const [fefoLoading, setFefoLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
@@ -265,6 +273,7 @@ export function SpineWorkspaceClient({
             quantity: m.quantity,
             unitCost: m.unitCost,
             itemName: m.itemName,
+            isBillable: m.isBillable,
           })),
         })),
         interruptOutcome: encounter.interruptOutcome,
@@ -290,7 +299,12 @@ export function SpineWorkspaceClient({
     }
     const selectedItem = inventoryItems.find((i) => i.id === draft.materialItemId);
     const qty = Number(draft.materialQty);
-    if (selectedItem && Number.isFinite(qty) && qty > 0) {
+    if (
+      selectedItem &&
+      draft.materialBillable &&
+      Number.isFinite(qty) &&
+      qty > 0
+    ) {
       rows.push({
         id: "pending-material",
         kind: "material",
@@ -306,6 +320,7 @@ export function SpineWorkspaceClient({
     draft.catalogId,
     draft.materialItemId,
     draft.materialQty,
+    draft.materialBillable,
   ]);
 
   const insuranceDrawerStatus = useMemo(():
@@ -375,6 +390,62 @@ export function SpineWorkspaceClient({
   const selectedBomLines = selectedMaterialLine
     ? bomByProcedureId[selectedMaterialLine.procedureCatalogId] ?? []
     : [];
+  const selectedInventoryItem = inventoryItems.find((i) => i.id === draft.materialItemId);
+  const matchingBomLine = selectedBomLines.find(
+    (b) => b.inventoryItemId === draft.materialItemId,
+  );
+  const isAdHocMaterial = Boolean(draft.materialItemId) && !matchingBomLine;
+  const lotWarning =
+    draft.materialTier === "tracked"
+      ? lotExpiryWarning(draft.materialExpiry || null)
+      : null;
+
+  useEffect(() => {
+    if (!draft.materialItemId || draft.materialTier !== "tracked") {
+      setFefoLots([]);
+      return;
+    }
+    let cancelled = false;
+    setFefoLoading(true);
+    listSpineFefoLots(draft.materialItemId)
+      .then((lots) => {
+        if (cancelled) return;
+        setFefoLots(lots);
+        if (!draft.materialLot && lots[0]) {
+          patchDraft({
+            materialLot: lots[0].lotNumber,
+            materialExpiry: lots[0].expiryDate
+              ? lots[0].expiryDate.slice(0, 10)
+              : "",
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFefoLots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFefoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only refetch when item/tier changes — not when lot/expiry edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.materialItemId, draft.materialTier]);
+
+  function applyMaterialItemSelection(itemId: string) {
+    const item = inventoryItems.find((i) => i.id === itemId);
+    const bom = selectedBomLines.find((b) => b.inventoryItemId === itemId);
+    const tier = item?.defaultTier ?? "consumable";
+    patchDraft({
+      materialItemId: itemId,
+      materialTier: tier,
+      materialQty: bom ? String(bom.defaultQuantity) : draft.materialQty || "1",
+      materialBillable: bom ? bom.isBillable : true,
+      materialLot: "",
+      materialExpiry: "",
+    });
+  }
 
   const bomChecklistSlot =
     encounter.procedureLines.length > 0 ? (
@@ -388,12 +459,18 @@ export function SpineWorkspaceClient({
           <ul className="mt-1 space-y-1 text-xs text-slate-700">
             {selectedBomLines.map((b) => (
               <li key={b.id} className="flex justify-between gap-2">
-                <span>
+                <button
+                  type="button"
+                  className="min-w-0 text-left hover:text-teal-800"
+                  disabled={!write}
+                  onClick={() => applyMaterialItemSelection(b.inventoryItemId)}
+                >
                   {b.itemName}{" "}
                   <span className="text-slate-400">
-                    ({b.isOptional ? "optional" : "required"})
+                    ({b.isOptional ? "optional" : "required"}
+                    {b.isBillable ? " · billable" : " · bundled"})
                   </span>
-                </span>
+                </button>
                 <span className="shrink-0 font-medium">
                   {b.defaultQuantity} {b.unit}
                 </span>
@@ -438,27 +515,27 @@ export function SpineWorkspaceClient({
         <select
           className={field}
           value={draft.materialItemId}
-          onChange={(e) => patchDraft({ materialItemId: e.target.value })}
+          onChange={(e) => applyMaterialItemSelection(e.target.value)}
           disabled={pending}
         >
           <option value="">Select material…</option>
           {inventoryItems.map((i) => (
             <option key={i.id} value={i.id}>
               {i.name}
+              {i.defaultTier === "tracked" ? " (tracked)" : ""}
             </option>
           ))}
         </select>
-        <select
-          className={field}
-          value={draft.materialTier}
-          onChange={(e) =>
-            patchDraft({ materialTier: e.target.value as "tracked" | "consumable" })
-          }
-          disabled={pending}
-        >
-          <option value="consumable">consumable</option>
-          <option value="tracked">tracked</option>
-        </select>
+        {selectedInventoryItem ? (
+          <p className="text-xs text-slate-500">
+            Tier: {draft.materialTier}
+            {matchingBomLine
+              ? matchingBomLine.isBillable
+                ? " · BoM billable"
+                : " · BoM bundled"
+              : " · ad-hoc"}
+          </p>
+        ) : null}
         <input
           className={field}
           type="number"
@@ -469,13 +546,77 @@ export function SpineWorkspaceClient({
           disabled={pending}
           placeholder="Qty"
         />
-        <input
-          className={field}
-          value={draft.materialLot}
-          onChange={(e) => patchDraft({ materialLot: e.target.value })}
-          disabled={pending}
-          placeholder="Lot (tracked)"
-        />
+        {isAdHocMaterial ? (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={draft.materialBillable}
+              onChange={(e) => patchDraft({ materialBillable: e.target.checked })}
+              disabled={pending}
+            />
+            Billable (separate invoice line)
+          </label>
+        ) : null}
+        {draft.materialTier === "tracked" ? (
+          <>
+            {fefoLoading ? (
+              <p className="text-xs text-slate-500">Loading lots (FEFO)…</p>
+            ) : fefoLots.length > 0 ? (
+              <select
+                className={field}
+                value={draft.materialLot}
+                onChange={(e) => {
+                  const lot = fefoLots.find((l) => l.lotNumber === e.target.value);
+                  patchDraft({
+                    materialLot: e.target.value,
+                    materialExpiry: lot?.expiryDate
+                      ? lot.expiryDate.slice(0, 10)
+                      : draft.materialExpiry,
+                  });
+                }}
+                disabled={pending}
+              >
+                <option value="">Select lot (FEFO)…</option>
+                {fefoLots.map((l) => (
+                  <option key={l.batchId} value={l.lotNumber}>
+                    {l.lotNumber}
+                    {l.expiryDate
+                      ? ` · exp ${l.expiryDate.slice(0, 10)}`
+                      : " · no expiry"}
+                    {` · qty ${l.currentQty}`}
+                    {l.isExpired ? " · EXPIRED" : l.isNearExpiry ? " · near expiry" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <input
+              className={field}
+              value={draft.materialLot}
+              onChange={(e) => patchDraft({ materialLot: e.target.value })}
+              disabled={pending}
+              placeholder="Lot number"
+            />
+            <input
+              className={field}
+              type="date"
+              value={draft.materialExpiry}
+              onChange={(e) => patchDraft({ materialExpiry: e.target.value })}
+              disabled={pending}
+            />
+            {lotWarning ? (
+              <p
+                className={
+                  lotWarning.level === "expired"
+                    ? "rounded-md bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
+                    : "rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900"
+                }
+                role="alert"
+              >
+                {lotWarning.message}
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </div>
       <button
         type="button"
@@ -490,7 +631,15 @@ export function SpineWorkspaceClient({
                 itemId: draft.materialItemId,
                 tier: draft.materialTier,
                 quantity: Number(draft.materialQty) || 1,
-                lotNumber: draft.materialLot || null,
+                isBillable: matchingBomLine
+                  ? matchingBomLine.isBillable
+                  : draft.materialBillable,
+                lotNumber:
+                  draft.materialTier === "tracked" ? draft.materialLot || null : null,
+                expiryDate:
+                  draft.materialTier === "tracked" && draft.materialExpiry
+                    ? draft.materialExpiry
+                    : null,
               }),
             "Material logged",
             () =>
@@ -498,6 +647,9 @@ export function SpineWorkspaceClient({
                 materialItemId: "",
                 materialQty: "1",
                 materialLot: "",
+                materialExpiry: "",
+                materialBillable: true,
+                materialTier: "consumable",
               }),
           )
         }
@@ -1081,6 +1233,7 @@ export function SpineWorkspaceClient({
                     <li key={m.id}>
                       Material · qty {m.quantity}
                       {m.lotNumber ? ` · lot ${m.lotNumber}` : ""}
+                      {m.isBillable ? " · billable" : " · bundled"}
                     </li>
                   ))}
                 </ul>

@@ -188,6 +188,7 @@ export async function logMaterialUsage(params: {
   itemId: string;
   tier: "tracked" | "consumable";
   quantity: number;
+  isBillable?: boolean;
   lotNumber?: string | null;
   expiryDate?: Date | null;
   userId?: string;

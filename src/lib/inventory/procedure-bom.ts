@@ -10,6 +10,8 @@ export type ProcedureBomLine = {
   unit: string;
   defaultQuantity: number;
   isOptional: boolean;
+  /** Separate invoice line when true; bundled into procedure price when false. */
+  isBillable: boolean;
   unitCost: number | null;
   stockOnHand: number;
 };
@@ -50,6 +52,7 @@ export async function listProcedureBom(
         unit: r.inventoryItem.unit,
         defaultQuantity: Number(s.defaultQuantity),
         isOptional: r.isOptional,
+        isBillable: r.isBillable,
         unitCost,
         stockOnHand: r.inventoryItem.quantity,
       };
@@ -96,6 +99,7 @@ export async function listProcedureBomByCatalogIds(
       unit: r.inventoryItem.unit,
       defaultQuantity: Number(s.defaultQuantity),
       isOptional: r.isOptional,
+      isBillable: r.isBillable,
       unitCost,
       stockOnHand: r.inventoryItem.quantity,
     };

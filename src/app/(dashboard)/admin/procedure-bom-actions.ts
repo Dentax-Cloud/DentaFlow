@@ -51,6 +51,7 @@ export async function upsertProcedureBomItem(input: {
   inventoryItemId: string;
   defaultQuantity: number;
   isOptional?: boolean;
+  isBillable?: boolean;
 }): Promise<ProcedureBomLine[]> {
   const ctx = await requireAdminWrite();
 
@@ -86,11 +87,37 @@ export async function upsertProcedureBomItem(input: {
       inventoryItemId: input.inventoryItemId,
       defaultQuantity: qty,
       isOptional: Boolean(input.isOptional),
+      isBillable: Boolean(input.isBillable),
     },
     update: {
       defaultQuantity: qty,
       isOptional: Boolean(input.isOptional),
+      isBillable: Boolean(input.isBillable),
     },
+  });
+
+  revalidatePath("/admin/procedure-catalog");
+  return listProcedureBom(ctx.tenantId, input.procedureCatalogId);
+}
+
+export async function setProcedureBomItemBillable(input: {
+  procedureCatalogId: string;
+  bomItemId: string;
+  isBillable: boolean;
+}): Promise<ProcedureBomLine[]> {
+  const ctx = await requireAdminWrite();
+  const existing = await db.procedureBomItem.findFirst({
+    where: {
+      id: input.bomItemId,
+      tenantId: ctx.tenantId,
+      procedureCatalogId: input.procedureCatalogId,
+    },
+  });
+  if (!existing) throw new Error("BOM item not found.");
+
+  await db.procedureBomItem.update({
+    where: { id: existing.id },
+    data: { isBillable: Boolean(input.isBillable) },
   });
 
   revalidatePath("/admin/procedure-catalog");
