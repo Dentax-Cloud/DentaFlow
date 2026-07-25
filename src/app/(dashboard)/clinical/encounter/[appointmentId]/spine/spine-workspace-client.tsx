@@ -1640,6 +1640,15 @@ export function SpineWorkspaceClient({
       <SpineBillingDrawer
         preview={billingPreview}
         pendingRows={pendingPriceRows}
+        billedInvoice={
+          encounter.billedInvoice
+            ? {
+                invoiceNumber: encounter.billedInvoice.invoiceNumber,
+                total: encounter.billedInvoice.total,
+                status: encounter.billedInvoice.status,
+              }
+            : null
+        }
         insuranceStatus={insuranceDrawerStatus}
         staleLabel={staleLabel}
         open={drawerOpen}

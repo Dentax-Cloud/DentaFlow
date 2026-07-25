@@ -37,12 +37,14 @@ describe("buildSpineBillingPreview", () => {
     expect(preview.lines[0]).toMatchObject({
       id: "line-completed",
       billable: true,
+      alreadyInvoiced: false,
       unitPrice: 100,
       materialsCost: 11,
     });
     expect(preview.lines[1]).toMatchObject({
       id: "line-planned",
       billable: false,
+      alreadyInvoiced: false,
       unitPrice: 250,
       materialsCost: 40,
     });
@@ -99,6 +101,33 @@ describe("buildSpineBillingPreview", () => {
       ],
     });
 
+    expect(preview.billableSubtotal).toBe(0);
+    expect(preview.gateMessage).toMatch(/No billable/i);
+  });
+
+  it("marks completed lines with billedInvoiceId as already invoiced (not billable)", () => {
+    const preview = buildSpineBillingPreview({
+      lines: [
+        {
+          id: "line-billed",
+          status: "completed",
+          billedInvoiceId: "inv-1",
+          unitPrice: 588,
+          procedureCatalog: {
+            code: "GPMR-APP001",
+            name: "Occlusal Night Guard",
+            price: 588,
+          },
+          materialUsages: [],
+        },
+      ],
+    });
+
+    expect(preview.lines[0]).toMatchObject({
+      billable: false,
+      alreadyInvoiced: true,
+      unitPrice: 588,
+    });
     expect(preview.billableSubtotal).toBe(0);
     expect(preview.gateMessage).toMatch(/No billable/i);
   });

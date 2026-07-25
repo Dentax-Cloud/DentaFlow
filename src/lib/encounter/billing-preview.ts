@@ -29,6 +29,8 @@ export type SpineBillingPreview = {
     unitPrice: number;
     materialsCost: number;
     billable: boolean;
+    /** Line already linked to an invoice (excluded from further billing). */
+    alreadyInvoiced: boolean;
   }>;
   /** Sum of all line unit prices (display). */
   proceduresSubtotal: number;
@@ -81,6 +83,7 @@ export function buildSpineBillingPreview(params: {
       unitPrice,
       materialsCost,
       billable,
+      alreadyInvoiced: Boolean(line.billedInvoiceId),
     };
   });
 

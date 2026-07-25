@@ -33,9 +33,16 @@ function insuranceToChipStatus(
   }
 }
 
+export type SpineBilledInvoiceSummary = {
+  invoiceNumber: string;
+  total: number | string;
+  status?: string;
+};
+
 export function SpineBillingDrawer({
   preview,
   pendingRows = [],
+  billedInvoice = null,
   insuranceStatus,
   staleLabel,
   open,
@@ -45,6 +52,8 @@ export function SpineBillingDrawer({
   preview: SpineBillingPreview;
   /** Client-only draft selections — not included in billable/projected totals. */
   pendingRows?: SpinePendingPriceRow[];
+  /** When set, drawer shows post-close invoiced state instead of empty projected totals. */
+  billedInvoice?: SpineBilledInvoiceSummary | null;
   insuranceStatus: "verified" | "stale" | "overridden" | "pending";
   staleLabel?: string;
   open: boolean;
@@ -55,6 +64,12 @@ export function SpineBillingDrawer({
     insuranceStatus === "stale" && staleLabel
       ? `Insurance (${staleLabel})`
       : "Insurance";
+  const invoicedTotal =
+    billedInvoice == null
+      ? null
+      : typeof billedInvoice.total === "number"
+        ? money(billedInvoice.total)
+        : money(Number(billedInvoice.total));
 
   return (
     <>
@@ -130,7 +145,11 @@ export function SpineBillingDrawer({
                       </div>
                       <div className="text-[11px] uppercase tracking-wide text-slate-500">
                         {line.status.replaceAll("_", " ")}
-                        {line.billable ? "" : " · not billable"}
+                        {line.alreadyInvoiced
+                          ? " · invoiced"
+                          : line.billable
+                            ? ""
+                            : " · not billable"}
                       </div>
                     </div>
                     <div className="shrink-0 text-right tabular-nums text-slate-800">
@@ -142,6 +161,25 @@ export function SpineBillingDrawer({
             </ul>
 
             <div className="space-y-2 border-t border-slate-100 pt-3 text-sm">
+              {billedInvoice && invoicedTotal != null ? (
+                <div
+                  className="rounded-md bg-teal-50 px-2.5 py-2 text-sm text-teal-950 ring-1 ring-inset ring-teal-200"
+                  data-testid="spine-invoiced-summary"
+                >
+                  <div className="font-medium">
+                    Invoiced: {billedInvoice.invoiceNumber} · {invoicedTotal}
+                  </div>
+                  {billedInvoice.status ? (
+                    <div className="mt-0.5 text-xs capitalize text-teal-800">
+                      Status: {billedInvoice.status.replaceAll("_", " ")}
+                    </div>
+                  ) : null}
+                  <p className="mt-1 text-xs text-teal-800/90">
+                    Procedure lines below are already on this invoice. Remaining
+                    billable / projected totals are for anything still unbilled.
+                  </p>
+                </div>
+              ) : null}
               <Row label="Procedures" value={money(preview.proceduresSubtotal)} />
               <Row label="Materials" value={money(preview.materialsSubtotal)} />
               <Row
@@ -151,16 +189,27 @@ export function SpineBillingDrawer({
               />
               <Row label="Est. coverage" value={money(preview.estimatedCoverage)} />
               <Row label="Est. copay" value={money(preview.estimatedCopay)} />
-              <Row
-                label="Projected total"
-                value={money(preview.projectedTotal)}
-                strong
-                accent
-              />
+              {billedInvoice && invoicedTotal != null ? (
+                <Row
+                  label="Invoiced total"
+                  value={invoicedTotal}
+                  strong
+                  accent
+                />
+              ) : (
+                <Row
+                  label="Projected total"
+                  value={money(preview.projectedTotal)}
+                  strong
+                  accent
+                />
+              )}
               <p className="text-xs text-slate-500">
-                Tax applied when invoice is generated
+                {billedInvoice
+                  ? "Invoice already generated for this encounter"
+                  : "Tax applied when invoice is generated"}
               </p>
-              {preview.gateMessage ? (
+              {preview.gateMessage && !billedInvoice ? (
                 <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 ring-1 ring-inset ring-amber-200">
                   {preview.gateMessage}
                 </p>
