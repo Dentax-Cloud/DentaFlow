@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Bold, Heading3, Italic, List } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,12 @@ type Props = {
   className?: string;
 };
 
+/**
+ * contentEditable must not be fully controlled via dangerouslySetInnerHTML on
+ * every render — that resets the caret to 0 and types text in reverse.
+ * Sync `value` into the DOM only when it differs from the live editor HTML
+ * (initial load, template switch, dictate / AI enhance, etc.).
+ */
 export function RichTextEditor({
   value,
   onChange,
@@ -22,11 +28,31 @@ export function RichTextEditor({
 }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const exec = useCallback((command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    editorRef.current?.focus();
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
-  }, [onChange]);
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (el.innerHTML === value) return;
+
+    const hadFocus = document.activeElement === el;
+    el.innerHTML = value;
+    if (!hadFocus) return;
+
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }, [value]);
+
+  const exec = useCallback(
+    (command: string, commandValue?: string) => {
+      document.execCommand(command, false, commandValue);
+      editorRef.current?.focus();
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+    },
+    [onChange],
+  );
 
   return (
     <div className={cn("rounded-md border", className)}>
@@ -82,7 +108,6 @@ export function RichTextEditor({
         suppressContentEditableWarning
         className="min-h-[140px] p-3 text-sm outline-none prose prose-sm max-w-none dark:prose-invert"
         data-placeholder={placeholder}
-        dangerouslySetInnerHTML={{ __html: value }}
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
       />
     </div>
