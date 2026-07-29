@@ -7,6 +7,7 @@ import { generateInvoiceRef } from "@/lib/ids/generate-ids";
 import { sendInvoiceEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 import type { InvoiceItemType } from "@/lib/billing/india-gst";
+import { assertNoOpenEncounterBlocksLegacyInvoice } from "@/lib/encounter/legacy-invoice-guard";
 
 export type InvoiceLineItem = {
   description: string;
@@ -35,6 +36,14 @@ export type CreateInvoiceFromItemsParams = {
  * Auto-suggests a DRAFT claim when insuranceAmount > 0 and a primary policy exists.
  */
 export async function createInvoiceFromItems(params: CreateInvoiceFromItemsParams) {
+  // Spine Close & invoice passes encounterId; legacy paths must not mint a parallel
+  // encounterId=null invoice while that visit is still open.
+  await assertNoOpenEncounterBlocksLegacyInvoice({
+    tenantId: params.tenantId,
+    patientId: params.patientId,
+    encounterId: params.encounterId,
+  });
+
   const taxResult = await calculateInvoiceTaxAndLines({
     tenantId: params.tenantId,
     patientId: params.patientId,

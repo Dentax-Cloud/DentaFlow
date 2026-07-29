@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +13,8 @@ import {
 import { Odontogram } from "@/components/clinical/dental-chart";
 import { PerioChartGrid } from "@/components/clinical/perio-chart-grid";
 import { ImageGallery, type ImageRecord } from "@/components/clinical/image-gallery";
+import { ImageUploadForm } from "@/components/clinical/image-upload-form";
+import { Button } from "@/components/ui/button";
 import type { ToothChartData } from "@/lib/clinical/chart-types";
 import type { PerioMeasurement } from "@/lib/clinical/types";
 import type { SpineToolId } from "./spine-stage-nav";
@@ -40,6 +44,15 @@ function toImageRecords(
   }));
 }
 
+function spineReturnQuery(patientId: string, appointmentId?: string) {
+  const params = new URLSearchParams({
+    patientId,
+    fromSpine: "1",
+  });
+  if (appointmentId) params.set("returnAppointmentId", appointmentId);
+  return params.toString();
+}
+
 const TOOL_TITLES: Record<SpineToolId, string> = {
   odontogram: "Odontogram",
   perio: "Periodontal chart",
@@ -58,6 +71,7 @@ export function SpineToolOverlay({
   photos,
   patientName,
   patientId,
+  appointmentId,
   treatmentPlan,
   perioMeasurements,
 }: {
@@ -70,13 +84,24 @@ export function SpineToolOverlay({
   photos: MediaItem[];
   patientName: string;
   patientId?: string;
+  appointmentId?: string;
   treatmentPlan?: { id: string; title: string } | null;
   perioMeasurements?: PerioMeasurement[];
 }) {
+  const router = useRouter();
   const activeTool = tool ?? "odontogram";
+  const [showUpload, setShowUpload] = useState(false);
+  const returnQs =
+    patientId != null ? spineReturnQuery(patientId, appointmentId) : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setShowUpload(false);
+        onOpenChange(next);
+      }}
+    >
       <DialogContent
         className={
           activeTool === "odontogram" || activeTool === "perio"
@@ -103,16 +128,18 @@ export function SpineToolOverlay({
               disabled
               onToothClick={() => {}}
             />
-            {patientId ? (
+            {returnQs ? (
               <Link
-                href={`/clinical?patientId=${encodeURIComponent(patientId)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={`/clinical?${returnQs}`}
                 className="inline-flex min-h-10 items-center text-sm font-medium text-teal-800 hover:underline"
               >
-                Open full odontogram (new tab)
+                Expand full view
               </Link>
             ) : null}
+            <p className="text-xs text-slate-500">
+              Opens the classic odontogram with full charting. Use Back to
+              encounter to return to this visit.
+            </p>
           </div>
         )}
 
@@ -129,28 +156,80 @@ export function SpineToolOverlay({
                 full perio chart to review or update charting.
               </p>
             )}
-            {patientId ? (
+            {returnQs ? (
               <Link
-                href={`/clinical/perio?patientId=${encodeURIComponent(patientId)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={`/clinical/perio?${returnQs}`}
                 className="inline-flex min-h-10 items-center text-sm font-medium text-teal-800 hover:underline"
               >
-                Open full perio chart (new tab)
+                Expand full view
               </Link>
             ) : null}
+            <p className="text-xs text-slate-500">
+              Opens the classic perio chart. Use Back to encounter to return to
+              this visit.
+            </p>
           </div>
         )}
 
         {activeTool === "radiographs" && (
-          <ImageGallery
-            images={toImageRecords(radiographs, "OPG")}
-            canDelete={false}
-          />
+          <div className="space-y-3">
+            {patientId ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setShowUpload((v) => !v)}
+                >
+                  {showUpload ? "Hide upload" : "Capture / upload radiograph"}
+                </Button>
+              </div>
+            ) : null}
+            {showUpload && patientId ? (
+              <ImageUploadForm
+                patientId={patientId}
+                appointmentId={appointmentId}
+                defaultType="OPG"
+                onUploaded={() => {
+                  setShowUpload(false);
+                  router.refresh();
+                }}
+                onCancel={() => setShowUpload(false)}
+              />
+            ) : null}
+            <ImageGallery
+              images={toImageRecords(radiographs, "OPG")}
+              canDelete={false}
+            />
+          </div>
         )}
 
         {activeTool === "photos" && (
-          <ImageGallery images={toImageRecords(photos, "PHOTO")} canDelete={false} />
+          <div className="space-y-3">
+            {patientId ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setShowUpload((v) => !v)}
+                >
+                  {showUpload ? "Hide upload" : "Capture / upload photo"}
+                </Button>
+              </div>
+            ) : null}
+            {showUpload && patientId ? (
+              <ImageUploadForm
+                patientId={patientId}
+                appointmentId={appointmentId}
+                defaultType="PHOTO"
+                onUploaded={() => {
+                  setShowUpload(false);
+                  router.refresh();
+                }}
+                onCancel={() => setShowUpload(false)}
+              />
+            ) : null}
+            <ImageGallery images={toImageRecords(photos, "PHOTO")} canDelete={false} />
+          </div>
         )}
 
         {activeTool === "treatment_plan" && (
@@ -158,6 +237,10 @@ export function SpineToolOverlay({
             {treatmentPlan ? (
               <>
                 <p className="font-medium text-slate-900">{treatmentPlan.title}</p>
+                <p className="text-xs text-slate-500">
+                  Plan details open in a new tab. Prefer Close & invoice on this
+                  encounter for visit billing.
+                </p>
                 <Link
                   href={`/clinical/treatment-plans/${treatmentPlan.id}`}
                   target="_blank"

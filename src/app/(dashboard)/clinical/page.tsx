@@ -11,16 +11,24 @@ import { getActiveChairsideSessionsForUser } from "@/app/(dashboard)/features/cl
 import { getEncounterQueueAppointments } from "@/lib/clinical/encounter-queue";
 import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import { ResumeChairsideBanner } from "@/components/clinical/resume-chairside-banner";
+import { BackToSpineEncounterBanner } from "@/components/clinical/back-to-spine-encounter-banner";
 import { EncounterQueuePanel } from "@/components/clinical/encounter-queue-panel";
 import { ClinicalBrowseLinks } from "@/components/clinical/clinical-browse-links";
 import { ClinicalPageClient } from "./clinical-client";
+import { findOpenUnbilledEncounterForPatient } from "@/lib/encounter/legacy-invoice-guard";
 
 export default async function ClinicalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ patientId?: string; appointmentId?: string }>;
+  searchParams: Promise<{
+    patientId?: string;
+    appointmentId?: string;
+    fromSpine?: string;
+    returnAppointmentId?: string;
+  }>;
 }) {
-  const { patientId, appointmentId } = await searchParams;
+  const { patientId, appointmentId, fromSpine, returnAppointmentId } =
+    await searchParams;
 
   if (appointmentId) {
     redirect(encounterWorkspacePath(appointmentId));
@@ -85,23 +93,45 @@ export default async function ClinicalPage({
       "Patient",
   }));
 
+  const openEncounter = patientId
+    ? await findOpenUnbilledEncounterForPatient(ctx.tenant.id, patientId)
+    : null;
+
+  const spineReturnAppointmentId =
+    (fromSpine === "1" && returnAppointmentId) || openEncounter?.appointmentId || undefined;
+
+  const spineReturnPatient = spineReturnAppointmentId
+    ? patients.find((p) => p.id === patientId)
+    : undefined;
+
   return (
     <div className="space-y-4 p-4 md:p-6">
+      {spineReturnAppointmentId ? (
+        <BackToSpineEncounterBanner
+          appointmentId={spineReturnAppointmentId}
+          patientLabel={
+            spineReturnPatient
+              ? `${spineReturnPatient.firstName} ${spineReturnPatient.lastName}`
+              : undefined
+          }
+        />
+      ) : null}
       {resumeSessions.length > 0 && <ResumeChairsideBanner sessions={resumeSessions} />}
       <EncounterQueuePanel appointments={encounterQueue} timezone={ctx.tenant.timezone} />
       <ClinicalBrowseLinks />
       <ClinicalPageClient
-      canWriteClinical={canWriteClinical}
-      patients={patients}
-      selectedPatientId={patientId}
-      appointmentId={appointmentId}
-      procedures={serializedProcedures}
-      initialChartData={chartData}
-      providerName={providerName}
-      clinicName={ctx.tenant.name}
-      templates={templates}
-      countryCode={ctx.tenant.countryCode}
-    />
+        canWriteClinical={canWriteClinical}
+        patients={patients}
+        selectedPatientId={patientId}
+        appointmentId={appointmentId}
+        procedures={serializedProcedures}
+        initialChartData={chartData}
+        providerName={providerName}
+        clinicName={ctx.tenant.name}
+        templates={templates}
+        countryCode={ctx.tenant.countryCode}
+        blockVisitInvoice={Boolean(openEncounter)}
+      />
     </div>
   );
 }

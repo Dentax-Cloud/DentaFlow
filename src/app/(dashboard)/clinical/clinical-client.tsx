@@ -53,6 +53,7 @@ export function ClinicalPageClient({
   clinicName,
   templates,
   countryCode,
+  blockVisitInvoice = false,
 }: {
   canWriteClinical?: boolean;
   patients: { id: string; firstName: string; lastName: string; patientNumber: string }[];
@@ -64,6 +65,8 @@ export function ClinicalPageClient({
   clinicName?: string;
   templates: ClinicalTemplateOption[];
   countryCode: string;
+  /** True when an open spine Encounter exists for this patient — omit visit invoice UI entirely. */
+  blockVisitInvoice?: boolean;
 }) {
   const [patientId, setPatientId] = useState(selectedPatientId ?? "");
   const [chartData, setChartData] = useState<ToothChartData>(initialChartData);
@@ -486,14 +489,14 @@ export function ClinicalPageClient({
               onAutoFromChartChange={setAutoFromChart}
             />
 
-            {patientId && canWriteClinical && (
+            {patientId && canWriteClinical && !blockVisitInvoice ? (
               <ProcedureVisitPanel
                 patientId={patientId}
                 appointmentId={appointmentId}
                 procedures={procedures}
                 countryCode={countryCode}
               />
-            )}
+            ) : null}
           </div>
 
           <div className="space-y-4">

@@ -1516,14 +1516,15 @@ export function SpineWorkspaceClient({
                 Save close-out note
               </button>
               <p className="text-xs text-slate-500">
-                Full SOAP editor:{" "}
-                <Link
-                  href={`/clinical?patientId=${initial.patient.id}`}
-                  className="text-teal-800 underline-offset-4 hover:underline"
-                >
-                  Open clinical notes
-                </Link>
+                Full SOAP editor stays optional; prefer notes in close-out above.
+                If you open the classic chart, use Back to encounter to return.
               </p>
+              <Link
+                href={`/clinical?patientId=${encodeURIComponent(initial.patient.id)}&fromSpine=1&returnAppointmentId=${encodeURIComponent(appointmentId)}`}
+                className="text-sm text-teal-800 underline-offset-4 hover:underline"
+              >
+                Open clinical notes (classic chart)
+              </Link>
             </div>
             <div className="space-y-2">
               <label className={labelCls} htmlFor="recallMonths">
@@ -1589,8 +1590,8 @@ export function SpineWorkspaceClient({
           </div>
         ) : (
           <p className="text-sm text-slate-500">
-            No clinical images yet. Capture from radiographs/photos tabs on the
-            classic workspace when the spine flag is off, or via UploadThing flows.
+            No clinical images yet. Use Radiographs / Photos in the encounter
+            tools rail to capture or upload without leaving this visit.
           </p>
         )}
       </section>
@@ -1672,6 +1673,7 @@ export function SpineWorkspaceClient({
         photos={findings?.photos ?? []}
         patientName={`${initial.patient.firstName} ${initial.patient.lastName}`}
         patientId={initial.patient.id}
+        appointmentId={appointmentId}
         treatmentPlan={findings?.treatmentPlan ?? null}
         perioMeasurements={(findings?.perioMeasurements ?? []) as PerioMeasurement[]}
       />
