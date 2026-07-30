@@ -248,7 +248,7 @@ describe("gate enforcement for procedure start", () => {
 });
 
 describe("flag-off invariant helpers", () => {
-  it("defaults ENCOUNTER_SPINE_ENABLED off", () => {
+  it("treats empty/missing tenant featureFlags as spine off (reader)", () => {
     const prev = process.env.ENCOUNTER_SPINE_ENABLED;
     delete process.env.ENCOUNTER_SPINE_ENABLED;
     expect(isEncounterSpineEnabled({ featureFlags: {} })).toBe(false);

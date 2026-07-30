@@ -18,6 +18,7 @@ import {
   getCityCode,
 } from "@/lib/ids/generate-ids";
 import { syncTenantCountryProfile } from "./sync-country-profile";
+import { DEFAULT_TENANT_FEATURE_FLAGS } from "./default-feature-flags";
 
 export type ProvisionResult = { tenant: Tenant; user: StaffMember; created: boolean };
 
@@ -74,7 +75,7 @@ export async function provisionTenant(input: {
         locale: tenantConfig.defaultLocale,
         status: TenantStatus.ACTIVE,
         onboardingCompleted: false,
-        featureFlags: {},
+        featureFlags: { ...DEFAULT_TENANT_FEATURE_FLAGS },
         metadata: {},
         ...trialDefaults,
         settings: { create: {} },
