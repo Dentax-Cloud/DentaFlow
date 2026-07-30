@@ -77,6 +77,7 @@ export function DashboardClient({
   const dashboardRole = normalizeDashboardRole(userRole);
   const isAdminView = dashboardRole === "ADMIN";
   const isClinicalView = dashboardRole === "DOCTOR";
+  const isNurseView = dashboardRole === "NURSE";
   const isFinanceView = dashboardRole === "FINANCE";
   const isFrontDeskView =
     dashboardRole === "RECEPTIONIST" || dashboardRole === "STORE";
@@ -143,7 +144,7 @@ export function DashboardClient({
         <p className="text-muted-foreground">{tenantName}</p>
       </div>
 
-      {(isClinicalView || isFrontDeskView || isAdminView) &&
+      {(isClinicalView || isNurseView || isFrontDeskView || isAdminView) &&
         (kpis.emergencyWaiting > 0 || kpis.emergencyImmediate > 0) && (
           <Card
             className={
@@ -255,6 +256,42 @@ export function DashboardClient({
         </div>
       )}
 
+      {isNurseView && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Today&apos;s appointments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpis.todayAppointments}</div>
+              <p className="text-xs text-muted-foreground">{kpis.completedToday} completed</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Clinical queue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{extras.waitingCount}</div>
+              <p className="text-xs text-muted-foreground">Checked in, waiting</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Chairs in use</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {kpis.inChairNow}/{kpis.totalChairs}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {kpis.chairUtilization}% utilization
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {isFrontDeskView && !isAdminView && (
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
@@ -284,12 +321,21 @@ export function DashboardClient({
         </div>
       )}
 
-      {(isClinicalView || isFrontDeskView) && (
+      {(isClinicalView || isNurseView || isFrontDeskView) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">
-              {isClinicalView ? "My schedule today" : "Today's appointments"}
+              {isClinicalView
+                ? "My schedule today"
+                : isNurseView
+                  ? "Today's schedule"
+                  : "Today's appointments"}
             </CardTitle>
+            {isNurseView && (
+              <CardDescription>
+                Read-only view of today&apos;s appointments and chair activity
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             {extras.todayAppointments.length === 0 ? (
@@ -316,7 +362,7 @@ export function DashboardClient({
                           Check in
                         </Button>
                       )}
-                    {isClinicalView && (
+                    {(isClinicalView || isNurseView) && (
                       <Button size="sm" variant="outline" asChild>
                         <Link
                           href={`/clinical?patientId=${apt.patientId}&appointmentId=${apt.id}`}
@@ -329,8 +375,8 @@ export function DashboardClient({
                 </div>
               ))
             )}
-            {isClinicalView && (
-              <div className="flex gap-2 pt-2">
+            {(isClinicalView || isNurseView) && (
+              <div className="flex flex-wrap gap-2 pt-2">
                 <Button asChild>
                   <Link href="/clinical">
                     <Stethoscope className="mr-2 h-4 w-4" />
@@ -343,6 +389,21 @@ export function DashboardClient({
                     View schedule
                   </Link>
                 </Button>
+                {isNurseView && (
+                  <>
+                    <Button variant="outline" asChild>
+                      <Link href="/clinical/chair-setup">
+                        <Armchair className="mr-2 h-4 w-4" />
+                        Chair setup
+                      </Link>
+                    </Button>
+                    <Button variant="outline" asChild>
+                      <Link href="/inventory">
+                        Tray / inventory
+                      </Link>
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </CardContent>
