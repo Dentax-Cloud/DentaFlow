@@ -13,8 +13,9 @@ function readTenantFlag(featureFlags: FeatureFlagsBag): boolean {
 }
 
 /**
- * Module 6 encounter spine. Default OFF.
- * Enable via env `ENCOUNTER_SPINE_ENABLED=true` and/or tenant.featureFlags.ENCOUNTER_SPINE_ENABLED.
+ * Module 6 encounter spine.
+ * New tenants get ENCOUNTER_SPINE_ENABLED=true at provision (see DEFAULT_TENANT_FEATURE_FLAGS).
+ * Empty/missing featureFlags still read as OFF here — use the env override or set the tenant flag.
  */
 export function isEncounterSpineEnabled(
   tenant?: Pick<Tenant, "featureFlags"> | null,

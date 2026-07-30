@@ -67,7 +67,7 @@ function insurance(partial: Partial<InsuranceVerification>): InsuranceVerificati
 }
 
 describe("ENCOUNTER_SPINE_ENABLED flag", () => {
-  it("defaults off without env or tenant flag", () => {
+  it("reads empty/null tenant flags as off without env override", () => {
     const prev = process.env.ENCOUNTER_SPINE_ENABLED;
     delete process.env.ENCOUNTER_SPINE_ENABLED;
     expect(isEncounterSpineEnabled({ featureFlags: {} })).toBe(false);
