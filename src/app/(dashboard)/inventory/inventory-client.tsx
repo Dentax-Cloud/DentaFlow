@@ -15,25 +15,57 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { InventoryItem, StockTransaction } from "@prisma/client";
-import { AlertTriangle, History, Minus, Package, Plus, ScanLine } from "lucide-react";
-import { addStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
 import {
-  scanSupplierBarcode,
-  receiveStock,
-  issueStockToProcedure,
-} from "@/app/(dashboard)/features/inventory/inventory-actions";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { InventoryItem, StockTransaction } from "@prisma/client";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  History,
+  LayoutGrid,
+  List,
+  Minus,
+  Package,
+  ScanLine,
+  Search,
+  Plus,
+} from "lucide-react";
+import { addStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
+import { scanSupplierBarcode } from "@/app/(dashboard)/features/inventory/inventory-actions";
 import { BarcodeScanner } from "@/components/inventory/barcode-scanner";
 import { cn } from "@/lib/utils";
+import {
+  distinctCategories,
+  filterInventoryListItems,
+  inventoryStatusLabel,
+  isExpiringSoon,
+  isLowStock,
+  reorderAt,
+  sortInventoryListItems,
+  type InventoryListSortDir,
+  type InventoryListSortKey,
+  type InventoryListStockFilter,
+  type InventoryListViewMode,
+} from "@/lib/inventory/inventory-list-filters";
 
 type ItemWithHistory = InventoryItem & {
   transactions?: StockTransaction[];
   itemRef?: string | null;
   storageLocation?: string | null;
   minStockAlert?: number | null;
+  defaultTier?: string | null;
+  gtin?: string | null;
+  supplier?: { id: string; name: string } | null;
+  batches?: Array<{ id: string; expiryDate?: Date | string | null }>;
 };
-
-type FilterTab = "all" | "low";
 
 export function InventoryClient({
   items: initialItems,
@@ -43,25 +75,34 @@ export function InventoryClient({
   lowStockCount: number;
 }) {
   const [items, setItems] = useState(initialItems);
-  const [filter, setFilter] = useState<FilterTab>("all");
+  const [stockFilter, setStockFilter] = useState<InventoryListStockFilter>("all");
+  const [category, setCategory] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<InventoryListViewMode>("card");
+  const [sortKey, setSortKey] = useState<InventoryListSortKey>("name");
+  const [sortDir, setSortDir] = useState<InventoryListSortDir>("asc");
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"add" | "remove" | "history" | "scan" | null>(null);
   const [selected, setSelected] = useState<ItemWithHistory | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [busy, setBusy] = useState(false);
-  const [scanResult, setScanResult] = useState<{
-    id: string;
-    name: string;
-    quantity: number;
-    itemRef?: string | null;
-  } | null>(null);
-  const [scanQty, setScanQty] = useState("1");
+  const [scanFound, setScanFound] = useState<ItemWithHistory | null>(null);
+  const [scanNotFound, setScanNotFound] = useState<string | null>(null);
+  const [scanCode, setScanCode] = useState("");
+
+  const categories = useMemo(() => distinctCategories(items), [items]);
 
   const filtered = useMemo(() => {
-    if (filter === "low") return items.filter((i) => i.quantity <= i.reorderLevel);
-    return items;
-  }, [items, filter]);
+    const base = filterInventoryListItems(items, {
+      stockFilter,
+      category,
+      search,
+      focusItemId,
+    });
+    return sortInventoryListItems(base, sortKey, sortDir) as ItemWithHistory[];
+  }, [items, stockFilter, category, search, focusItemId, sortKey, sortDir]);
 
   const criticalCount = items.filter((i) => i.quantity <= Math.floor(i.reorderLevel / 2)).length;
 
@@ -71,6 +112,28 @@ export function InventoryClient({
     setQuantity("1");
     setNotes("");
     setUnitCost("");
+  }
+
+  function toggleSort(key: InventoryListSortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir("asc");
+  }
+
+  function SortIcon({ column }: { column: InventoryListSortKey }) {
+    if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
+    return sortDir === "asc" ? (
+      <ArrowUp className="ml-1 inline h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 inline h-3 w-3" />
+    );
+  }
+
+  function clearScanFocus() {
+    setFocusItemId(null);
   }
 
   async function handleAddStock() {
@@ -124,85 +187,42 @@ export function InventoryClient({
     }
   }
 
-  async function handleBarcodeScan(code: string) {
+  async function handleScanToSearch(code: string) {
+    const trimmed = code.trim();
+    if (!trimmed) return;
     setBusy(true);
+    setScanNotFound(null);
+    setScanFound(null);
+    setScanCode(trimmed);
     try {
-      const result = await scanSupplierBarcode(code);
+      const result = await scanSupplierBarcode(trimmed);
       if (!result.found || !result.item) {
-        toast.error("Item not found for this barcode");
-        setScanResult(null);
+        setScanNotFound(trimmed);
+        toast.error("No inventory item matches this barcode");
         return;
       }
-      const item = result.item as {
-        id: string;
-        name: string;
-        quantity: number;
-        itemRef?: string | null;
-      };
-      setScanResult(item);
-      setScanQty(String(result.gs1Data?.quantity ?? result.packSize ?? 1));
-      toast.success(`Found: ${item.name}`);
+      const item = result.item as ItemWithHistory;
+      const fromList = items.find((i) => i.id === item.id) ?? item;
+      setScanFound(fromList);
+      toast.success(`Found: ${fromList.name}`);
     } catch {
+      setScanNotFound(trimmed);
       toast.error("Lookup failed");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleScanReceive() {
-    if (!scanResult) return;
-    const qty = Number(scanQty);
-    if (!qty || qty < 1) {
-      toast.error("Enter a valid quantity");
-      return;
-    }
-    setBusy(true);
-    try {
-      await receiveStock({
-        inventoryItemId: scanResult.id,
-        quantity: qty,
-        scannedBarcode: scanResult.itemRef ?? undefined,
-      });
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === scanResult.id ? { ...i, quantity: i.quantity + qty } : i,
-        ),
-      );
-      setScanResult((prev) => (prev ? { ...prev, quantity: prev.quantity + qty } : null));
-      toast.success("Stock received");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Receive failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleScanIssue(notesLabel: string) {
-    if (!scanResult) return;
-    const qty = Number(scanQty);
-    if (!qty || qty < 1) {
-      toast.error("Enter a valid quantity");
-      return;
-    }
-    setBusy(true);
-    try {
-      await issueStockToProcedure({
-        inventoryItemId: scanResult.id,
-        quantity: qty,
-        notes: notesLabel,
-      });
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === scanResult.id ? { ...i, quantity: i.quantity - qty } : i,
-        ),
-      );
-      setScanResult((prev) => (prev ? { ...prev, quantity: prev.quantity - qty } : null));
-      toast.success("Stock issued");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Issue failed");
-    } finally {
-      setBusy(false);
-    }
+  function applyScanFocus() {
+    if (!scanFound) return;
+    setFocusItemId(scanFound.id);
+    setSearch("");
+    setCategory(null);
+    setStockFilter("all");
+    setDialog(null);
+    setScanFound(null);
+    setScanNotFound(null);
+    toast.success(`Showing ${scanFound.name}`);
   }
 
   return (
@@ -217,15 +237,19 @@ export function InventoryClient({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Inventory</h1>
-          <p className="text-muted-foreground">{items.length} items tracked</p>
+          <p className="text-muted-foreground">
+            {filtered.length} of {items.length} items
+            {focusItemId ? " · scan match" : ""}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="outline"
             onClick={() => {
-              setScanResult(null);
-              setScanQty("1");
+              setScanFound(null);
+              setScanNotFound(null);
+              setScanCode("");
               setDialog("scan");
             }}
           >
@@ -233,91 +257,243 @@ export function InventoryClient({
             Scan item
           </Button>
           <Button
-            variant={filter === "all" ? "default" : "outline"}
+            variant={stockFilter === "all" ? "default" : "outline"}
             size="sm"
-            onClick={() => setFilter("all")}
+            onClick={() => setStockFilter("all")}
           >
             All
           </Button>
           <Button
-            variant={filter === "low" ? "destructive" : "outline"}
+            variant={stockFilter === "low" ? "destructive" : "outline"}
             size="sm"
-            onClick={() => setFilter("low")}
+            onClick={() => setStockFilter("low")}
           >
             Low stock ({lowStockCount})
           </Button>
+          <div className="flex rounded-md border">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "card" ? "default" : "ghost"}
+              className="rounded-r-none"
+              onClick={() => setViewMode("card")}
+              aria-pressed={viewMode === "card"}
+            >
+              <LayoutGrid className="mr-1 h-4 w-4" />
+              Card
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "table" ? "default" : "ghost"}
+              className="rounded-l-none"
+              onClick={() => setViewMode("table")}
+              aria-pressed={viewMode === "table"}
+            >
+              <List className="mr-1 h-4 w-4" />
+              Table
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((item) => {
-          const reorderAt = item.minStockAlert ?? item.reorderLevel;
-          const isLow = item.quantity <= reorderAt;
-          const maxStock = Math.max(item.reorderLevel * 3, item.quantity, 1);
-          const pct = Math.min(100, Math.round((item.quantity / maxStock) * 100));
-          return (
-            <Card key={item.id} className={cn(isLow && "border-destructive")}>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Package className="h-4 w-4" />
-                  <Link href={`/inventory/${item.id}`} className="hover:underline">
-                    {item.name}
-                  </Link>
-                  {isLow && (
-                    <Badge variant="destructive" className="ml-auto">
-                      Low
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  {item.itemRef ? (
-                    <span className="font-mono">{item.itemRef}</span>
-                  ) : (
-                    <>SKU: {item.sku}</>
-                  )}
-                  {item.storageLocation && (
-                    <span className="ml-2">· {item.storageLocation}</span>
-                  )}
-                </p>
-                <div className="flex items-end justify-between">
-                  <span className="text-2xl font-bold">{item.quantity}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Reorder at {reorderAt}
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      isLow ? "bg-destructive" : "bg-primary",
-                    )}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <Button size="sm" variant="outline" onClick={() => openDialog("add", item)}>
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add stock
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openDialog("remove", item)}>
-                    <Minus className="mr-1 h-3 w-3" />
-                    Remove
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => openDialog("history", item)}>
-                    <History className="mr-1 h-3 w-3" />
-                    History
-                  </Button>
-                  <Button size="sm" variant="ghost" asChild>
-                    <Link href={`/inventory/${item.id}`}>View</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="flex flex-col gap-3">
+        <div className="relative max-w-md">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (focusItemId) setFocusItemId(null);
+            }}
+            placeholder="Search name, SKU, or category…"
+            className="pl-8"
+            aria-label="Search inventory"
+          />
+        </div>
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Category</span>
+            <Button
+              size="sm"
+              variant={category === null ? "secondary" : "outline"}
+              onClick={() => {
+                setCategory(null);
+                if (focusItemId) setFocusItemId(null);
+              }}
+            >
+              All categories
+            </Button>
+            {categories.map((cat) => (
+              <Button
+                key={cat}
+                size="sm"
+                variant={category === cat ? "secondary" : "outline"}
+                onClick={() => {
+                  setCategory(cat);
+                  if (focusItemId) setFocusItemId(null);
+                }}
+              >
+                {cat}
+              </Button>
+            ))}
+          </div>
+        )}
+        {focusItemId && (
+          <div className="flex items-center gap-2 text-sm">
+            <Badge variant="secondary">Scan filter active</Badge>
+            <Button size="sm" variant="ghost" onClick={clearScanFocus}>
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
+
+      {filtered.length === 0 && (
+        <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+          No items match the current filters.
+        </p>
+      )}
+
+      {viewMode === "card" && filtered.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((item) => {
+            const reorder = reorderAt(item);
+            const isLow = isLowStock(item);
+            const maxStock = Math.max(item.reorderLevel * 3, item.quantity, 1);
+            const pct = Math.min(100, Math.round((item.quantity / maxStock) * 100));
+            return (
+              <Card
+                key={item.id}
+                className={cn(isLow && "border-destructive", focusItemId === item.id && "ring-2 ring-primary")}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Package className="h-4 w-4" />
+                    <Link href={`/inventory/${item.id}`} className="hover:underline">
+                      {item.name}
+                    </Link>
+                    {isLow && (
+                      <Badge variant="destructive" className="ml-auto">
+                        Low
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {item.itemRef ? (
+                      <span className="font-mono">{item.itemRef}</span>
+                    ) : (
+                      <>SKU: {item.sku}</>
+                    )}
+                    {item.storageLocation && (
+                      <span className="ml-2">· {item.storageLocation}</span>
+                    )}
+                  </p>
+                  <div className="flex items-end justify-between">
+                    <span className="text-2xl font-bold">{item.quantity}</span>
+                    <span className="text-xs text-muted-foreground">Reorder at {reorder}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        isLow ? "bg-destructive" : "bg-primary",
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <Button size="sm" variant="outline" onClick={() => openDialog("add", item)}>
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add stock
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => openDialog("remove", item)}>
+                      <Minus className="mr-1 h-3 w-3" />
+                      Remove
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openDialog("history", item)}>
+                      <History className="mr-1 h-3 w-3" />
+                      History
+                    </Button>
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link href={`/inventory/${item.id}`}>View</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === "table" && filtered.length > 0 && (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {(
+                  [
+                    ["name", "Name"],
+                    ["sku", "SKU"],
+                    ["category", "Category"],
+                    ["quantity", "On hand"],
+                    ["reorderLevel", "Reorder"],
+                    ["supplier", "Supplier"],
+                    ["tier", "Tier"],
+                    ["status", "Status"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <TableHead key={key}>
+                    <button
+                      type="button"
+                      className="inline-flex items-center font-medium hover:text-foreground"
+                      onClick={() => toggleSort(key)}
+                    >
+                      {label}
+                      <SortIcon column={key} />
+                    </button>
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((item) => {
+                const status = inventoryStatusLabel(item);
+                const low = isLowStock(item);
+                const expiring = isExpiringSoon(item);
+                return (
+                  <TableRow
+                    key={item.id}
+                    className={cn(focusItemId === item.id && "bg-primary/5")}
+                    data-item-id={item.id}
+                  >
+                    <TableCell>
+                      <Link href={`/inventory/${item.id}`} className="font-medium hover:underline">
+                        {item.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+                    <TableCell>{item.category ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums">{item.quantity}</TableCell>
+                    <TableCell className="tabular-nums">{reorderAt(item)}</TableCell>
+                    <TableCell>{item.supplier?.name ?? "—"}</TableCell>
+                    <TableCell className="capitalize">{item.defaultTier ?? "consumable"}</TableCell>
+                    <TableCell>
+                      {low || expiring ? (
+                        <Badge variant={low ? "destructive" : "secondary"}>{status}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">OK</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <Dialog open={dialog === "add"} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
@@ -398,62 +574,67 @@ export function InventoryClient({
         onOpenChange={(o) => {
           if (!o) {
             setDialog(null);
-            setScanResult(null);
+            setScanFound(null);
+            setScanNotFound(null);
           }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Scan inventory item</DialogTitle>
+            <DialogTitle>Scan to find item</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Scan a GTIN or linked supplier barcode to jump to that item in the list.
+          </p>
           <BarcodeScanner
-            onScan={(code) => void handleBarcodeScan(code)}
+            onScan={(code) => void handleScanToSearch(code)}
             mode="both"
-            placeholder="Scan supplier or internal barcode..."
+            placeholder="Scan GTIN or supplier barcode…"
           />
 
-          {scanResult && (
-            <div className="space-y-3 rounded-lg border p-4">
+          {scanNotFound && (
+            <div
+              className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
+              role="status"
+              data-testid="scan-not-found"
+            >
+              <p className="font-medium text-destructive">Item not found</p>
+              <p className="mt-1 text-muted-foreground">
+                No inventory item matches barcode{" "}
+                <span className="font-mono text-foreground">{scanNotFound}</span>.
+              </p>
+            </div>
+          )}
+
+          {scanFound && (
+            <div className="space-y-3 rounded-lg border p-4" data-testid="scan-found">
               <div>
-                <p className="font-medium">{scanResult.name}</p>
-                {scanResult.itemRef && (
-                  <p className="font-mono text-xs text-muted-foreground">{scanResult.itemRef}</p>
+                <p className="font-medium">{scanFound.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  SKU: <span className="font-mono">{scanFound.sku}</span>
+                </p>
+                {scanFound.gtin ? (
+                  <p className="text-sm text-muted-foreground">
+                    GTIN: <span className="font-mono">{scanFound.gtin}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">GTIN: not set</p>
                 )}
-                <p className="text-2xl font-bold">{scanResult.quantity} in stock</p>
-              </div>
-              <div>
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={scanQty}
-                  onChange={(e) => setScanQty(e.target.value)}
-                />
+                <p className="mt-1 text-2xl font-bold">{scanFound.quantity} in stock</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void handleScanReceive()} disabled={busy}>
-                  Receive stock
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleScanIssue("Issued to procedure")}
-                  disabled={busy}
-                >
-                  Issue to procedure
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleScanIssue("Issued to chair")}
-                  disabled={busy}
-                >
-                  Issue to chair
+                <Button size="sm" onClick={applyScanFocus} disabled={busy}>
+                  Show in list
                 </Button>
                 <Button size="sm" variant="ghost" asChild>
-                  <Link href={`/inventory/${scanResult.id}`}>View details</Link>
+                  <Link href={`/inventory/${scanFound.id}`}>View details</Link>
                 </Button>
               </div>
+              {scanCode && (
+                <p className="text-xs text-muted-foreground">
+                  Matched code: <span className="font-mono">{scanCode}</span>
+                </p>
+              )}
             </div>
           )}
         </DialogContent>

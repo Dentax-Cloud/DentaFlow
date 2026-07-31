@@ -12,13 +12,21 @@ export default async function InventoryPage() {
     orderBy: { name: "asc" },
     include: {
       transactions: { orderBy: { createdAt: "desc" }, take: 20 },
-      batches: { where: { status: "ACTIVE" }, select: { id: true } },
+      batches: {
+        where: { status: "ACTIVE" },
+        select: { id: true, expiryDate: true },
+      },
+      supplier: { select: { id: true, name: true } },
     },
   });
 
   const lowStock = items.filter((i) => i.quantity <= (i.minStockAlert ?? i.reorderLevel));
   const serializedItems = items.map((item) =>
-    serializeEntity(item, { transactions: "array", batches: "array" }),
+    serializeEntity(item, {
+      transactions: "array",
+      batches: "array",
+      supplier: "object",
+    }),
   );
 
   return (
