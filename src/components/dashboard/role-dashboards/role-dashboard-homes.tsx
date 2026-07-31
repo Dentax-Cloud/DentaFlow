@@ -1,7 +1,19 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Stethoscope, Users, Receipt, Package, BarChart3, Settings } from "lucide-react";
+import {
+  Calendar,
+  Stethoscope,
+  Users,
+  Receipt,
+  Package,
+  BarChart3,
+  Settings,
+  AlertTriangle,
+  Timer,
+  Truck,
+} from "lucide-react";
+import type { StoreDashboardStats } from "@/app/(dashboard)/features/dashboard/queries";
 
 type KPIs = {
   todayAppointments: number;
@@ -113,21 +125,25 @@ export function FinanceDashboardHome({ kpis }: { kpis: KPIs }) {
   );
 }
 
-export function StoreDashboardHome({ kpis }: { kpis: KPIs }) {
+export function StoreDashboardHome({ stats }: { stats: StoreDashboardStats }) {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Store & inventory</h1>
         <p className="text-muted-foreground">Stock levels, suppliers, and reorder alerts</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <StatCard title="Active patients" value={kpis.patientCount} icon={Users} />
-        <StatCard title="Pending invoices" value={kpis.pendingInvoices} icon={Package} />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Inventory items" value={stats.itemCount} icon={Package} />
+        <StatCard title="Low / reorder alerts" value={stats.lowStockCount} icon={AlertTriangle} />
+        <StatCard title="Suppliers" value={stats.supplierCount} icon={Truck} />
+        <StatCard title="Expiring batches (30d)" value={stats.expiringBatchCount} icon={Timer} />
       </div>
       <QuickLinks
         links={[
           { href: "/inventory", label: "Manage inventory", icon: Package },
-          { href: "/reports", label: "Stock reports", icon: BarChart3 },
+          { href: "/inventory/suppliers", label: "Suppliers", icon: Truck },
+          { href: "/inventory/expiry", label: "Expiry alerts", icon: Timer },
+          { href: "/inventory/count", label: "Stock count", icon: BarChart3 },
         ]}
       />
     </div>

@@ -17,6 +17,7 @@ export default async function InventoryItemPage({
   const item = await db.inventoryItem.findFirst({
     where: { id, tenantId: ctx.tenant.id, deletedAt: null },
     include: {
+      supplier: { select: { id: true, name: true } },
       supplierBarcodes: true,
       batches: {
         where: { status: { not: "EMPTY" } },
@@ -34,7 +35,7 @@ export default async function InventoryItemPage({
 
   if (!item) notFound();
 
-  const [tenant, allProcedures] = await Promise.all([
+  const [tenant, allProcedures, suppliers] = await Promise.all([
     db.tenant.findUnique({
       where: { id: ctx.tenant.id },
       select: { currency: true, tenantCode: true, countryCode: true },
@@ -48,6 +49,11 @@ export default async function InventoryItemPage({
         category: true,
         inventoryConsumption: true,
       },
+    }),
+    db.supplier.findMany({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -108,6 +114,8 @@ export default async function InventoryItemPage({
         trackByBatch: item.trackByBatch,
         trackByExpiry: item.trackByExpiry,
         gtin: item.gtin,
+        supplierId: item.supplierId,
+        supplierName: item.supplier?.name ?? null,
         supplierBarcodes: item.supplierBarcodes,
         batches: item.batches.map((b) => {
           const serialized = serializeDecimal(b);
@@ -140,6 +148,7 @@ export default async function InventoryItemPage({
           };
         }),
       }}
+      suppliers={suppliers}
       currency={tenant?.currency ?? "AED"}
       countryCode={tenant?.countryCode ?? "AE"}
       tenantCode={tenant?.tenantCode ?? ""}

@@ -435,6 +435,19 @@ export async function getExpiryAlerts(daysAhead = 30) {
     orderBy: { expiryDate: "asc" },
   });
 
+  // Side-effect: ensure ClinicalAlert material_expiry rows exist for these batches.
+  // Deduped inside syncMaterialExpiryAlerts (unacknowledged + same sourceRecordId).
+  const { syncMaterialExpiryAlerts } = await import(
+    "@/lib/inventory/material-expiry-alerts"
+  );
+  await syncMaterialExpiryAlerts({
+    tenantId: ctx.tenantId,
+    userId: ctx.authUserId,
+    daysAhead,
+  }).catch((err) => {
+    console.error("[inventory] material_expiry alert sync failed:", err);
+  });
+
   return batches.map((b) => serializeDecimal(b));
 }
 

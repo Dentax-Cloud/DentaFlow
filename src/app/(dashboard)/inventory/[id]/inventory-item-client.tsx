@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryLabel } from "@/components/inventory/inventory-label";
 import { SupplierBarcodePanel } from "@/components/inventory/supplier-barcode-panel";
 import { updateInventoryRetailGst } from "@/app/(dashboard)/features/inventory/inventory-actions";
+import { linkInventoryItemSupplier } from "@/app/(dashboard)/features/inventory/supplier-actions";
 import { ArrowLeft, AlertTriangle, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,8 @@ type ItemData = {
   trackByBatch: boolean;
   trackByExpiry: boolean;
   gtin: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
   supplierBarcodes: SupplierBarcode[];
   batches: BatchRow[];
   transactions: TransactionRow[];
@@ -100,6 +103,7 @@ const STATUS_COLORS: Record<StockStatus, string> = {
 
 export function InventoryItemClient({
   item,
+  suppliers,
   currency,
   countryCode,
   tenantCode,
@@ -107,6 +111,7 @@ export function InventoryItemClient({
   linkedProcedures,
 }: {
   item: ItemData;
+  suppliers: { id: string; name: string }[];
   currency: string;
   countryCode: string;
   tenantCode: string;
@@ -116,6 +121,8 @@ export function InventoryItemClient({
   const router = useRouter();
   const [txFilter, setTxFilter] = useState<string>("ALL");
   const [retailSaving, setRetailSaving] = useState(false);
+  const [supplierSaving, setSupplierSaving] = useState(false);
+  const [supplierId, setSupplierId] = useState(item.supplierId ?? "");
   const [retailForm, setRetailForm] = useState({
     retailPrice: item.retailPrice?.toString() ?? "",
     taxRate: item.taxRate?.toString() ?? "",
@@ -155,6 +162,27 @@ export function InventoryItemClient({
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setRetailSaving(false);
+    }
+  }
+
+  async function saveSupplier(e: React.FormEvent) {
+    e.preventDefault();
+    setSupplierSaving(true);
+    try {
+      const result = await linkInventoryItemSupplier({
+        inventoryItemId: item.id,
+        supplierId: supplierId ? supplierId : null,
+      });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Supplier linked");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSupplierSaving(false);
     }
   }
 
@@ -232,6 +260,47 @@ export function InventoryItemClient({
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Supplier</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form
+                onSubmit={(e) => void saveSupplier(e)}
+                className="flex flex-wrap items-end gap-3"
+              >
+                <div className="min-w-[220px] flex-1 space-y-2">
+                  <Label htmlFor="supplierId">Linked supplier</Label>
+                  <select
+                    id="supplierId"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={supplierId}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                  >
+                    <option value="">No supplier</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  {suppliers.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No suppliers yet.{" "}
+                      <Link href="/inventory/suppliers" className="underline">
+                        Create one
+                      </Link>
+                      .
+                    </p>
+                  )}
+                </div>
+                <Button type="submit" disabled={supplierSaving}>
+                  {supplierSaving ? "Saving…" : "Save supplier"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

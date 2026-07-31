@@ -82,6 +82,47 @@ export type TodayAppointmentRow = {
   patientId: string;
 };
 
+export type StoreDashboardStats = {
+  itemCount: number;
+  lowStockCount: number;
+  supplierCount: number;
+  expiringBatchCount: number;
+};
+
+/** Inventory KPIs for the STORE dashboard (stock / reorder / suppliers / expiry). */
+export async function getStoreDashboardStats(tenantId: string): Promise<StoreDashboardStats> {
+  const expiryCutoff = new Date();
+  expiryCutoff.setDate(expiryCutoff.getDate() + 30);
+
+  const items = await db.inventoryItem.findMany({
+    where: { tenantId, deletedAt: null },
+    select: { quantity: true, reorderLevel: true, minStockAlert: true },
+  });
+
+  const [supplierCount, expiringBatchCount] = await Promise.all([
+    db.supplier.count({ where: { tenantId } }),
+    db.inventoryBatch.count({
+      where: {
+        tenantId,
+        status: "ACTIVE",
+        currentQty: { gt: 0 },
+        expiryDate: { lte: expiryCutoff },
+      },
+    }),
+  ]);
+
+  const lowStockCount = items.filter(
+    (i) => i.quantity <= (i.minStockAlert ?? i.reorderLevel),
+  ).length;
+
+  return {
+    itemCount: items.length,
+    lowStockCount,
+    supplierCount,
+    expiringBatchCount,
+  };
+}
+
 export async function getRoleDashboardExtras(
   tenantId: string,
   role: UserRole,
@@ -108,7 +149,7 @@ export async function getRoleDashboardExtras(
     ...(doctorId ? { doctorId } : {}),
   };
 
-  const [todayList, waitingCount, pendingPlans] = await Promise.all([
+  const [todayList, waitingCount, pendingPlans, storeStats] = await Promise.all([
     db.appointment.findMany({
       where: todayWhere,
       include: { patient: { select: { id: true, firstName: true, lastName: true } } },
@@ -131,6 +172,9 @@ export async function getRoleDashboardExtras(
         status: { in: ["PROPOSED", "ACCEPTED", "IN_PROGRESS"] },
       },
     }),
+    dashboardRole === "STORE"
+      ? getStoreDashboardStats(tenantId)
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -146,5 +190,6 @@ export async function getRoleDashboardExtras(
     })),
     waitingCount,
     pendingTreatmentPlans: pendingPlans,
+    storeStats,
   };
 }
