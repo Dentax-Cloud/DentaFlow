@@ -15,6 +15,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/admin", resource: "admin", action: "read" },
   { prefix: "/billing/subscription", resource: "admin", action: "read" },
   { prefix: "/billing", resource: "billing", action: "read" },
+  { prefix: "/inventory/chairs", resource: "chair_inventory", action: "read" },
   { prefix: "/inventory", resource: "inventory", action: "read" },
   { prefix: "/appointments", resource: "appointments", action: "read" },
   { prefix: "/clinical/treatment-plans", resource: "clinical_schedule", action: "read" },

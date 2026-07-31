@@ -10,6 +10,10 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateStockRef } from "@/lib/ids/generate-ids";
 import { STOCK_ADJUSTMENT_REASONS } from "@/lib/inventory/stock-adjustment";
+import {
+  STOCK_ISSUE_DESTINATION_TYPES,
+  STOCK_ISSUE_REASONS,
+} from "@/lib/inventory/stock-issue";
 
 const addStockSchema = z.object({
   inventoryItemId: z.string(),
@@ -172,6 +176,115 @@ export const adjustStock = createAction({
       delta,
       transactionRef,
       stockTransactionId: stockTx.id,
+    };
+  },
+});
+
+const issueStockSchema = z.object({
+  inventoryItemId: z.string().min(1),
+  quantity: z.number().int().min(1),
+  reason: z.enum(STOCK_ISSUE_REASONS),
+  destinationType: z.enum(STOCK_ISSUE_DESTINATION_TYPES),
+  /** Chair id or staff member id when destinationType is chair/staff. */
+  destinationId: z.string().optional(),
+  /** Free-text destination when type is other, or label override. */
+  destinationLabel: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Formal Store issue — audited USAGE with destination + reason.
+ * Distinct from quick removeStock (ad hoc, notes-only).
+ * Does not touch spine MaterialUsage / procedure deduct paths.
+ */
+export const issueStock = createAction({
+  schema: issueStockSchema,
+  permission: () => requirePermission(PERMISSIONS.inventory.write),
+  handler: async (input, ctx) => {
+    const item = await db.inventoryItem.findFirst({
+      where: tenantWhere(ctx.tenant.id, { id: input.inventoryItemId, deletedAt: null }),
+    });
+    if (!item) throw new Error("Inventory item not found");
+    if (item.quantity < input.quantity) throw new Error("Insufficient stock");
+
+    let chairId: string | null = null;
+    let destinationLabel = input.destinationLabel?.trim() || "";
+
+    if (input.destinationType === "chair") {
+      if (!input.destinationId) throw new Error("Select a chair destination");
+      const chair = await db.chair.findFirst({
+        where: { id: input.destinationId, tenantId: ctx.tenant.id },
+        select: { id: true, name: true, number: true },
+      });
+      if (!chair) throw new Error("Chair not found");
+      chairId = chair.id;
+      destinationLabel = destinationLabel || `Chair ${chair.number} (${chair.name})`;
+    } else if (input.destinationType === "staff") {
+      if (!input.destinationId) throw new Error("Select a staff destination");
+      const staff = await db.staffMember.findFirst({
+        where: { id: input.destinationId, tenantId: ctx.tenant.id, deletedAt: null },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      if (!staff) throw new Error("Staff member not found");
+      destinationLabel =
+        destinationLabel ||
+        [staff.firstName, staff.lastName].filter(Boolean).join(" ") ||
+        staff.email;
+    } else if (!destinationLabel) {
+      throw new Error("Enter a destination");
+    }
+
+    const transactionRef = await generateStockRef(ctx.tenant.id);
+    const noteParts = [
+      `issue:${input.reason}`,
+      `to ${input.destinationType}:${destinationLabel}`,
+      input.notes?.trim() || null,
+    ].filter(Boolean);
+
+    const [, stockTx] = await db.$transaction([
+      db.inventoryItem.update({
+        where: { id: input.inventoryItemId },
+        data: { quantity: { decrement: input.quantity } },
+      }),
+      db.stockTransaction.create({
+        data: {
+          tenantId: ctx.tenant.id,
+          itemId: input.inventoryItemId,
+          type: StockTransactionType.USAGE,
+          quantity: input.quantity,
+          notes: noteParts.join(" · "),
+          transactionRef,
+          chairId,
+        },
+      }),
+    ]);
+
+    await createAuditLog({
+      tenantId: ctx.tenant.id,
+      userId: ctx.staffMember?.id,
+      action: AuditAction.UPDATE,
+      entity: "InventoryItem",
+      entityId: input.inventoryItemId,
+      metadata: {
+        kind: "stock_issue",
+        reason: input.reason,
+        destinationType: input.destinationType,
+        destinationId: input.destinationId ?? null,
+        destinationLabel,
+        quantity: input.quantity,
+        transactionRef,
+        stockTransactionId: stockTx.id,
+      },
+    });
+
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/chairs");
+    revalidatePath(`/inventory/${input.inventoryItemId}`);
+    return {
+      ok: true as const,
+      transactionRef,
+      stockTransactionId: stockTx.id,
+      destinationLabel,
     };
   },
 });
