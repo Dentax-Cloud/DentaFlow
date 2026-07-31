@@ -442,7 +442,7 @@ export async function getExpiryAlerts(daysAhead = 30) {
   );
   await syncMaterialExpiryAlerts({
     tenantId: ctx.tenantId,
-    userId: ctx.authUserId,
+    userId: ctx.staffMember?.id,
     daysAhead,
   }).catch((err) => {
     console.error("[inventory] material_expiry alert sync failed:", err);

@@ -156,7 +156,7 @@ export const adjustStock = createAction({
 
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.authUserId,
+      userId: ctx.staffMember?.id,
       action: AuditAction.UPDATE,
       entity: "InventoryItem",
       entityId: input.inventoryItemId,

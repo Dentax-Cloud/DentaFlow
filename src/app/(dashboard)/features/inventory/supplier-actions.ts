@@ -55,7 +55,7 @@ export const createSupplier = createAction({
     });
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.authUserId,
+      userId: ctx.staffMember?.id,
       action: AuditAction.CREATE,
       entity: "Supplier",
       entityId: supplier.id,
@@ -92,7 +92,7 @@ export const updateSupplier = createAction({
     });
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.authUserId,
+      userId: ctx.staffMember?.id,
       action: AuditAction.UPDATE,
       entity: "Supplier",
       entityId: supplier.id,
@@ -142,7 +142,7 @@ export const linkInventoryItemSupplier = createAction({
     });
     await createAuditLog({
       tenantId: ctx.tenant.id,
-      userId: ctx.authUserId,
+      userId: ctx.staffMember?.id,
       action: AuditAction.UPDATE,
       entity: "InventoryItem",
       entityId: updated.id,
