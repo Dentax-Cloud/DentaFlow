@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { generateStockRef } from "@/lib/ids/generate-ids";
+import { STOCK_ADJUSTMENT_REASONS } from "@/lib/inventory/stock-adjustment";
 
 const addStockSchema = z.object({
   inventoryItemId: z.string(),
@@ -86,16 +87,6 @@ export const removeStock = createAction({
     return { ok: true };
   },
 });
-
-/** Reason taxonomy for StockTransaction ADJUSTMENT writes. */
-export const STOCK_ADJUSTMENT_REASONS = [
-  "breakage",
-  "wastage",
-  "count-correction",
-  "found-stock",
-] as const;
-
-export type StockAdjustmentReason = (typeof STOCK_ADJUSTMENT_REASONS)[number];
 
 const adjustStockSchema = z.object({
   inventoryItemId: z.string().min(1),

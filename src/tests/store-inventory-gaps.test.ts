@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { StockTransactionType } from "@prisma/client";
-import { STOCK_ADJUSTMENT_REASONS } from "@/app/(dashboard)/features/inventory/actions";
+import { STOCK_ADJUSTMENT_REASONS } from "@/lib/inventory/stock-adjustment";
 import { NEAR_EXPIRY_DAYS } from "@/lib/inventory/lots";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
