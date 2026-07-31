@@ -17,6 +17,8 @@ import { expireStaleChairsideSessions } from "@/lib/clinical/chairside-lifecycle
 import { processStalledProcedureLineEscalation } from "@/lib/procedure-lines/run-stalled-line-escalation";
 import { formatClinicTime, resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 import { isPrismaUniqueViolation, workerClaimLogId } from "@/worker/claim";
+import { syncMaterialExpiryAlerts } from "@/lib/inventory/material-expiry-alerts";
+import { NEAR_EXPIRY_DAYS } from "@/lib/inventory/lots";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const TRIAL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -24,6 +26,7 @@ const RECALL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DAILY_BILLING_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const CHAIRSIDE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const STALLED_LINE_ESCALATION_INTERVAL_MS = 60 * 60 * 1000;
+const MATERIAL_EXPIRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 const TRIAL_WARNING_DAYS = [7, 3, 1] as const;
@@ -135,6 +138,7 @@ async function run() {
   setInterval(runPastDueDunningJob, DAILY_BILLING_INTERVAL_MS);
   setInterval(runChairsideStaleSessionJob, CHAIRSIDE_CLEANUP_INTERVAL_MS);
   setInterval(runStalledProcedureLineEscalationJob, STALLED_LINE_ESCALATION_INTERVAL_MS);
+  setInterval(runMaterialExpiryAlertJob, MATERIAL_EXPIRY_INTERVAL_MS);
 
   console.log("[worker] Jobs scheduled. Running…");
 }
@@ -148,6 +152,7 @@ async function runAllJobs() {
     runPastDueDunningJob(),
     runChairsideStaleSessionJob(),
     runStalledProcedureLineEscalationJob(),
+    runMaterialExpiryAlertJob(),
   ]);
 }
 
@@ -535,6 +540,30 @@ If payment is not received within 7 days, your account will be suspended.`,
     }
   } catch (err) {
     console.error("[worker] past due dunning job failed:", err);
+  }
+}
+
+async function runMaterialExpiryAlertJob() {
+  try {
+    const tenants = await db.tenant.findMany({
+      where: { status: TenantStatus.ACTIVE },
+      select: { id: true },
+    });
+    let created = 0;
+    for (const tenant of tenants) {
+      const result = await syncMaterialExpiryAlerts({
+        tenantId: tenant.id,
+        daysAhead: NEAR_EXPIRY_DAYS,
+      });
+      created += result.created;
+    }
+    if (created > 0) {
+      console.log(
+        `[worker] material_expiry alerts created: ${created} across ${tenants.length} tenant(s)`,
+      );
+    }
+  } catch (err) {
+    console.error("[worker] material expiry alert job failed:", err);
   }
 }
 

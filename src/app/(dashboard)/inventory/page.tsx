@@ -28,6 +28,9 @@ export default async function InventoryPage() {
           <Link href="/inventory/purchase-orders">Purchase orders</Link>
         </Button>
         <Button variant="outline" size="sm" asChild>
+          <Link href="/inventory/suppliers">Suppliers</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
           <Link href="/inventory/expiry">Expiry alerts</Link>
         </Button>
         <Button variant="outline" size="sm" asChild>

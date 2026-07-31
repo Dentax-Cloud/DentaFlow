@@ -196,6 +196,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/inventory/suppliers",
+    label: "Suppliers",
+    icon: ClipboardList,
+    resource: "inventory",
+    action: "read",
+  },
+  {
     href: "/inventory/purchase-orders",
     label: "Purchase orders",
     icon: ClipboardList,

@@ -36,7 +36,16 @@ export function RoleDashboardHome({
     case "FINANCE":
       return <FinanceDashboardHome kpis={kpis} />;
     case "STORE":
-      return <StoreDashboardHome kpis={kpis} />;
+      return (
+        <StoreDashboardHome
+          stats={{
+            itemCount: 0,
+            lowStockCount: 0,
+            supplierCount: 0,
+            expiringBatchCount: 0,
+          }}
+        />
+      );
     case "ADMIN":
     default:
       return <AdminDashboardHome kpis={kpis} tenantName={tenantName} />;

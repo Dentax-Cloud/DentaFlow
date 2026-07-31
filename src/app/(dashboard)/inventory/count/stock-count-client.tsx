@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { removeStock, addStock } from "@/app/(dashboard)/features/inventory/actions";
+import { adjustStock } from "@/app/(dashboard)/features/inventory/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type Item = {
@@ -16,8 +17,17 @@ type Item = {
   itemRef: string | null;
 };
 
+const REASONS = [
+  { value: "count-correction", label: "Count correction" },
+  { value: "found-stock", label: "Found stock" },
+  { value: "breakage", label: "Breakage" },
+  { value: "wastage", label: "Wastage" },
+] as const;
+
 export function StockCountClient({ items: initial }: { items: Item[] }) {
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [reason, setReason] =
+    useState<(typeof REASONS)[number]["value"]>("count-correction");
   const [submitting, setSubmitting] = useState(false);
 
   async function submitCount() {
@@ -28,15 +38,19 @@ export function StockCountClient({ items: initial }: { items: Item[] }) {
         const actualStr = counts[item.id];
         if (actualStr === undefined || actualStr === "") continue;
         const actual = parseInt(actualStr, 10);
-        if (isNaN(actual)) continue;
-        const variance = actual - item.quantity;
-        if (variance === 0) continue;
-        if (variance > 0) {
-          await addStock({ inventoryItemId: item.id, quantity: variance, notes: "Stock count adjustment" });
-        } else {
-          await removeStock({ inventoryItemId: item.id, quantity: -variance, notes: "Stock count adjustment" });
+        if (isNaN(actual) || actual < 0) continue;
+        if (actual === item.quantity) continue;
+
+        const result = await adjustStock({
+          inventoryItemId: item.id,
+          actualQuantity: actual,
+          reason,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
         }
-        adjustments++;
+        if (!result.data.skipped) adjustments++;
       }
       toast.success(`${adjustments} adjustment(s) recorded`);
     } catch (e) {
@@ -50,7 +64,8 @@ export function StockCountClient({ items: initial }: { items: Item[] }) {
     const rows = [
       ["SKU", "Name", "Expected", "Actual", "Variance"],
       ...initial.map((item) => {
-        const actual = counts[item.id] !== undefined && counts[item.id] !== "" ? counts[item.id] : "";
+        const actual =
+          counts[item.id] !== undefined && counts[item.id] !== "" ? counts[item.id] : "";
         const variance =
           actual !== "" ? String(parseInt(actual, 10) - item.quantity) : "";
         return [item.sku, item.name, String(item.quantity), actual, variance];
@@ -68,7 +83,24 @@ export function StockCountClient({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="adjustment-reason">Adjustment reason</Label>
+          <select
+            id="adjustment-reason"
+            className="flex h-10 w-[220px] rounded-md border border-input bg-background px-3 text-sm"
+            value={reason}
+            onChange={(e) =>
+              setReason(e.target.value as (typeof REASONS)[number]["value"])
+            }
+          >
+            {REASONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button onClick={() => void submitCount()} disabled={submitting}>
           Submit count
         </Button>
@@ -79,7 +111,8 @@ export function StockCountClient({ items: initial }: { items: Item[] }) {
 
       {initial.map((item) => {
         const actualStr = counts[item.id];
-        const actual = actualStr !== undefined && actualStr !== "" ? parseInt(actualStr, 10) : null;
+        const actual =
+          actualStr !== undefined && actualStr !== "" ? parseInt(actualStr, 10) : null;
         const variance = actual !== null && !isNaN(actual) ? actual - item.quantity : null;
 
         return (
@@ -96,14 +129,21 @@ export function StockCountClient({ items: initial }: { items: Item[] }) {
                   type="number"
                   className="w-24"
                   placeholder="Actual"
+                  min={0}
                   value={counts[item.id] ?? ""}
-                  onChange={(e) => setCounts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  onChange={(e) =>
+                    setCounts((prev) => ({ ...prev, [item.id]: e.target.value }))
+                  }
                 />
                 {variance !== null && (
                   <span
                     className={cn(
                       "w-16 text-right font-medium",
-                      variance === 0 ? "text-green-600" : variance > 0 ? "text-blue-600" : "text-red-600",
+                      variance === 0
+                        ? "text-green-600"
+                        : variance > 0
+                          ? "text-blue-600"
+                          : "text-red-600",
                     )}
                   >
                     {variance > 0 ? "+" : ""}

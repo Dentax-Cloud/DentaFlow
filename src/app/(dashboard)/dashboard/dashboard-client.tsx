@@ -24,6 +24,8 @@ import type { UserRole } from "@prisma/client";
 import { normalizeDashboardRole } from "@/lib/rbac/permissions";
 import { updateAppointmentStatus } from "@/app/(dashboard)/features/appointments/actions";
 import { toast } from "sonner";
+import { StoreDashboardHome } from "@/components/dashboard/role-dashboards/role-dashboard-homes";
+import type { StoreDashboardStats } from "@/app/(dashboard)/features/dashboard/queries";
 
 type KPIs = {
   todayAppointments: number;
@@ -49,6 +51,7 @@ type Extras = {
   }[];
   waitingCount: number;
   pendingTreatmentPlans: number;
+  storeStats: StoreDashboardStats | null;
 };
 
 const statusLabel: Record<string, string> = {
@@ -79,8 +82,8 @@ export function DashboardClient({
   const isClinicalView = dashboardRole === "DOCTOR";
   const isNurseView = dashboardRole === "NURSE";
   const isFinanceView = dashboardRole === "FINANCE";
-  const isFrontDeskView =
-    dashboardRole === "RECEPTIONIST" || dashboardRole === "STORE";
+  const isStoreView = dashboardRole === "STORE";
+  const isFrontDeskView = dashboardRole === "RECEPTIONIST";
 
   const { data: aiInsights, isLoading: aiLoading } = useQuery({
     queryKey: ["ai-insights", kpis],
@@ -136,6 +139,10 @@ export function DashboardClient({
       icon: Users,
     },
   ];
+
+  if (isStoreView && extras.storeStats) {
+    return <StoreDashboardHome stats={extras.storeStats} />;
+  }
 
   return (
     <div className="space-y-8">

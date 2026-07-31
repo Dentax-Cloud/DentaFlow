@@ -2649,7 +2649,9 @@ model LabCase {
 model ClinicalAlert {
   id                   String    @id @default(cuid())
   tenantId             String
-  encounterId          String
+  /// Optional: clinical alerts (pain_spike, etc.) attach to an encounter.
+  /// Inventory material_expiry alerts are tenant-scoped and may omit encounter.
+  encounterId          String?
   /// high_vitals | drug_interaction | pain_spike | insurance_denial |
   /// material_expiry | missing_sterilization_log
   type                 String
@@ -2659,11 +2661,12 @@ model ClinicalAlert {
   createdAt            DateTime  @default(now())
 
   tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  encounter          Encounter    @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  encounter          Encounter?   @relation(fields: [encounterId], references: [id], onDelete: Cascade)
   acknowledgedByStaff StaffMember? @relation("AlertAcknowledgedBy", fields: [acknowledgedByStaffId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, encounterId])
   @@index([tenantId, type])
+  @@index([tenantId, type, sourceRecordId])
 }
 
 model ProviderPresence {
