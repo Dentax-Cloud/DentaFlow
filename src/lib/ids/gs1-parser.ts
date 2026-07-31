@@ -61,6 +61,7 @@ export function parseGS1(barcode: string): GS1Data {
 
 export function detectBarcodeType(barcode: string): string {
   const clean = barcode.trim();
+  if (/^\d{14}$/.test(clean)) return "GTIN14";
   if (/^\d{13}$/.test(clean)) return "EAN13";
   if (/^\d{8}$/.test(clean)) return "EAN8";
   if (/^\d{12}$/.test(clean)) return "UPCA";

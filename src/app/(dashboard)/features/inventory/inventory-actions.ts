@@ -24,7 +24,12 @@ export async function scanSupplierBarcode(barcode: string) {
   if (barcodeType === "GS1_128") {
     gs1Data = parseGS1(barcode);
     gtin = gs1Data.gtin;
-  } else if (barcodeType === "EAN13" || barcodeType === "EAN8" || barcodeType === "UPCA") {
+  } else if (
+    barcodeType === "GTIN14" ||
+    barcodeType === "EAN13" ||
+    barcodeType === "EAN8" ||
+    barcodeType === "UPCA"
+  ) {
     gtin = barcode.trim();
   }
 
