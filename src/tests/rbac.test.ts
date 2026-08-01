@@ -76,6 +76,15 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.STORE, "write", "patients")).toBe(false);
   });
 
+  it("store has chair_inventory read but not clinical_chart", () => {
+    expect(can(UserRole.STORE, "read", "chair_inventory")).toBe(true);
+    expect(hasPermission(UserRole.STORE, PERMISSIONS.chair_inventory.read)).toBe(true);
+    expect(can(UserRole.STORE, "read", "clinical_chart")).toBe(false);
+    expect(can(UserRole.STORE, "write", "clinical_chart")).toBe(false);
+    expect(can(UserRole.NURSE, "read", "chair_inventory")).toBe(true);
+    expect(can(UserRole.RECEPTIONIST, "read", "chair_inventory")).toBe(false);
+  });
+
   it("non-admin roles cannot access team or admin settings", () => {
     for (const role of [UserRole.DOCTOR, UserRole.RECEPTIONIST, UserRole.FINANCE, UserRole.STORE]) {
       expect(can(role, "write", "team")).toBe(false);
@@ -105,6 +114,17 @@ describe("RBAC routes and navigation", () => {
     expect(canAccessPath(UserRole.NURSE, "/clinical/radiographs")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/encounter/appt-1")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/chairside")).toBe(true);
+  });
+
+  it("store can open inventory chair stock but not clinical chair-setup", () => {
+    expect(canAccessPath(UserRole.STORE, "/inventory/chairs")).toBe(true);
+    expect(canAccessPath(UserRole.STORE, "/inventory")).toBe(true);
+    expect(canAccessPath(UserRole.STORE, "/clinical/chair-setup")).toBe(false);
+    expect(canAccessPath(UserRole.STORE, "/clinical")).toBe(false);
+
+    const storeNav = getNavItemsForRole(UserRole.STORE);
+    expect(storeNav.some((item) => item.href === "/inventory/chairs")).toBe(true);
+    expect(storeNav.some((item) => item.href === "/clinical/chair-setup")).toBe(false);
   });
 
   it("blocks receptionist from clinical chart routes but allows treatment plans", () => {

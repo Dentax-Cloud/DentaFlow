@@ -16,8 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { InventoryItem, StockTransaction } from "@prisma/client";
-import { AlertTriangle, History, Minus, Package, Plus, ScanLine } from "lucide-react";
-import { addStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
+import { AlertTriangle, History, Minus, Package, Plus, ScanLine, Send } from "lucide-react";
+import { addStock, issueStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
 import {
   scanSupplierBarcode,
   receiveStock,
@@ -25,6 +25,11 @@ import {
 } from "@/app/(dashboard)/features/inventory/inventory-actions";
 import { BarcodeScanner } from "@/components/inventory/barcode-scanner";
 import { cn } from "@/lib/utils";
+import {
+  STOCK_ISSUE_REASONS,
+  type StockIssueDestinationType,
+  type StockIssueReason,
+} from "@/lib/inventory/stock-issue";
 
 type ItemWithHistory = InventoryItem & {
   transactions?: StockTransaction[];
@@ -35,20 +40,33 @@ type ItemWithHistory = InventoryItem & {
 
 type FilterTab = "all" | "low";
 
+type ChairOpt = { id: string; name: string; number: number };
+type StaffOpt = { id: string; label: string };
+
 export function InventoryClient({
   items: initialItems,
   lowStockCount,
+  chairs = [],
+  staff = [],
 }: {
   items: ItemWithHistory[];
   lowStockCount: number;
+  chairs?: ChairOpt[];
+  staff?: StaffOpt[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [dialog, setDialog] = useState<"add" | "remove" | "history" | "scan" | null>(null);
+  const [dialog, setDialog] = useState<"add" | "remove" | "history" | "scan" | "issue" | null>(
+    null,
+  );
   const [selected, setSelected] = useState<ItemWithHistory | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [issueReason, setIssueReason] = useState<StockIssueReason>("allocated-to-chair");
+  const [destType, setDestType] = useState<StockIssueDestinationType>("chair");
+  const [destId, setDestId] = useState("");
+  const [destLabel, setDestLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [scanResult, setScanResult] = useState<{
     id: string;
@@ -65,12 +83,45 @@ export function InventoryClient({
 
   const criticalCount = items.filter((i) => i.quantity <= Math.floor(i.reorderLevel / 2)).length;
 
-  function openDialog(type: "add" | "remove" | "history", item: ItemWithHistory) {
+  function openDialog(type: "add" | "remove" | "history" | "issue", item: ItemWithHistory) {
     setSelected(item);
     setDialog(type);
     setQuantity("1");
     setNotes("");
     setUnitCost("");
+    setIssueReason("allocated-to-chair");
+    setDestType("chair");
+    setDestId(chairs[0]?.id ?? "");
+    setDestLabel("");
+  }
+
+  async function handleIssueStock() {
+    if (!selected) return;
+    const qty = Number(quantity);
+    if (!qty || qty < 1) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    setBusy(true);
+    const result = await issueStock({
+      inventoryItemId: selected.id,
+      quantity: qty,
+      reason: issueReason,
+      destinationType: destType,
+      destinationId: destType === "other" ? undefined : destId || undefined,
+      destinationLabel: destType === "other" ? destLabel : undefined,
+      notes: notes || undefined,
+    });
+    setBusy(false);
+    if (result.success) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === selected.id ? { ...i, quantity: i.quantity - qty } : i)),
+      );
+      toast.success(`Issued to ${result.data.destinationLabel}`);
+      setDialog(null);
+    } else {
+      toast.error(result.error);
+    }
   }
 
   async function handleAddStock() {
@@ -301,6 +352,10 @@ export function InventoryClient({
                     <Plus className="mr-1 h-3 w-3" />
                     Add stock
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => openDialog("issue", item)}>
+                    <Send className="mr-1 h-3 w-3" />
+                    Issue
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => openDialog("remove", item)}>
                     <Minus className="mr-1 h-3 w-3" />
                     Remove
@@ -346,11 +401,110 @@ export function InventoryClient({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={dialog === "issue"} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Issue stock — {selected?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>Quantity</Label>
+              <Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={issueReason}
+                onChange={(e) => setIssueReason(e.target.value as StockIssueReason)}
+              >
+                {STOCK_ISSUE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Destination type</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={destType}
+                onChange={(e) => {
+                  const next = e.target.value as StockIssueDestinationType;
+                  setDestType(next);
+                  if (next === "chair") setDestId(chairs[0]?.id ?? "");
+                  else if (next === "staff") setDestId(staff[0]?.id ?? "");
+                  else setDestId("");
+                }}
+              >
+                <option value="chair">Chair</option>
+                <option value="staff">Staff</option>
+                <option value="other">Other (free text)</option>
+              </select>
+            </div>
+            {destType === "chair" && (
+              <div>
+                <Label>Chair</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={destId}
+                  onChange={(e) => setDestId(e.target.value)}
+                >
+                  {chairs.length === 0 && <option value="">No chairs</option>}
+                  {chairs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Chair {c.number} · {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {destType === "staff" && (
+              <div>
+                <Label>Staff</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={destId}
+                  onChange={(e) => setDestId(e.target.value)}
+                >
+                  {staff.length === 0 && <option value="">No staff</option>}
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {destType === "other" && (
+              <div>
+                <Label>Destination</Label>
+                <Input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} />
+              </div>
+            )}
+            <div>
+              <Label>Notes (optional)</Label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => void handleIssueStock()} disabled={busy}>
+              Issue stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={dialog === "remove"} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove stock — {selected?.name}</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Quick ad-hoc remove (notes only). Prefer <strong>Issue</strong> for audited
+            destination + reason.
+          </p>
           <div className="grid gap-4 py-2">
             <div>
               <Label>Quantity</Label>

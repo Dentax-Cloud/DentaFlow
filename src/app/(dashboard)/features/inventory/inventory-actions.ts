@@ -4,7 +4,7 @@ import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
-import { StockTransactionType } from "@prisma/client";
+import { AuditAction, StockTransactionType } from "@prisma/client";
 import {
   generatePurchaseOrderRef,
   generateBatchRef,
@@ -12,6 +12,19 @@ import {
 } from "@/lib/ids/generate-ids";
 import { parseGS1, detectBarcodeType } from "@/lib/ids/gs1-parser";
 import { serializeDecimal } from "@/lib/utils/serialize";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { createAuditLog } from "@/lib/actions/safe-action";
+
+function derivePurchaseOrderStatus(
+  lines: Array<{ orderedQty: number; receivedQty: number }>,
+): "ORDERED" | "PARTIALLY_RECEIVED" | "RECEIVED" {
+  if (lines.length === 0) return "ORDERED";
+  const allReceived = lines.every((l) => l.receivedQty >= l.orderedQty);
+  if (allReceived) return "RECEIVED";
+  const anyReceived = lines.some((l) => l.receivedQty > 0);
+  return anyReceived ? "PARTIALLY_RECEIVED" : "ORDERED";
+}
 
 export async function scanSupplierBarcode(barcode: string) {
   const ctx = await requireTenantContext();
@@ -158,19 +171,30 @@ export async function linkSupplierBarcode(input: {
   revalidatePath(`/inventory/${input.inventoryItemId}`);
 }
 
+/**
+ * Receive stock into central inventory.
+ * Cost policy: most-recent-received `unitCost` overwrites InventoryItem.cost (scalar).
+ * When linked to a PO line, updates receivedQty and PO status (ORDERED → PARTIALLY_RECEIVED → RECEIVED).
+ */
 export async function receiveStock(input: {
   inventoryItemId: string;
   quantity: number;
   unitCost?: number;
   supplierId?: string;
   purchaseOrderId?: string;
+  purchaseOrderItemId?: string;
   lotNumber?: string;
   expiryDate?: string;
   gtin?: string;
   scannedBarcode?: string;
   notes?: string;
 }) {
+  await requirePermission(PERMISSIONS.inventory.write);
   const ctx = await requireTenantContext();
+
+  if (!Number.isInteger(input.quantity) || input.quantity < 1) {
+    throw new Error("Quantity must be a positive integer");
+  }
 
   const item = await db.inventoryItem.findFirst({
     where: { id: input.inventoryItemId, tenantId: ctx.tenantId, deletedAt: null },
@@ -180,52 +204,134 @@ export async function receiveStock(input: {
   const transactionRef = await generateStockRef(ctx.tenantId);
   const expiryDate = input.expiryDate ? new Date(input.expiryDate) : null;
 
-  let batchId: string | null = null;
-  if (item.trackByBatch || input.lotNumber || expiryDate) {
-    const batchRef = generateBatchRef(item.itemRef ?? item.id, expiryDate, input.lotNumber);
-
-    const batch = await db.inventoryBatch.create({
-      data: {
-        id: randomUUID(),
-        batchRef,
-        tenantId: ctx.tenantId,
-        inventoryItemId: input.inventoryItemId,
-        supplierId: input.supplierId ?? null,
-        purchaseOrderId: input.purchaseOrderId ?? null,
-        lotNumber: input.lotNumber ?? null,
-        expiryDate,
-        gtin: input.gtin ?? null,
-        receivedQty: input.quantity,
-        currentQty: input.quantity,
-        unitCost: input.unitCost ?? null,
-        status: "ACTIVE",
-      },
+  let poLineId = input.purchaseOrderItemId ?? null;
+  if (input.purchaseOrderId) {
+    const po = await db.purchaseOrder.findFirst({
+      where: { id: input.purchaseOrderId, tenantId: ctx.tenantId },
+      include: { items: true },
     });
-    batchId = batch.id;
+    if (!po) throw new Error("Purchase order not found");
+    if (poLineId) {
+      const line = po.items.find((i) => i.id === poLineId);
+      if (!line) throw new Error("Purchase order line not found");
+      if (line.inventoryItemId !== input.inventoryItemId) {
+        throw new Error("PO line does not match inventory item");
+      }
+    } else {
+      const match = po.items.find((i) => i.inventoryItemId === input.inventoryItemId);
+      poLineId = match?.id ?? null;
+    }
   }
 
-  await db.inventoryItem.update({
-    where: { id: input.inventoryItemId },
-    data: { quantity: { increment: input.quantity } },
+  const result = await db.$transaction(async (tx) => {
+    let batchId: string | null = null;
+    if (item.trackByBatch || input.lotNumber || expiryDate) {
+      const batchRef = generateBatchRef(item.itemRef ?? item.id, expiryDate, input.lotNumber);
+      const batch = await tx.inventoryBatch.create({
+        data: {
+          id: randomUUID(),
+          batchRef,
+          tenantId: ctx.tenantId,
+          inventoryItemId: input.inventoryItemId,
+          supplierId: input.supplierId ?? null,
+          purchaseOrderId: input.purchaseOrderId ?? null,
+          lotNumber: input.lotNumber ?? null,
+          expiryDate,
+          gtin: input.gtin ?? null,
+          receivedQty: input.quantity,
+          currentQty: input.quantity,
+          unitCost: input.unitCost ?? null,
+          status: "ACTIVE",
+        },
+      });
+      batchId = batch.id;
+    }
+
+    await tx.inventoryItem.update({
+      where: { id: input.inventoryItemId },
+      data: {
+        quantity: { increment: input.quantity },
+        // Most-recent-received cost (not weighted average).
+        ...(input.unitCost != null ? { cost: input.unitCost } : {}),
+      },
+    });
+
+    const stockTx = await tx.stockTransaction.create({
+      data: {
+        tenantId: ctx.tenantId,
+        itemId: input.inventoryItemId,
+        type: StockTransactionType.PURCHASE,
+        quantity: input.quantity,
+        notes: input.notes ?? (input.purchaseOrderId ? `PO receipt` : null),
+        transactionRef,
+        batchId,
+        purchaseOrderId: input.purchaseOrderId ?? null,
+        scannedBarcode: input.scannedBarcode ?? null,
+        scanMethod: input.scannedBarcode ? "SUPPLIER_BARCODE" : "MANUAL",
+      },
+    });
+
+    let poStatus: string | null = null;
+    if (input.purchaseOrderId && poLineId) {
+      const line = await tx.purchaseOrderItem.findFirst({
+        where: { id: poLineId, purchaseOrderId: input.purchaseOrderId },
+      });
+      if (!line) throw new Error("Purchase order line not found");
+      const nextReceived = line.receivedQty + input.quantity;
+      if (nextReceived > line.orderedQty) {
+        throw new Error(
+          `Cannot receive ${input.quantity}: only ${line.orderedQty - line.receivedQty} remaining on this line`,
+        );
+      }
+      await tx.purchaseOrderItem.update({
+        where: { id: poLineId },
+        data: {
+          receivedQty: nextReceived,
+          ...(input.unitCost != null ? { unitCost: input.unitCost } : {}),
+        },
+      });
+      const lines = await tx.purchaseOrderItem.findMany({
+        where: { purchaseOrderId: input.purchaseOrderId },
+      });
+      poStatus = derivePurchaseOrderStatus(lines);
+      await tx.purchaseOrder.update({
+        where: { id: input.purchaseOrderId },
+        data: {
+          status: poStatus,
+          ...(poStatus === "RECEIVED" ? { receivedDate: new Date() } : {}),
+        },
+      });
+    }
+
+    return { batchId, stockTransactionId: stockTx.id, poStatus };
   });
 
-  await db.stockTransaction.create({
-    data: {
-      tenantId: ctx.tenantId,
-      itemId: input.inventoryItemId,
-      type: StockTransactionType.PURCHASE,
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember?.id,
+    action: AuditAction.UPDATE,
+    entity: "InventoryItem",
+    entityId: input.inventoryItemId,
+    metadata: {
+      kind: "stock_receipt",
       quantity: input.quantity,
-      notes: input.notes ?? null,
+      unitCost: input.unitCost ?? null,
       transactionRef,
-      batchId,
       purchaseOrderId: input.purchaseOrderId ?? null,
-      scannedBarcode: input.scannedBarcode ?? null,
-      scanMethod: input.scannedBarcode ? "SUPPLIER_BARCODE" : "MANUAL",
+      purchaseOrderItemId: poLineId,
+      poStatus: result.poStatus,
     },
   });
 
   revalidatePath("/inventory");
-  return { transactionRef, batchId };
+  revalidatePath("/inventory/purchase-orders");
+  revalidatePath(`/inventory/${input.inventoryItemId}`);
+  return {
+    transactionRef,
+    batchId: result.batchId,
+    stockTransactionId: result.stockTransactionId,
+    poStatus: result.poStatus,
+  };
 }
 
 export async function issueStockToProcedure(input: {
@@ -379,7 +485,10 @@ export async function createPurchaseOrder(input: {
     unitCost: number;
   }>;
 }) {
+  await requirePermission(PERMISSIONS.inventory.write);
   const ctx = await requireTenantContext();
+
+  if (!input.items.length) throw new Error("Add at least one line item");
 
   const poRef = await generatePurchaseOrderRef(ctx.tenantId);
 
