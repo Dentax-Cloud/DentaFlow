@@ -26,6 +26,8 @@ import type { OutstandingPlanItem } from "@/components/clinical/procedure-lines-
 import type { ToothChartData } from "@/lib/clinical/chart-types";
 import type { PatientVisitHistoryRow } from "@/lib/clinical/load-patient-visit-history";
 import Link from "next/link";
+import { formatInTimeZone } from "date-fns-tz";
+import { resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 
 type PhotoRecord = ImageRecord & {
   photoCategory: string | null;
@@ -36,6 +38,8 @@ type PhotoRecord = ImageRecord & {
 type Props = {
   canWrite: boolean;
   countryCode: string;
+  /** Tenant.timezone for hydration-safe datetime display. */
+  timezone?: string | null;
   currentStaffMemberId: string | null;
   initialTab: EncounterTab;
   appointment: {
@@ -146,7 +150,11 @@ export function EncounterWorkspaceClient(props: Props) {
 
   return (
     <div className="flex h-[calc(100vh-64px)] flex-col">
-      <EncounterPatientHeader patient={props.patient} appointment={props.appointment} />
+      <EncounterPatientHeader
+        patient={props.patient}
+        appointment={props.appointment}
+        timezone={props.timezone}
+      />
 
       <Tabs
         value={tab}
@@ -186,6 +194,7 @@ export function EncounterWorkspaceClient(props: Props) {
               <EncounterChartTab
                 canWrite={props.canWrite}
                 countryCode={props.countryCode}
+                timezone={props.timezone}
                 currentStaffMemberId={props.currentStaffMemberId}
                 patientId={props.patient.id}
                 patientName={patientLabel}
@@ -262,10 +271,11 @@ export function EncounterWorkspaceClient(props: Props) {
                       <Badge variant="secondary">{e.status}</Badge>
                       <span className="text-muted-foreground">
                         Pain {e.painScore}/10 ·{" "}
-                        {new Date(e.createdAt).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {formatInTimeZone(
+                          new Date(e.createdAt),
+                          resolveClinicTimezone(props.timezone),
+                          "h:mm a",
+                        )}
                       </span>
                     </div>
                     <p className="mt-1 font-medium">{e.chiefComplaint}</p>

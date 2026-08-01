@@ -189,6 +189,7 @@ export default async function EncounterWorkspacePage({
     <EncounterWorkspaceClient
       canWrite={canWrite}
       countryCode={ctx.tenant.countryCode}
+      timezone={ctx.tenant.timezone}
       currentStaffMemberId={ctx.staffMember?.id ?? null}
       initialTab={initialTab}
       appointment={{

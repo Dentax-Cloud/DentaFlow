@@ -130,6 +130,7 @@ export default async function ClinicalPage({
         clinicName={ctx.tenant.name}
         templates={templates}
         countryCode={ctx.tenant.countryCode}
+        timezone={ctx.tenant.timezone}
         blockVisitInvoice={Boolean(openEncounter)}
       />
     </div>
