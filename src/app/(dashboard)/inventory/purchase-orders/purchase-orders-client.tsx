@@ -81,23 +81,21 @@ export function PurchaseOrdersClient({
         items: [{ inventoryItemId: lineItemId, orderedQty: qty, unitCost: cost }],
       });
       const itemName = catalog.find((c) => c.id === lineItemId)?.name ?? lineItemId;
-      setOrders((prev) => [
-        {
-          id: po.id,
-          poRef: po.poRef ?? null,
-          status: po.status,
-          total: po.total,
-          items: (po.items ?? []).map((l: PoLine & { inventoryItemId: string }) => ({
-            id: l.id,
-            inventoryItemId: l.inventoryItemId,
-            orderedQty: l.orderedQty,
-            receivedQty: l.receivedQty,
-            unitCost: l.unitCost,
-            item: { name: itemName },
-          })),
-        },
-        ...prev,
-      ]);
+      const created: PoRow = {
+        id: po.id,
+        poRef: po.poRef ?? null,
+        status: String(po.status),
+        total: Number(po.total),
+        items: (po.items ?? []).map((l) => ({
+          id: l.id,
+          inventoryItemId: l.inventoryItemId,
+          orderedQty: l.orderedQty,
+          receivedQty: l.receivedQty,
+          unitCost: Number(l.unitCost),
+          item: { name: itemName },
+        })),
+      };
+      setOrders((prev) => [created, ...prev]);
       toast.success(`Created ${po.poRef}`);
       setCreateOpen(false);
       setSelectedPoId(po.id);
