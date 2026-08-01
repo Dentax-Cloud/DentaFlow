@@ -53,6 +53,7 @@ export function ClinicalPageClient({
   clinicName,
   templates,
   countryCode,
+  timezone,
   blockVisitInvoice = false,
 }: {
   canWriteClinical?: boolean;
@@ -65,6 +66,7 @@ export function ClinicalPageClient({
   clinicName?: string;
   templates: ClinicalTemplateOption[];
   countryCode: string;
+  timezone?: string | null;
   /** True when an open spine Encounter exists for this patient — omit visit invoice UI entirely. */
   blockVisitInvoice?: boolean;
 }) {
@@ -459,6 +461,7 @@ export function ClinicalPageClient({
               notation={notation}
               patientName={patientDisplayName}
               filterTooth={selectedTooth}
+              timezone={timezone}
             />
 
             <TreatmentSuggestionsPanel

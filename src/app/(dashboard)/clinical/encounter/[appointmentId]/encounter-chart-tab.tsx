@@ -135,6 +135,7 @@ export function EncounterChartTab({
             notation={notation}
             patientName={patientName}
             filterTooth={selectedToothFdi}
+            timezone={timezone}
           />
         </div>
       </details>

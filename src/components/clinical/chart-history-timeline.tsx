@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatInTimeZone } from "date-fns-tz";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
   formatConditionType,
 } from "@/lib/clinical/condition-config";
 import { getDisplayNumber, type ChartNotation } from "@/lib/clinical/odontogram-notation";
+import { resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 import { cn } from "@/lib/utils";
 import { Filter } from "lucide-react";
 
@@ -24,6 +26,8 @@ type Props = {
   notation: ChartNotation;
   patientName?: string;
   filterTooth?: string;
+  /** Tenant.timezone — required for hydration-safe recordedAt display. */
+  timezone?: string | null;
 };
 
 function inDateRange(iso: string, from?: string, to?: string) {
@@ -42,10 +46,12 @@ export function ChartHistoryTimeline({
   notation,
   patientName,
   filterTooth,
+  timezone,
 }: Props) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [toothFilter, setToothFilter] = useState(filterTooth ?? "");
+  const tz = resolveClinicTimezone(timezone);
 
   const history = useMemo(() => {
     const all = chartToHistory(chartData);
@@ -154,7 +160,11 @@ export function ChartHistoryTimeline({
                             {formatConditionType(entry.type)}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(entry.recordedAt).toLocaleString()}
+                            {formatInTimeZone(
+                              new Date(entry.recordedAt),
+                              tz,
+                              "MMM d, yyyy · h:mm a",
+                            )}
                           </span>
                         </div>
                         {entry.surfaces && entry.surfaces.length > 0 && (
