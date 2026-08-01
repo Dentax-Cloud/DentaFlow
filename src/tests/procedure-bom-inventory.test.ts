@@ -190,7 +190,7 @@ describe("concurrent store deduction safety (FOR UPDATE semantics)", () => {
 describe("InventoryLocation migration backfill", () => {
   const migrationPath = join(
     process.cwd(),
-    "prisma/migrations/20260723090000_procedure_bom_inventory_location/migration.sql",
+    "prisma/migrations/20260928000000_procedure_bom_inventory_location/migration.sql",
   );
 
   it("backfills exactly one default store location per existing tenant", () => {
@@ -228,7 +228,7 @@ describe("InventoryLocation migration backfill", () => {
 describe("billable + defaultTier migration", () => {
   const migrationPath = join(
     process.cwd(),
-    "prisma/migrations/20260723120000_bom_billable_and_item_tier/migration.sql",
+    "prisma/migrations/20260928000001_bom_billable_and_item_tier/migration.sql",
   );
 
   it("adds isBillable defaults that preserve existing invoice behavior", () => {
@@ -257,7 +257,7 @@ describe("ad-hoc material logging + return-to-store", () => {
     const sql = readFileSync(
       join(
         process.cwd(),
-        "prisma/migrations/20260723140000_material_usage_return_to_store/migration.sql",
+        "prisma/migrations/20260928000002_material_usage_return_to_store/migration.sql",
       ),
       "utf8",
     );
