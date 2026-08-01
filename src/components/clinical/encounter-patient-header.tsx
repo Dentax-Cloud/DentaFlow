@@ -1,20 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { ArrowLeft } from "lucide-react";
 import { PersonAvatar } from "@/components/profile/person-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { resolveClinicTimezone } from "@/lib/datetime/clinic-timezone";
 
-function computeAge(dateOfBirth: string | null | undefined): number | null {
+/** Calendar-date age in the clinic timezone — avoids SSR/client TZ drift on DOB. */
+function computeAge(
+  dateOfBirth: string | null | undefined,
+  timezone: string,
+): number | null {
   if (!dateOfBirth) return null;
-  const dob = new Date(dateOfBirth);
-  if (Number.isNaN(dob.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age -= 1;
+  const dobStr = dateOfBirth.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dobStr)) return null;
+  const [y, m, d] = dobStr.split("-").map(Number);
+  const todayStr = formatInTimeZone(new Date(), resolveClinicTimezone(timezone), "yyyy-MM-dd");
+  const [ty, tm, td] = todayStr.split("-").map(Number);
+  let age = ty - y;
+  if (tm < m || (tm === m && td < d)) age -= 1;
   return age >= 0 ? age : null;
 }
 
@@ -36,12 +42,16 @@ type Props = {
     doctorName: string | null;
     ref: string | null;
   };
+  /** Tenant.timezone — must match on server and client for hydration-safe formatting. */
+  timezone?: string | null;
 };
 
-export function EncounterPatientHeader({ patient, appointment }: Props) {
+export function EncounterPatientHeader({ patient, appointment, timezone }: Props) {
   const patientLabel = `${patient.firstName} ${patient.lastName}`.trim();
-  const age = computeAge(patient.dateOfBirth);
-  const apptTime = format(new Date(appointment.startTime), "EEE, MMM d · h:mm a");
+  const tz = resolveClinicTimezone(timezone);
+  const age = computeAge(patient.dateOfBirth, tz);
+  // Explicit clinic TZ (not browser/server local) — fixes React #418 text mismatch.
+  const apptTime = formatInTimeZone(new Date(appointment.startTime), tz, "EEE, MMM d · h:mm a");
   const hasAllergies = patient.allergies.length > 0;
   const hasMedicalAlert = Boolean(patient.medicalHistory?.trim());
 

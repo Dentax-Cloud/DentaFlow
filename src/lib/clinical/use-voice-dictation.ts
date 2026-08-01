@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 type SpeechRecognitionInstance = {
   continuous: boolean;
@@ -30,8 +30,14 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
 
 export function useVoiceDictation(onTranscript: (text: string) => void) {
   const [isListening, setIsListening] = useState(false);
-  const [isSupported] = useState(() => getSpeechRecognition() != null);
+  // Start false so SSR and the first client paint match (avoids hydration #418).
+  // Detect SpeechRecognition only after mount.
+  const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  useEffect(() => {
+    setIsSupported(getSpeechRecognition() != null);
+  }, []);
 
   const startListening = useCallback(() => {
     const SR = getSpeechRecognition();
