@@ -90,6 +90,8 @@ Also apply the same `UPDATE` on any long-lived non-prod DB / disposable restore 
 
 1. **Empty DB** `dentaflow_migrepair_fresh`: pre-fix failed at `20260723090000_…` / `MaterialUsage` missing; post-fix applied all **54** migrations including the four renamed ones after spine — success.
 2. **Prod snapshot** `dentaflow_migrepair_test`: after metadata `UPDATE`, `migrate deploy` → **No pending migrations to apply** (checksums retained).
-3. **Negative** `dentaflow_migrepair_neg`: rename folders without `UPDATE` → deploy attempts re-apply (documents why metadata step is mandatory).
+3. **Negative** `dentaflow_migrepair_neg`: rename folders without `UPDATE` → deploy attempts re-apply and fails with `type "InventoryLocationType" already exists` (`42710` / `P3018`) — documents why the metadata step is mandatory.
+
+Also update any unit tests that `readFileSync` the old migration paths (e.g. `src/tests/procedure-bom-inventory.test.ts`).
 
 Real prod database was **not** modified in this investigation.
