@@ -132,7 +132,6 @@ export function InventoryItemClient({
   const isIndia = countryCode === "IN";
   const status = getStockStatus(item);
   const minStock = item.minStockAlert ?? item.reorderLevel;
-  const displayRef = item.itemRef ?? item.sku;
 
   const filteredTransactions = useMemo(() => {
     if (txFilter === "ALL") return item.transactions;
@@ -200,10 +199,28 @@ export function InventoryItemClient({
             <Package className="h-6 w-6" />
             {item.name}
           </h1>
-          <p className="font-mono text-sm text-muted-foreground">{displayRef}</p>
-          {item.category && (
-            <p className="text-sm text-muted-foreground">{item.category}</p>
-          )}
+          <dl className="space-y-0.5 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="font-medium text-foreground/80">SKU</dt>
+              <dd className="font-mono">{item.sku}</dd>
+            </div>
+            {item.itemRef && item.itemRef !== item.sku && (
+              <div className="flex flex-wrap gap-x-2">
+                <dt className="font-medium text-foreground/80">Internal ref</dt>
+                <dd className="font-mono">{item.itemRef}</dd>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="font-medium text-foreground/80">GTIN / barcode</dt>
+              <dd className="font-mono">{item.gtin?.trim() ? item.gtin : "Not set"}</dd>
+            </div>
+            {item.category && (
+              <div className="flex flex-wrap gap-x-2">
+                <dt className="font-medium text-foreground/80">Category</dt>
+                <dd>{item.category}</dd>
+              </div>
+            )}
+          </dl>
         </div>
         <Badge className={cn("text-sm", STATUS_COLORS[status])}>{status.replace("_", " ")}</Badge>
       </div>
