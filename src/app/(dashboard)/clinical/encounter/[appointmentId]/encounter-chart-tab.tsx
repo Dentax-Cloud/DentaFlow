@@ -22,6 +22,7 @@ import type { PatientVisitHistoryRow } from "@/lib/clinical/load-patient-visit-h
 type Props = {
   canWrite: boolean;
   countryCode: string;
+  timezone?: string | null;
   currentStaffMemberId: string | null;
   patientId: string;
   patientName: string;
@@ -44,6 +45,7 @@ type Props = {
 export function EncounterChartTab({
   canWrite,
   countryCode,
+  timezone,
   currentStaffMemberId,
   patientId,
   patientName,
@@ -137,7 +139,7 @@ export function EncounterChartTab({
         </div>
       </details>
 
-      <EncounterVisitHistoryPanel visits={visitHistory} />
+      <EncounterVisitHistoryPanel visits={visitHistory} timezone={timezone} />
     </div>
   );
 }
