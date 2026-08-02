@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { AuditAction, Prisma } from "@prisma/client";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { requirePermission } from "@/lib/rbac/guard";
-import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { serializeDecimal } from "@/lib/utils/serialize";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
@@ -51,6 +51,7 @@ import {
 import type { EncounterStatus, EncounterProcedureLineStatus, PlannedVsPerformed } from "@/lib/encounter/types";
 import type { InterruptOutcome } from "@/lib/encounter/state-machine";
 import type { GateSummary } from "@/lib/encounter/types";
+import { isNursePresenceStage } from "@/lib/encounter/types";
 import { getPatientChart } from "@/app/(dashboard)/features/clinical/actions";
 
 export type { SpineActionResult };
@@ -73,6 +74,13 @@ async function requireSpineRead() {
   if (!isEncounterSpineEnabled(ctx.tenant)) {
     throw new Error(SPINE_DISABLED_MESSAGE);
   }
+  return ctx;
+}
+
+async function requireSpineAssistWrite() {
+  const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.clinical_assist.write);
+  if (!isEncounterSpineEnabled(ctx.tenant)) throw new Error(SPINE_DISABLED_MESSAGE);
   return ctx;
 }
 
@@ -172,6 +180,9 @@ export type SpineEncounterSerialized = {
   closedReason: string | null;
   painScore: number | null;
   painNextAction: string | null;
+  examCompletedAt: string | null;
+  examinedByStaffId: string | null;
+  examClinicalNoteId: string | null;
   preAuthOverridden: boolean;
   preAuthOverrideReason: string | null;
   patientAckPreAuthAt: string | null;
@@ -416,6 +427,9 @@ function serializeEncounterWorkspace(
     closedReason: row.closedReason,
     painScore: row.painScore,
     painNextAction: row.painNextAction,
+    examCompletedAt: toIso(row.examCompletedAt),
+    examinedByStaffId: row.examinedByStaffId,
+    examClinicalNoteId: row.examClinicalNoteId,
     preAuthOverridden: row.preAuthOverridden,
     preAuthOverrideReason: row.preAuthOverrideReason,
     patientAckPreAuthAt: toIso(row.patientAckPreAuthAt),
@@ -499,6 +513,7 @@ export async function transitionSpineEncounter(input: {
   encounterId: string;
   toStatus: EncounterStatus;
   handoffToStaffId?: string;
+  presenceStage?: string;
 }) {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
@@ -509,9 +524,62 @@ export async function transitionSpineEncounter(input: {
     userId: ctx.staffMember?.id,
     staffMemberId: ctx.staffMember?.id ?? null,
     handoffToStaffId: input.handoffToStaffId,
+    presenceStage: input.presenceStage,
   });
   revalidateSpinePaths(owned.appointmentId);
   return updated;
+}
+
+export async function completeSpineExam(input: {
+  encounterId: string;
+  chiefComplaint: string;
+  findings: string;
+  provisionalDiagnosis: string;
+}) {
+  const ctx = await requireSpineWrite();
+  if (!ctx.staffMember?.id) throw new Error("Staff member required to complete exam.");
+  const chiefComplaint = input.chiefComplaint.trim();
+  const findings = input.findings.trim();
+  const provisionalDiagnosis = input.provisionalDiagnosis.trim();
+  if (!chiefComplaint || !findings || !provisionalDiagnosis) {
+    throw new Error(
+      "Chief complaint, findings, and provisional diagnosis are required to complete the exam.",
+    );
+  }
+  const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
+  const note = await db.clinicalNote.create({
+    data: {
+      tenantId: ctx.tenantId,
+      patientId: owned.patientId,
+      providerId: ctx.staffMember.id,
+      appointmentId: owned.appointmentId,
+      noteType: "EXAM",
+      title: "Chief complaint / exam",
+      subjective: chiefComplaint,
+      objective: findings,
+      assessment: provisionalDiagnosis,
+      toothNumbers: [],
+    },
+  });
+  await db.encounter.update({
+    where: { id: input.encounterId },
+    data: {
+      examCompletedAt: new Date(),
+      examinedByStaffId: ctx.staffMember.id,
+      examClinicalNoteId: note.id,
+    },
+  });
+  const { createAuditLog } = await import("@/lib/actions/safe-action");
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember.id,
+    action: AuditAction.CREATE,
+    entity: "EncounterExam",
+    entityId: input.encounterId,
+    metadata: { clinicalNoteId: note.id },
+  });
+  revalidateSpinePaths(owned.appointmentId);
+  return { noteId: note.id };
 }
 
 export async function interruptSpineEncounter(input: {
@@ -833,7 +901,19 @@ export async function logSpineMaterial(input: {
   lotNumber?: string | null;
   expiryDate?: string | Date | null;
 }) {
-  const ctx = await requireSpineWrite();
+  const ctx = await requireTenantContext();
+  const canChartWrite = Boolean(
+    ctx.staffMember?.role &&
+      hasPermission(ctx.staffMember.role, PERMISSIONS.clinical_chart.write),
+  );
+  if (canChartWrite) {
+    await requirePermission(PERMISSIONS.clinical_chart.write);
+  } else if (input.tier === "consumable") {
+    await requirePermission(PERMISSIONS.clinical_assist.write);
+  } else {
+    throw new Error("FORBIDDEN");
+  }
+  if (!isEncounterSpineEnabled(ctx.tenant)) throw new Error(SPINE_DISABLED_MESSAGE);
   const line = await db.encounterProcedureLine.findFirst({
     where: { id: input.procedureLineId, tenantId: ctx.tenantId },
     select: { encounter: { select: { appointmentId: true } } },
@@ -868,6 +948,29 @@ export async function logSpineMaterial(input: {
     revalidateSpinePaths(line.encounter.appointmentId);
   }
   return result;
+}
+
+export async function recordSpineNursePresence(input: {
+  encounterId: string;
+  stage: string;
+}) {
+  const ctx = await requireSpineAssistWrite();
+  if (!ctx.staffMember?.id) throw new Error("Staff member required to record presence.");
+  if (!isNursePresenceStage(input.stage)) throw new Error("Invalid nurse presence stage.");
+  const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
+  const { createProviderPresenceAudited } = await import("@/lib/encounter/repository");
+  await createProviderPresenceAudited(
+    {
+      tenant: { connect: { id: ctx.tenantId } },
+      encounter: { connect: { id: input.encounterId } },
+      staff: { connect: { id: ctx.staffMember.id } },
+      stage: input.stage,
+      presentFrom: new Date(),
+    },
+    { tenantId: ctx.tenantId, userId: ctx.staffMember.id },
+  );
+  revalidateSpinePaths(owned.appointmentId);
+  return { ok: true as const };
 }
 
 export async function returnSpineMaterial(materialUsageId: string) {

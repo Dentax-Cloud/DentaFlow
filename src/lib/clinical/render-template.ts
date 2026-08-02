@@ -4,6 +4,7 @@ export const CLINICAL_TEMPLATE_TYPES = [
   "POST_OP",
   "CONSULTATION",
   "EMERGENCY",
+  "EXAM",
   "CUSTOM",
 ] as const;
 

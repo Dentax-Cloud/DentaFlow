@@ -12,6 +12,19 @@ export const ENCOUNTER_STATUSES = [
 
 export type EncounterStatus = (typeof ENCOUNTER_STATUSES)[number];
 
+/** Assistance presence is recorded without extending the encounter status enum. */
+export const NURSE_PRESENCE_STAGES = [
+  "tray_setup",
+  "chairside_assist",
+  "turnover",
+] as const;
+
+export type NursePresenceStage = (typeof NURSE_PRESENCE_STAGES)[number];
+
+export function isNursePresenceStage(stage: string): stage is NursePresenceStage {
+  return (NURSE_PRESENCE_STAGES as readonly string[]).includes(stage);
+}
+
 export const PROCEDURE_LINE_STATUSES = [
   "planned",
   "in_progress",

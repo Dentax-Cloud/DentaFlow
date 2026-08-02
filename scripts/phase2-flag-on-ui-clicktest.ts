@@ -83,6 +83,10 @@ async function main() {
 
     // Advance intake → exam → gates (status strip is outside collapsible cards)
     await clickExact(page, "→ CHIEF COMPLAINT EXAM");
+    await page.getByPlaceholder("Chief complaint").fill("Sensitivity in upper right molar");
+    await page.getByPlaceholder("Findings").fill("Tenderness on percussion");
+    await page.getByPlaceholder("Provisional diagnosis").fill("Reversible pulpitis");
+    await clickExact(page, "Mark exam complete");
     await clickExact(page, "→ GATES");
 
     // Phase 2b: expand Gate summary stage card if collapsed

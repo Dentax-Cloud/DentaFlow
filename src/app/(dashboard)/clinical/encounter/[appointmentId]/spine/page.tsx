@@ -22,6 +22,7 @@ export default async function EncounterSpinePage({
 
   const role = ctx.staffMember?.role;
   const canWrite = Boolean(role && hasPermission(role, PERMISSIONS.clinical_chart.write));
+  const canAssist = Boolean(role && hasPermission(role, PERMISSIONS.clinical_assist.write));
   const canWriteInsurance = Boolean(
     role && hasPermission(role, PERMISSIONS.insurance.write),
   );
@@ -37,6 +38,7 @@ export default async function EncounterSpinePage({
     <SpineWorkspaceClient
       appointmentId={appointmentId}
       canWrite={canWrite}
+      canAssist={canAssist}
       canWriteInsurance={canWriteInsurance}
       initial={initial}
     />

@@ -155,6 +155,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     action: "read",
   },
   {
+    href: "/clinical/chair-prep",
+    label: "Chair prep",
+    icon: ClipboardList,
+    resource: "clinical_chart",
+    action: "read",
+  },
+  {
     href: "/billing",
     label: "Billing",
     icon: Receipt,

@@ -90,6 +90,11 @@ async function main() {
     report.timelineUrl = page.url();
     report.timelineRedirectedAway = !page.url().includes("/timeline");
 
+    // Phase 3a: chair-prep is spine-flag-gated
+    await page.goto(`${BASE}/clinical/chair-prep`, { waitUntil: "networkidle" });
+    report.chairPrepUrl = page.url();
+    report.chairPrepUnreachable = !page.url().includes("/chair-prep");
+
     // Classic encounter workspace (chairside chart lives here when flag off)
     await page.goto(`${BASE}/clinical/encounter/${APPT}`, { waitUntil: "networkidle" });
     report.legacyUrl = page.url();

@@ -29,11 +29,18 @@ async function requireStaffId(ctx: Awaited<ReturnType<typeof import("@/lib/tenan
 }
 
 export async function seedPlatformTemplates() {
-  const count = await db.clinicalTemplate.count({ where: { tenantId: null } });
-  if (count > 0) return;
+  const existing = await db.clinicalTemplate.findMany({
+    where: { tenantId: null },
+    select: { name: true, type: true },
+  });
+  const existingKeys = new Set(existing.map((template) => `${template.type}:${template.name}`));
+  const missing = PLATFORM_DEFAULT_TEMPLATES.filter(
+    (template) => !existingKeys.has(`${template.type}:${template.name}`),
+  );
+  if (missing.length === 0) return;
 
   await db.clinicalTemplate.createMany({
-    data: PLATFORM_DEFAULT_TEMPLATES.map((t) => ({
+    data: missing.map((t) => ({
       tenantId: null,
       name: t.name,
       type: t.type,
@@ -45,13 +52,18 @@ export async function seedPlatformTemplates() {
 }
 
 export async function seedClinicalTemplatesForTenant(tenantId: string) {
-  const existing = await db.clinicalTemplate.count({
+  const existing = await db.clinicalTemplate.findMany({
     where: { tenantId },
+    select: { name: true, type: true },
   });
-  if (existing > 0) return;
+  const existingKeys = new Set(existing.map((template) => `${template.type}:${template.name}`));
+  const missing = PLATFORM_DEFAULT_TEMPLATES.filter(
+    (template) => !existingKeys.has(`${template.type}:${template.name}`),
+  );
+  if (missing.length === 0) return;
 
   await db.clinicalTemplate.createMany({
-    data: PLATFORM_DEFAULT_TEMPLATES.map((t) => ({
+    data: missing.map((t) => ({
       tenantId,
       name: t.name,
       type: t.type,

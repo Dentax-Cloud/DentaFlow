@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 export type SpineNavPanelId =
   | "intake"
+  | "exam"
   | "gates"
   | "findings"
   | "procedures"
@@ -29,6 +30,7 @@ export type SpineToolId =
 
 const STAGE_ORDER: SpineNavPanelId[] = [
   "intake",
+  "exam",
   "gates",
   "findings",
   "procedures",
@@ -38,6 +40,7 @@ const STAGE_ORDER: SpineNavPanelId[] = [
 
 const STAGE_LABELS: Record<SpineNavPanelId, string> = {
   intake: "Intake",
+  exam: "Exam",
   gates: "Gates",
   findings: "Findings",
   procedures: "Procedures",
@@ -57,8 +60,9 @@ const TOOLS: Array<{ id: SpineToolId; label: string; icon: typeof Smile }> = [
 export function statusToNavStage(status: string): SpineNavPanelId {
   switch (status) {
     case "arrival_intake":
-    case "chief_complaint_exam":
       return "intake";
+    case "chief_complaint_exam":
+      return "exam";
     case "gates":
       return "gates";
     case "procedure_execution":
