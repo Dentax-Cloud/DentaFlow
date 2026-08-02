@@ -17,6 +17,8 @@ export function DashboardShell({
   tenantName,
   tenantLogoUrl,
   trialDaysLeft = null,
+  showHrSelfService = false,
+  showHrNav = false,
 }: {
   children: React.ReactNode;
   userRole: UserRole;
@@ -24,6 +26,8 @@ export function DashboardShell({
   tenantName?: string;
   tenantLogoUrl?: string | null;
   trialDaysLeft?: number | null;
+  showHrSelfService?: boolean;
+  showHrNav?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -61,6 +65,8 @@ export function DashboardShell({
           user={user}
           tenantName={tenantName}
           tenantLogoUrl={tenantLogoUrl}
+          showHrSelfService={showHrSelfService}
+          showHrNav={showHrNav}
         />
       </div>
 

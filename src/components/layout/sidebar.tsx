@@ -48,14 +48,24 @@ export function Sidebar({
   user,
   tenantName,
   tenantLogoUrl,
+  showHrSelfService = false,
+  showHrNav = false,
 }: {
   userRole: UserRole;
   user?: SidebarUser;
   tenantName?: string;
   tenantLogoUrl?: string | null;
+  /** Linked Employee + HR module on — show My HR without hr.read. */
+  showHrSelfService?: boolean;
+  /** HR_MODULE_ENABLED — show ADMIN/OWNER HR directory group. */
+  showHrNav?: boolean;
 }) {
   const pathname = usePathname();
-  const navGroups = useMemo(() => getNavGroupsForRole(userRole), [userRole]);
+  const navGroups = useMemo(() => {
+    const groups = getNavGroupsForRole(userRole);
+    if (showHrNav) return groups;
+    return groups.filter((g) => g.label !== "HR");
+  }, [userRole, showHrNav]);
 
   // Only the user's explicit collapse/expand choices are stored here.
   // The active-route group is expanded via derived state below, so no
@@ -99,6 +109,21 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+        {showHrSelfService && (
+          <div className="space-y-1">
+            <Link
+              href="/hr/me"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                pathname === "/hr/me" || pathname.startsWith("/hr/me/")
+                  ? "bg-dental/10 text-dental dark:text-sky-400"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              My HR
+            </Link>
+          </div>
+        )}
         {navGroups.map((group) => {
           if (!group.label) {
             return (

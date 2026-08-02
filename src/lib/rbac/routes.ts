@@ -17,6 +17,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/billing", resource: "billing", action: "read" },
   { prefix: "/inventory/chairs", resource: "chair_inventory", action: "read" },
   { prefix: "/inventory", resource: "inventory", action: "read" },
+  { prefix: "/hr", resource: "hr", action: "read" },
   { prefix: "/appointments", resource: "appointments", action: "read" },
   { prefix: "/clinical/treatment-plans", resource: "clinical_schedule", action: "read" },
   { prefix: "/clinical/encounter", resource: "clinical_chart", action: "read" },
@@ -49,6 +50,9 @@ export function resolveRouteRule(pathname: string): RouteRule | null {
 }
 
 export function canAccessPath(role: UserRole, pathname: string): boolean {
+  // Identity-scoped self-service: any authenticated dashboard role may open
+  // /hr/me; the page itself requires HR_MODULE_ENABLED + linked Employee.
+  if (pathname === "/hr/me" || pathname.startsWith("/hr/me/")) return true;
   const rule = resolveRouteRule(pathname);
   if (!rule) return true;
   return can(role, rule.action, rule.resource);
