@@ -1,0 +1,32 @@
+{
+  "base": "http://127.0.0.1:3660",
+  "startedAt": "2026-08-02T19:51:08.551Z",
+  "tip": "bae5ecbe9",
+  "items": {
+    "withPhoto": {
+      "id": "cmr60tsy402iho9d2tsgk5rkj",
+      "name": "Alginate Impression Material"
+    },
+    "placeholder": {
+      "id": "cmr60tt1o02klo9d2c8dcnsey",
+      "name": "Amalgam Carrier"
+    }
+  },
+  "seededImageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/120px-PNG_transparency_demonstration_1.png",
+  "storeLogin": "store.gb.kensington@test.dentaflow.io",
+  "detailWithPhoto": {
+    "detailHasImg": true,
+    "uploadControlVisible": true
+  },
+  "detailPlaceholder": {
+    "placeholderOnly": true,
+    "uploadControlVisible": true
+  },
+  "uploadAttempt": "file-input-present",
+  "uploadResultImageUrl": "https://qr48eaq3ep.ufs.sh/f/7kWnOOq6IzeYuWTq9a78VQJDq1HT3yzZY0wtM967vc4x5jPG",
+  "uploadOk": true,
+  "doctorUploadHidden": true,
+  "ok": true,
+  "chairsStatus": 200,
+  "endedAt": "2026-08-02T19:52:05.848Z"
+}
