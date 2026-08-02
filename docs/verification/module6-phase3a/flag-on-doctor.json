@@ -1,0 +1,11 @@
+{
+  "phase": "flag-on-doctor",
+  "startedAt": "2026-08-02T10:04:34.605Z",
+  "featureFlags": {
+    "ENCOUNTER_SPINE_ENABLED": true
+  },
+  "spineUrl": "http://127.0.0.1:3650/clinical/encounter/phase3a_clicktest_appt/spine",
+  "examMarked": true,
+  "error": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: '→ CLOSE OUT', exact: true }).first() to be visible\n",
+  "ok": false
+}
