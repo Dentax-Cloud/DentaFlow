@@ -1,0 +1,19 @@
+{
+  "base": "http://127.0.0.1:3650",
+  "appt": "phase3a_clicktest_appt",
+  "tip": "db6acf1e3",
+  "startedAt": "2026-08-02T16:10:41.453Z",
+  "foPath": "reception-ui",
+  "dbVerification": "unknown|approved|850.00|150.00",
+  "spineForm": {
+    "eligVal": "unknown",
+    "preauthVal": "approved",
+    "covVal": "850",
+    "copayVal": "150"
+  },
+  "insuranceClearedChipVisible": true,
+  "prefillOk": true,
+  "notEmptyDraftDefaults": true,
+  "ok": true,
+  "endedAt": "2026-08-02T16:11:30.162Z"
+}
