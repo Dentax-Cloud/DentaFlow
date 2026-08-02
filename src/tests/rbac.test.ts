@@ -165,5 +165,8 @@ describe("RBAC routes and navigation", () => {
     expect(nurseNav.some((item) => item.href === "/clinical/chair-setup")).toBe(true);
     expect(nurseNav.some((item) => item.href === "/clinical/chair-prep")).toBe(true);
     expect(nurseNav.some((item) => item.href === "/clinical/radiographs")).toBe(false);
+
+    const nurseNavSpineOff = getNavItemsForRole(UserRole.NURSE, { spineEnabled: false });
+    expect(nurseNavSpineOff.some((item) => item.href === "/clinical/chair-prep")).toBe(false);
   });
 });

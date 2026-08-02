@@ -50,6 +50,7 @@ export function Sidebar({
   tenantLogoUrl,
   showHrSelfService = false,
   showHrNav = false,
+  spineEnabled = true,
 }: {
   userRole: UserRole;
   user?: SidebarUser;
@@ -59,13 +60,15 @@ export function Sidebar({
   showHrSelfService?: boolean;
   /** HR_MODULE_ENABLED — show ADMIN/OWNER HR directory group. */
   showHrNav?: boolean;
+  /** When false, hide spine-gated nav (chair prep). */
+  spineEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const navGroups = useMemo(() => {
-    const groups = getNavGroupsForRole(userRole);
+    const groups = getNavGroupsForRole(userRole, { spineEnabled });
     if (showHrNav) return groups;
     return groups.filter((g) => g.label !== "HR");
-  }, [userRole, showHrNav]);
+  }, [userRole, showHrNav, spineEnabled]);
 
   // Only the user's explicit collapse/expand choices are stored here.
   // The active-route group is expanded via derived state below, so no

@@ -364,16 +364,33 @@ function filterItemsForRole(role: UserRole, items: NavItem[]): NavItem[] {
   return items.filter((item) => can(role, item.action ?? "read", item.resource));
 }
 
-export function getNavGroupsForRole(role: UserRole): NavGroup[] {
+export type NavFilterOptions = {
+  /** When false, spine-only routes (e.g. chair prep) are omitted from the sidebar. */
+  spineEnabled?: boolean;
+};
+
+function filterSpineItems(items: NavItem[], spineEnabled: boolean): NavItem[] {
+  if (spineEnabled) return items;
+  return items.filter((item) => item.href !== "/clinical/chair-prep");
+}
+
+export function getNavGroupsForRole(
+  role: UserRole,
+  options: NavFilterOptions = {},
+): NavGroup[] {
+  const spineEnabled = options.spineEnabled ?? true;
   return NAV_GROUPS.map((group) => ({
     ...group,
-    items: filterItemsForRole(role, group.items),
+    items: filterSpineItems(filterItemsForRole(role, group.items), spineEnabled),
   })).filter((group) => group.items.length > 0);
 }
 
 /** Flat list of permitted nav items (backward-compatible helper). */
-export function getNavItemsForRole(role: UserRole): NavItem[] {
-  return getNavGroupsForRole(role).flatMap((group) => group.items);
+export function getNavItemsForRole(
+  role: UserRole,
+  options: NavFilterOptions = {},
+): NavItem[] {
+  return getNavGroupsForRole(role, options).flatMap((group) => group.items);
 }
 
 export function getPrimaryNavForRole(role: UserRole): NavItem[] {
