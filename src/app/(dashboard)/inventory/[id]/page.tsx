@@ -4,6 +4,8 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { serializeDecimal } from "@/lib/utils/serialize";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { InventoryItemClient } from "./inventory-item-client";
 
 export default async function InventoryItemPage({
@@ -13,6 +15,11 @@ export default async function InventoryItemPage({
 }) {
   const { id } = await params;
   const ctx = await requireRouteAccess("inventory", "read");
+  const canWriteInventory = Boolean(
+    ctx.staffMember?.role &&
+      hasPermission(ctx.staffMember.role, PERMISSIONS.inventory.write),
+  );
+  const uploadConfigured = await isUploadthingConfigured();
 
   const item = await db.inventoryItem.findFirst({
     where: { id, tenantId: ctx.tenant.id, deletedAt: null },
@@ -114,6 +121,7 @@ export default async function InventoryItemPage({
         trackByBatch: item.trackByBatch,
         trackByExpiry: item.trackByExpiry,
         gtin: item.gtin,
+        imageUrl: item.imageUrl,
         supplierId: item.supplierId,
         supplierName: item.supplier?.name ?? null,
         supplierBarcodes: item.supplierBarcodes,
@@ -154,6 +162,8 @@ export default async function InventoryItemPage({
       tenantCode={tenant?.tenantCode ?? ""}
       totalValue={totalValue}
       linkedProcedures={linkedProcedures}
+      canWriteInventory={canWriteInventory}
+      uploadConfigured={uploadConfigured}
     />
   );
 }

@@ -1311,6 +1311,8 @@ model InventoryItem {
   storageConditions  String?
   minStockAlert      Int?
   maxStock           Int?
+  /// Optional product photo URL (UploadThing). Null → UI shows package placeholder.
+  imageUrl           String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?

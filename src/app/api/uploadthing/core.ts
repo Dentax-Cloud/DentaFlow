@@ -6,6 +6,8 @@ import { getTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { saveInsuranceCardPhotoFromUpload } from "@/lib/insurance/save-card-photo";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 
 const f = createUploadthing();
 
@@ -225,6 +227,39 @@ export const ourFileRouter = {
       );
       return { url, policyId: metadata.policyId, side: metadata.side };
     }),
+
+  /**
+   * Inventory product photo — JPEG/PNG only (no clinical DICOM/TIFF path).
+   * Distinct from patient-scoped clinicalImageUploader / profilePhoto.
+   * URL persistence is via setInventoryItemImageUrl (inventory.write).
+   */
+  inventoryItemImage: f({
+    "image/jpeg": { maxFileSize: "4MB", maxFileCount: 1 },
+    "image/png": { maxFileSize: "4MB", maxFileCount: 1 },
+  })
+    .input(z.object({ inventoryItemId: z.string().min(1) }))
+    .middleware(async ({ input }) => {
+      const metadata = await requireTenantUpload();
+      await requirePermission(PERMISSIONS.inventory.write);
+
+      const item = await db.inventoryItem.findFirst({
+        where: tenantWhere(metadata.tenantId, {
+          id: input.inventoryItemId,
+          deletedAt: null,
+        }),
+        select: { id: true },
+      });
+      if (!item) throw new Error("Inventory item not found");
+
+      return {
+        ...metadata,
+        inventoryItemId: item.id,
+      };
+    })
+    .onUploadComplete(async ({ metadata, file }) => ({
+      url: file.ufsUrl ?? file.url,
+      inventoryItemId: metadata.inventoryItemId,
+    })),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
