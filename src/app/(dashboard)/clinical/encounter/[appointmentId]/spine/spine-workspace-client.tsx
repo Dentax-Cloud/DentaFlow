@@ -60,6 +60,7 @@ import { SpineStageCard } from "./spine-stage-card";
 import { SpineClinicalFindings } from "./spine-clinical-findings";
 import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
+import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
 
 type DraftState = {
   asaClass: string;
@@ -181,6 +182,7 @@ export function SpineWorkspaceClient({
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
+    ...insuranceDraftFromVerification(initial.encounter.insuranceVerifications[0]),
     painScore:
       initial.encounter.painScore != null ? String(initial.encounter.painScore) : "",
     painNextAction: initial.encounter.painNextAction ?? "",
@@ -210,7 +212,16 @@ export function SpineWorkspaceClient({
       const raw = localStorage.getItem(draftKey(encounter.id));
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<DraftState>;
-      setDraft((prev) => ({ ...prev, ...parsed }));
+      // Insurance fields are server-owned (InsuranceVerification). Do not let a
+      // stale local draft wipe front-office values seeded into the form.
+      const {
+        insuranceEligibility: _ie,
+        insurancePreAuth: _ip,
+        estimatedCoverage: _ec,
+        estimatedCopay: _ey,
+        ...rest
+      } = parsed;
+      setDraft((prev) => ({ ...prev, ...rest }));
     } catch {
       // ignore corrupt draft
     }
@@ -219,7 +230,14 @@ export function SpineWorkspaceClient({
   useEffect(() => {
     if (!hasMounted || !encounter.id) return;
     try {
-      localStorage.setItem(draftKey(encounter.id), JSON.stringify(draft));
+      const {
+        insuranceEligibility: _ie,
+        insurancePreAuth: _ip,
+        estimatedCoverage: _ec,
+        estimatedCopay: _ey,
+        ...persistable
+      } = draft;
+      localStorage.setItem(draftKey(encounter.id), JSON.stringify(persistable));
     } catch {
       // ignore quota
     }
