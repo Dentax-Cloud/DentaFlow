@@ -30,9 +30,13 @@ Prod spot-check before modeling: **12 / 157** active `StaffMember` rows had `aut
 - Report: `clicktest-report.json` (`CLICKTEST OK`)
   - Credential expiry badge on directory + detail
   - Time entry approved via UI
-  - Leave queue visible; leave approved (tenant-scoped)
+  - Leave queue: exactly **1** pending card; UI Approve via `decideLeaveRequest({ id })` — **no SQL fallback**
   - Doctor self-service `/hr/me` OK; doctor redirected away from `/hr` directory
   - Cross-tenant employee id not visible to primary tenant (`crossTenantVisibleToPrimary=0`)
+
+### Duplicate-row note (resolved)
+
+See [`STEP0-DUPLICATE-LEAVE.md`](./STEP0-DUPLICATE-LEAVE.md). Pure seed re-run noise (multiple `HR Clicktest` employees), not an approve-action wrong-row bug. Seed cleaned; leave approve re-verified clean.
 
 ## Screenshots
 
