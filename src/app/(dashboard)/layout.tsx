@@ -9,6 +9,8 @@ import {
   ACCOUNT_SETUP_INCOMPLETE_PATH,
   requireStaffMemberRole,
 } from "@/lib/rbac/staff-role";
+import { isHrModuleEnabled } from "@/lib/hr/feature-flag";
+import { db } from "@/lib/db";
 
 export default async function DashboardLayout({
   children,
@@ -40,6 +42,19 @@ export default async function DashboardLayout({
 
   const userRole = requireStaffMemberRole(ctx);
 
+  let showHrSelfService = false;
+  if (isHrModuleEnabled(ctx.tenant) && ctx.staffMember.id) {
+    const linked = await db.employee.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        staffMemberId: ctx.staffMember.id,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    showHrSelfService = Boolean(linked);
+  }
+
   return (
     <DashboardShell
       userRole={userRole}
@@ -61,6 +76,8 @@ export default async function DashboardLayout({
           ? ctx.trial.trialDaysRemaining
           : null
       }
+      showHrSelfService={showHrSelfService}
+      showHrNav={isHrModuleEnabled(ctx.tenant)}
     >
       {children}
     </DashboardShell>

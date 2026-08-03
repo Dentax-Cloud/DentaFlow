@@ -23,6 +23,7 @@ import {
   Globe,
   CalendarPlus,
   Settings2,
+  IdCard,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { can, type Action, type Resource } from "./permissions";
@@ -237,6 +238,34 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     resource: "inventory",
     action: "write",
   },
+  {
+    href: "/hr",
+    label: "Directory",
+    icon: IdCard,
+    resource: "hr",
+    action: "read",
+  },
+  {
+    href: "/hr/leave",
+    label: "Leave approvals",
+    icon: ClipboardCheck,
+    resource: "hr",
+    action: "read",
+  },
+  {
+    href: "/hr/departments",
+    label: "Departments",
+    icon: Building2,
+    resource: "hr",
+    action: "write",
+  },
+  {
+    href: "/hr/leave-types",
+    label: "Leave types",
+    icon: ClipboardList,
+    resource: "hr",
+    action: "write",
+  },
   crmItem,
   reportsItem,
   aiItem,
@@ -313,6 +342,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Inventory",
     items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/inventory")),
+  },
+  {
+    label: "HR",
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/hr")),
   },
   {
     label: "Admin",

@@ -80,6 +80,12 @@ model Tenant {
   casePresentations    CasePresentation[]
   emergencyIntakes     EmergencyIntake[]
   staffMembers         StaffMember[]
+  departments          Department[]
+  employees            Employee[]
+  employeeDocuments    EmployeeDocument[]
+  timeEntries          TimeEntry[]
+  leaveTypes           LeaveType[]
+  leaveRequests        LeaveRequest[]
   tenant_memberships   tenant_memberships[]
   dailyCounters        DailyCounter[]
   barcodeScans         BarcodeScan[]
@@ -219,6 +225,11 @@ model StaffMember {
   riskAssessmentsCleared  RiskAssessment[]         @relation("RiskClearedBy")
   clinicalAlertsAcked     ClinicalAlert[]          @relation("AlertAcknowledgedBy")
   providerPresences       ProviderPresence[]
+  /// Optional HR employee record linked for self-service (Phase 1).
+  employee                Employee?
+  employeeDocumentsUploaded EmployeeDocument[] @relation("EmployeeDocumentUploader")
+  timeEntriesApproved     TimeEntry[]          @relation("TimeEntryApprover")
+  leaveRequestsApproved   LeaveRequest[]       @relation("LeaveRequestApprover")
 
   @@index([tenantId])
   @@index([authUserId])
@@ -2688,4 +2699,157 @@ model ProviderPresence {
 
   @@index([tenantId, encounterId])
   @@index([tenantId, staffId])
+}
+
+// ─── HR & Payroll Phase 1 (country-agnostic records — no payroll math) ───
+
+model Department {
+  id          String     @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees Employee[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// HR employee record. Optional link to StaffMember (DB table User) — staff may
+/// exist without a login (authUserId null) and without an HR record, and vice versa.
+model Employee {
+  id               String    @id @default(cuid())
+  tenantId         String
+  /// Optional 1:1 link to login/staff identity (StaffMember). Not mandatory.
+  staffMemberId    String?   @unique
+  departmentId     String?
+  firstName        String
+  lastName         String
+  email            String?
+  jobTitle         String?
+  /// salaried | hourly | production_based | per_diem | contractor
+  employmentType   String    @default("salaried")
+  /// active | on_leave | terminated
+  employmentStatus String    @default("active")
+  hireDate         DateTime
+  terminationDate  DateTime?
+  /// Free-text compensation reference only — real CompensationStructure is Phase 2.
+  compensationNote String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffMember StaffMember?       @relation(fields: [staffMemberId], references: [id], onDelete: SetNull)
+  department  Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  documents   EmployeeDocument[]
+  timeEntries TimeEntry[]
+  leaveRequests LeaveRequest[]
+
+  @@index([tenantId])
+  @@index([tenantId, employmentStatus])
+  @@index([tenantId, departmentId])
+}
+
+model EmployeeDocument {
+  id           String    @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  /// contract | id | credential | policy_ack | other
+  documentType String    @default("other")
+  title        String
+  fileUrl      String
+  fileName     String?
+  mimeType     String?
+  /// Used for credential/license expiry tracking (optional).
+  expiresAt    DateTime?
+  uploadedById String?
+  uploadedAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee   Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  uploadedBy StaffMember? @relation("EmployeeDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, expiresAt])
+}
+
+model TimeEntry {
+  id           String    @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  clockInAt    DateTime
+  clockOutAt   DateTime?
+  /// Minutes of unpaid break within the entry (optional).
+  breakMinutes Int       @default(0)
+  /// clock_punch | manual
+  source       String    @default("manual")
+  notes        String?
+  /// pending | approved | rejected
+  status       String    @default("pending")
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee   Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy StaffMember? @relation("TimeEntryApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+}
+
+model LeaveType {
+  id                      String    @id @default(cuid())
+  tenantId                String
+  name                    String
+  isPaid                  Boolean   @default(true)
+  /// Informational default annual entitlement in days — not a statutory enforcement.
+  defaultAnnualEntitlement Int      @default(0)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requests LeaveRequest[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  leaveTypeId  String
+  startDate    DateTime  @db.Date
+  endDate      DateTime  @db.Date
+  /// Inclusive working-day count stored at submit for balance checks.
+  dayCount     Int
+  /// pending | approved | rejected | cancelled
+  status       String    @default("pending")
+  reason       String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee   Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  approvedBy StaffMember? @relation("LeaveRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@index([tenantId, leaveTypeId])
 }
