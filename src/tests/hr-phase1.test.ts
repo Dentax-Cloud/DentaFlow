@@ -252,19 +252,24 @@ describe("HR Phase 1 — action RBAC & tenant isolation", () => {
     mockLeaveAggregate.mockResolvedValue({ _sum: { dayCount: 0 } });
   });
 
-  it("rejects createEmployee when HR module is disabled", async () => {
-    mockRequireTenantContext.mockResolvedValue(
-      staffContext(UserRole.ADMIN, { hrEnabled: false }),
-    );
-    const { createEmployee } = await import("@/app/(dashboard)/features/hr/hr-actions");
-    await expect(
-      createEmployee({
-        firstName: "Ada",
-        lastName: "Lovelace",
-        hireDate: "2026-01-01",
-      }),
-    ).rejects.toThrow(/not enabled/i);
-  });
+  // First dynamic import of the actions module is slow under parallel vitest load.
+  it(
+    "rejects createEmployee when HR module is disabled",
+    async () => {
+      mockRequireTenantContext.mockResolvedValue(
+        staffContext(UserRole.ADMIN, { hrEnabled: false }),
+      );
+      const { createEmployee } = await import("@/app/(dashboard)/features/hr/hr-actions");
+      await expect(
+        createEmployee({
+          firstName: "Ada",
+          lastName: "Lovelace",
+          hireDate: "2026-01-01",
+        }),
+      ).rejects.toThrow(/not enabled/i);
+    },
+    15000,
+  );
 
   it("scopes listEmployees to the current tenantId", async () => {
     mockRequireTenantContext.mockResolvedValue(staffContext(UserRole.ADMIN));
