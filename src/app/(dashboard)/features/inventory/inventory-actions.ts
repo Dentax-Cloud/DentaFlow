@@ -594,6 +594,54 @@ export async function updateInventoryRetailGst(input: {
   return { ok: true };
 }
 
+/**
+ * Persist UploadThing URL onto InventoryItem.imageUrl after inventoryItemImage upload.
+ * Same gate as stock adjustments: inventory.write. Audited UPDATE.
+ */
+export async function setInventoryItemImageUrl(input: {
+  inventoryItemId: string;
+  imageUrl: string | null;
+}) {
+  await requirePermission(PERMISSIONS.inventory.write);
+  const ctx = await requireTenantContext();
+
+  const imageUrl =
+    input.imageUrl == null || input.imageUrl.trim() === ""
+      ? null
+      : input.imageUrl.trim();
+  if (imageUrl != null && !/^https?:\/\//i.test(imageUrl)) {
+    throw new Error("Invalid image URL");
+  }
+
+  const item = await db.inventoryItem.findFirst({
+    where: { id: input.inventoryItemId, tenantId: ctx.tenantId, deletedAt: null },
+    select: { id: true, imageUrl: true },
+  });
+  if (!item) throw new Error("Inventory item not found");
+
+  await db.inventoryItem.update({
+    where: { id: item.id },
+    data: { imageUrl },
+  });
+
+  await createAuditLog({
+    tenantId: ctx.tenantId,
+    userId: ctx.staffMember?.id,
+    action: AuditAction.UPDATE,
+    entity: "InventoryItem",
+    entityId: item.id,
+    metadata: {
+      kind: "inventory_item_image",
+      previousImageUrl: item.imageUrl,
+      imageUrl,
+    },
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath(`/inventory/${item.id}`);
+  return { ok: true as const, imageUrl };
+}
+
 export async function initiateRecall(input: {
   lotNumber?: string;
   gtin?: string;

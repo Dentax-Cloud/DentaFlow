@@ -33,7 +33,6 @@ import {
   LayoutGrid,
   List,
   Minus,
-  Package,
   ScanLine,
   Search,
   Send,
@@ -42,6 +41,7 @@ import {
 import { addStock, issueStock, removeStock } from "@/app/(dashboard)/features/inventory/actions";
 import { scanSupplierBarcode } from "@/app/(dashboard)/features/inventory/inventory-actions";
 import { BarcodeScanner } from "@/components/inventory/barcode-scanner";
+import { InventoryItemThumb } from "@/components/inventory/inventory-item-thumb";
 import { cn } from "@/lib/utils";
 import {
   distinctCategories,
@@ -421,7 +421,11 @@ export function InventoryClient({
               >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <Package className="h-4 w-4" />
+                    <InventoryItemThumb
+                      imageUrl={item.imageUrl}
+                      name={item.name}
+                      size="sm"
+                    />
                     <Link href={`/inventory/${item.id}`} className="hover:underline">
                       {item.name}
                     </Link>
@@ -489,6 +493,7 @@ export function InventoryClient({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12" aria-label="Photo" />
                 {(
                   [
                     ["name", "Name"],
@@ -525,6 +530,13 @@ export function InventoryClient({
                     className={cn(focusItemId === item.id && "bg-primary/5")}
                     data-item-id={item.id}
                   >
+                    <TableCell className="w-12 pr-0">
+                      <InventoryItemThumb
+                        imageUrl={item.imageUrl}
+                        name={item.name}
+                        size="sm"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Link href={`/inventory/${item.id}`} className="font-medium hover:underline">
                         {item.name}

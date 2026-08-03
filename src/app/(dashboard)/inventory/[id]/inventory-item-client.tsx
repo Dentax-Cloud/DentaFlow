@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryLabel } from "@/components/inventory/inventory-label";
 import { SupplierBarcodePanel } from "@/components/inventory/supplier-barcode-panel";
+import { InventoryItemPhotoUpload } from "@/components/inventory/inventory-item-photo-upload";
 import { updateInventoryRetailGst } from "@/app/(dashboard)/features/inventory/inventory-actions";
 import { linkInventoryItemSupplier } from "@/app/(dashboard)/features/inventory/supplier-actions";
 import { ArrowLeft, AlertTriangle, Package } from "lucide-react";
@@ -69,6 +70,7 @@ type ItemData = {
   trackByBatch: boolean;
   trackByExpiry: boolean;
   gtin: string | null;
+  imageUrl: string | null;
   supplierId: string | null;
   supplierName: string | null;
   supplierBarcodes: SupplierBarcode[];
@@ -109,6 +111,8 @@ export function InventoryItemClient({
   tenantCode,
   totalValue,
   linkedProcedures,
+  canWriteInventory = false,
+  uploadConfigured = false,
 }: {
   item: ItemData;
   suppliers: { id: string; name: string }[];
@@ -117,6 +121,8 @@ export function InventoryItemClient({
   tenantCode: string;
   totalValue: number;
   linkedProcedures: ProcedureLink[];
+  canWriteInventory?: boolean;
+  uploadConfigured?: boolean;
 }) {
   const router = useRouter();
   const [txFilter, setTxFilter] = useState<string>("ALL");
@@ -235,6 +241,23 @@ export function InventoryItemClient({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Product photo
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InventoryItemPhotoUpload
+                inventoryItemId={item.id}
+                itemName={item.name}
+                imageUrl={item.imageUrl}
+                canWrite={canWriteInventory}
+                uploadConfigured={uploadConfigured}
+              />
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
