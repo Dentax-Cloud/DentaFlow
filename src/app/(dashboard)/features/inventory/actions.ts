@@ -8,6 +8,7 @@ import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { requireTenantContext } from "@/lib/tenant/context";
 import { generateStockRef } from "@/lib/ids/generate-ids";
 import { STOCK_ADJUSTMENT_REASONS } from "@/lib/inventory/stock-adjustment";
 import {
@@ -289,9 +290,10 @@ export const issueStock = createAction({
   },
 });
 
-export async function getStockHistory(tenantId: string, itemId: string) {
+export async function getStockHistory(itemId: string) {
+  const ctx = await requireTenantContext();
   return db.stockTransaction.findMany({
-    where: { tenantId, itemId },
+    where: { tenantId: ctx.tenantId, itemId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

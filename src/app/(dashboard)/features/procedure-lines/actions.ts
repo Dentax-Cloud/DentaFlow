@@ -62,28 +62,33 @@ function isTreatmentItemComplete(status: string): boolean {
 }
 
 async function completeLinkedTreatmentItem(
+  tenantId: string,
   treatmentItemId: string | null,
 ): Promise<{ planCompletedTitle: string | null }> {
   if (!treatmentItemId) return { planCompletedTitle: null };
 
   const item = await db.treatmentItem.findFirst({
-    where: { id: treatmentItemId },
+    where: { id: treatmentItemId, tenantId },
     select: { id: true, status: true, treatmentPlanId: true },
   });
-  if (!item) return { planCompletedTitle: null };
+  if (!item) {
+    throw new Error("Treatment item not found.");
+  }
 
   if (!isTreatmentItemComplete(item.status)) {
     await updateTreatmentPlanItem(treatmentItemId, { status: "COMPLETED" });
   }
 
   const plan = await db.treatmentPlan.findFirst({
-    where: { id: item.treatmentPlanId },
+    where: { id: item.treatmentPlanId, tenantId },
     select: {
       title: true,
       items: { select: { status: true } },
     },
   });
-  if (!plan) return { planCompletedTitle: null };
+  if (!plan) {
+    throw new Error("Treatment plan not found.");
+  }
 
   const allComplete = plan.items.every((i) => isTreatmentItemComplete(i.status));
   return { planCompletedTitle: allComplete ? plan.title : null };
@@ -219,6 +224,16 @@ export async function createProcedureLine(input: {
     throw new Error("A doctor-owned procedure line requires an owner.");
   }
 
+  if (input.treatmentItemId) {
+    const ownedItem = await db.treatmentItem.findFirst({
+      where: { id: input.treatmentItemId, tenantId: ctx.tenantId },
+      select: { id: true },
+    });
+    if (!ownedItem) {
+      throw new Error("Treatment item not found.");
+    }
+  }
+
   const line = await db.procedureLine.create({
     data: {
       tenantId: ctx.tenantId,
@@ -279,7 +294,10 @@ export async function closeProcedureLine(lineId: string) {
   });
 
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
-  const treatmentSync = await completeLinkedTreatmentItem(line.treatmentItemId);
+  const treatmentSync = await completeLinkedTreatmentItem(
+    ctx.tenantId,
+    line.treatmentItemId,
+  );
 
   revalidatePath("/clinical/chairside");
   revalidatePath("/clinical/visit-board");
@@ -386,7 +404,10 @@ export async function forceCloseProcedureLine(lineId: string, reason: string) {
   });
 
   const completion = await applyDerivedAppointmentCompletion(ctx.tenantId, line.appointmentId);
-  const treatmentSync = await completeLinkedTreatmentItem(line.treatmentItemId);
+  const treatmentSync = await completeLinkedTreatmentItem(
+    ctx.tenantId,
+    line.treatmentItemId,
+  );
 
   revalidatePath("/clinical/chairside");
   revalidatePath("/clinical/visit-board");

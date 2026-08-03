@@ -13,9 +13,9 @@ export default async function PatientsPage() {
   const canWrite = hasPermission(role, PERMISSIONS.patients.write);
 
   const [patients, formFields, insuranceStatusMap] = await Promise.all([
-    getPatients(ctx.tenant.id),
+    getPatients(),
     buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE"),
-    getPrimaryInsuranceStatusMap(ctx.tenant.id),
+    getPrimaryInsuranceStatusMap(),
   ]);
 
   return (

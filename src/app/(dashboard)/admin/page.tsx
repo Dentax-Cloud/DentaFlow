@@ -3,7 +3,7 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { getRolePermissions, hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPendingInvitations } from "@/app/(dashboard)/features/admin/actions";
-import { getBranches, getAuditLogs, countAuditLogs } from "@/app/(dashboard)/features/admin/branch-actions";
+import { getBranches, countAuditLogs } from "@/app/(dashboard)/features/admin/branch-actions";
 import { serializeDecimal, serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { AdminClient } from "./admin-client";
 import { parseRecallSettings } from "@/lib/recall/helpers";
@@ -33,10 +33,10 @@ export default async function AdminPage() {
         take: 20,
         include: { user: true },
       }),
-      countAuditLogs(ctx.tenant.id),
-      getBranches(ctx.tenant.id),
+      countAuditLogs(),
+      getBranches(),
       db.settings.findUnique({ where: { tenantId: ctx.tenant.id } }),
-      canManageTeam ? getPendingInvitations(ctx.tenant.id) : Promise.resolve([]),
+      canManageTeam ? getPendingInvitations() : Promise.resolve([]),
       db.tenant.findUnique({
         where: { id: ctx.tenant.id },
         select: {

@@ -168,7 +168,7 @@ export default async function EncounterWorkspacePage({
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    getPatientChart(ctx.tenant.id, patientId),
+    getPatientChart(patientId),
     loadPatientVisitHistory(ctx.tenant.id, patientId).catch(() => []),
   ]);
 

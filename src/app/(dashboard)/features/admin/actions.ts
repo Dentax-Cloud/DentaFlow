@@ -10,7 +10,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { clearPendingTeamInvite, sendTeamInvite, storePendingTeamInvite } from "@/lib/tenant/team-invites";
 import { checkStaffLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { tenantWhere } from "@/lib/tenant/scoped";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import type { RecallSettings } from "@/lib/recall/helpers";
 import { DEFAULT_RECALL_SETTINGS } from "@/lib/recall/helpers";
 import {
@@ -249,12 +249,13 @@ export const updateClinicSettings = createAction({
   },
 });
 
-export async function getPendingInvitations(tenantId: string): Promise<PendingInvitation[]> {
-  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+export async function getPendingInvitations(): Promise<PendingInvitation[]> {
+  const ctx = await requireTenantContext();
+  const tenant = await db.tenant.findUnique({ where: { id: ctx.tenantId } });
   if (!tenant) return [];
 
   const { listPendingTeamInvitesFromMetadata } = await import("@/lib/tenant/team-invites");
-  const pending = await listPendingTeamInvitesFromMetadata(tenantId);
+  const pending = await listPendingTeamInvitesFromMetadata(ctx.tenantId);
   return pending.map(({ email, role }) => ({
     id: `pending:${email}`,
     email,
@@ -352,9 +353,10 @@ export const deleteProcedure = createAction({
   },
 });
 
-export async function listProcedures(tenantId: string) {
+export async function listProcedures() {
+  const ctx = await requireTenantContext();
   return db.procedureCatalog.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId: ctx.tenantId, isActive: true },
     orderBy: { name: "asc" },
   });
 }

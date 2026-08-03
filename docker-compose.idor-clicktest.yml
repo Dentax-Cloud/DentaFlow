@@ -1,0 +1,29 @@
+# Disposable IDOR verification stack (two-tenant seed DB).
+#   docker compose -p dentaflow-dev -f docker-compose.dev.yml -f docker-compose.idor-clicktest.yml up -d idor-clicktest-web
+networks:
+  dentalflow_net:
+    external: true
+    name: dentaflow-dev_dentalflow_net
+
+services:
+  idor-clicktest-web:
+    image: dentaflow-web:latest
+    container_name: dentaflow-idor-clicktest-web
+    restart: "no"
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://dentaflow:dentaflow@dentaflow-db:5432/dentaflow_idor_clicktest
+      NEXTAUTH_URL: http://127.0.0.1:3680
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3680
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:3680:3000"
+    networks:
+      - dentalflow_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s

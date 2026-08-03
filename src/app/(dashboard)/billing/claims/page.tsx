@@ -9,8 +9,8 @@ import { ClaimsClient } from "./claims-client";
 export default async function ClaimsPage() {
   const ctx = await requireRouteAccess("billing", "read");
   const [claims, claimableInvoices] = await Promise.all([
-    getClaims(ctx.tenant.id),
-    getClaimableInvoices(ctx.tenant.id),
+    getClaims(),
+    getClaimableInvoices(),
   ]);
 
   return (

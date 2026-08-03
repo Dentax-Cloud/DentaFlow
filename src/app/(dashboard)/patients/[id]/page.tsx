@@ -36,7 +36,7 @@ export default async function PatientDetailPage({
 
   const [patient, latestPerio, clinicalImageRows, photoRows, emergencyRows, formFields, insurancePolicies, insuranceProviders, treatmentPlanPreAuths] =
     await Promise.all([
-    getPatientById(ctx.tenant.id, id),
+    getPatientById(id),
     db.perioChart.findFirst({
       where: { tenantId: ctx.tenant.id, patientId: id },
       orderBy: { chartDate: "desc" },
@@ -80,7 +80,7 @@ export default async function PatientDetailPage({
     canWrite
       ? buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE")
       : Promise.resolve([]),
-    getPatientInsurancePolicies(ctx.tenant.id, id),
+    getPatientInsurancePolicies(id),
     getTenantInsuranceProviders(),
     getPatientTreatmentPlanPreAuths(id),
   ]);

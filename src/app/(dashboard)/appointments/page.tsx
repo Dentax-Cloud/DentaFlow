@@ -17,12 +17,12 @@ export default async function AppointmentsPage({ searchParams }: Props) {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
 
   const [appointments, chairs, doctors, emergencyStats, insuranceStatusMap] = await Promise.all([
-    getAppointments(ctx.tenant.id, {
+    getAppointments({
       start: weekStart,
       end: endOfWeek(now, { weekStartsOn: 1 }),
     }),
-    getChairs(ctx.tenant.id),
-    getDoctors(ctx.tenant.id),
+    getChairs(),
+    getDoctors(),
     db.emergencyIntake.findMany({
       where: {
         tenantId: ctx.tenant.id,
@@ -31,7 +31,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       },
       select: { status: true, triageLevel: true },
     }),
-    getPrimaryInsuranceStatusMap(ctx.tenant.id),
+    getPrimaryInsuranceStatusMap(),
   ]);
 
   const serializedAppointments = appointments.map((appointment) => {

@@ -1089,7 +1089,7 @@ export async function loadSpineWorkspaceData(
       select: { id: true, url: true, type: true, fileName: true, takenAt: true },
     }),
     // Read-only clinical findings for Phase 2b cockpit (no write paths).
-    getPatientChart(ctx.tenantId, patientId).catch(() => ({})),
+    getPatientChart(patientId).catch(() => ({})),
     db.perioChart
       .findFirst({
         where: { tenantId: ctx.tenantId, patientId },

@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { checkBranchLimit } from "@/lib/features/gate";
 import { canUseFeature } from "@/lib/features/plans";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { requireTenantContext } from "@/lib/tenant/context";
 
 const branchSchema = z.object({
   name: z.string().min(1).trim(),
@@ -80,9 +81,10 @@ export const deactivateBranch = createAction({
   },
 });
 
-export async function getBranches(tenantId: string) {
+export async function getBranches() {
+  const ctx = await requireTenantContext();
   const branches = await db.branch.findMany({
-    where: { tenantId, deletedAt: null },
+    where: { tenantId: ctx.tenantId, deletedAt: null },
     orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
     include: {
       _count: { select: { chairs: true, appointments: true } },
@@ -96,16 +98,16 @@ export async function getBranches(tenantId: string) {
 }
 
 export async function getAuditLogs(
-  tenantId: string,
   page = 1,
   filters?: { action?: string; userId?: string },
 ) {
+  const ctx = await requireTenantContext();
   const take = 20;
   const skip = (page - 1) * take;
 
   return db.auditLog.findMany({
     where: {
-      tenantId,
+      tenantId: ctx.tenantId,
       ...(filters?.action ? { action: filters.action as never } : {}),
       ...(filters?.userId ? { userId: filters.userId } : {}),
     },
@@ -116,6 +118,7 @@ export async function getAuditLogs(
   });
 }
 
-export async function countAuditLogs(tenantId: string) {
-  return db.auditLog.count({ where: { tenantId } });
+export async function countAuditLogs() {
+  const ctx = await requireTenantContext();
+  return db.auditLog.count({ where: { tenantId: ctx.tenantId } });
 }

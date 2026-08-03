@@ -53,7 +53,7 @@ export default async function ClinicalPage({
       where: { tenantId: ctx.tenant.id, id: patientId, deletedAt: null },
     });
     if (patient) {
-      chartData = await getPatientChart(ctx.tenant.id, patient.id);
+      chartData = await getPatientChart(patient.id);
     }
   }
 

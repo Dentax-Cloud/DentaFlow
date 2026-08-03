@@ -1,11 +1,7 @@
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getStripeBillingHistory } from "@/app/(dashboard)/features/subscription/actions";
-import {
-  countAuditLogs,
-  getAuditLogs,
-} from "@/app/(dashboard)/features/admin/branch-actions";
+import { listStripeInvoicesForCustomer } from "@/lib/stripe/billing-history";
 import { getTenantUsage } from "@/lib/features/usage";
 import { getTenantDetail } from "@/lib/super-admin/queries";
 import { TenantDetailView } from "@/components/super-admin/tenant-detail/tenant-detail-view";
@@ -46,8 +42,14 @@ export default async function TenantDetailPage({
       where: { tenantId: id, role: UserRole.OWNER, deletedAt: null },
     }),
     getTenantUsage(id),
-    countAuditLogs(id),
-    getAuditLogs(id, auditPage),
+    db.auditLog.count({ where: { tenantId: id } }),
+    db.auditLog.findMany({
+      where: { tenantId: id },
+      orderBy: { createdAt: "desc" },
+      take: AUDIT_PAGE_SIZE,
+      skip: (auditPage - 1) * AUDIT_PAGE_SIZE,
+      include: { user: true },
+    }),
     db.auditLog.findFirst({
       where: { tenantId: id },
       orderBy: { createdAt: "desc" },
@@ -87,7 +89,7 @@ export default async function TenantDetailPage({
   let stripeHistoryError = false;
   if (detail.stripeCustomerId) {
     try {
-      stripeHistory = await getStripeBillingHistory(detail.stripeCustomerId);
+      stripeHistory = await listStripeInvoicesForCustomer(detail.stripeCustomerId);
     } catch {
       stripeHistoryError = true;
     }
