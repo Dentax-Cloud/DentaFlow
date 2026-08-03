@@ -6,6 +6,8 @@ import { getTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { isUploadthingConfigured } from "@/lib/uploadthing-env";
 import { saveInsuranceCardPhotoFromUpload } from "@/lib/insurance/save-card-photo";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { isHrModuleEnabled } from "@/lib/hr/feature-flag";
 
 const f = createUploadthing();
 
@@ -225,6 +227,51 @@ export const ourFileRouter = {
       );
       return { url, policyId: metadata.policyId, side: metadata.side };
     }),
+
+  /**
+   * HR employee document (contracts, IDs, credentials). Distinct from clinical /
+   * inventory uploaders. Persistence via registerEmployeeDocument action.
+   */
+  employeeDocument: f({
+    pdf: { maxFileSize: "16MB", maxFileCount: 1 },
+    image: { maxFileSize: "8MB", maxFileCount: 1 },
+  })
+    .input(z.object({ employeeId: z.string().min(1) }))
+    .middleware(async ({ input }) => {
+      const metadata = await requireTenantUpload();
+      const ctx = await getTenantContext();
+      if (!ctx || !isHrModuleEnabled(ctx.tenant)) {
+        throw new Error("HR module is not enabled");
+      }
+      const role = ctx.staffMember?.role;
+      if (!role) throw new Error("Unauthorized");
+
+      const employee = await db.employee.findFirst({
+        where: tenantWhere(metadata.tenantId, {
+          id: input.employeeId,
+          deletedAt: null,
+        }),
+        select: { id: true, staffMemberId: true },
+      });
+      if (!employee) throw new Error("Employee not found");
+
+      const isHr = hasPermission(role, PERMISSIONS.hr.write);
+      const isSelf =
+        !!ctx.staffMember?.id && employee.staffMemberId === ctx.staffMember.id;
+      if (!isHr && !isSelf) throw new Error("FORBIDDEN");
+
+      return {
+        ...metadata,
+        employeeId: employee.id,
+      };
+    })
+    .onUploadComplete(async ({ metadata, file }) => ({
+      url: file.ufsUrl ?? file.url,
+      name: file.name,
+      size: file.size,
+      type: file.type ?? null,
+      employeeId: metadata.employeeId,
+    })),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;

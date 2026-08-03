@@ -41,6 +41,11 @@ export const PERMISSIONS = {
     read: "inventory:read",
     write: "inventory:write",
   },
+  /** HR directory / cross-employee writes (OWNER/ADMIN). Self-service is identity-scoped. */
+  hr: {
+    read: "hr:read",
+    write: "hr:write",
+  },
   crm: {
     read: "crm:read",
     write: "crm:write",
@@ -74,6 +79,7 @@ export const RESOURCES = {
   chair_inventory: "chair_inventory",
   billing: "billing",
   inventory: "inventory",
+  hr: "hr",
   reports: "reports",
   team: "team",
   admin: "admin",
@@ -130,6 +136,7 @@ export function normalizeDashboardRole(role: UserRole): DashboardRole {
  * clinical_chart: odontogram, perio, imaging, chairside (clinical staff)
  * insurance: front-office encounter insurance verification (receptionist write)
  * chair_inventory: Store (and Nurse) visibility of chair tray state — not clinical chart
+ * hr: HR directory / approvals (OWNER/ADMIN); employee self-service is identity-scoped separately
  */
 export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLevel>> = {
   ADMIN: {
@@ -141,6 +148,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "full",
     billing: "full",
     inventory: "full",
+    hr: "full",
     reports: "full",
     team: "full",
     admin: "full",
@@ -156,6 +164,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "none",
     billing: "read",
     inventory: "read",
+    hr: "none",
     reports: "limited",
     team: "none",
     admin: "none",
@@ -171,6 +180,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "read",
     billing: "read",
     inventory: "read",
+    hr: "none",
     reports: "limited",
     team: "none",
     admin: "none",
@@ -186,6 +196,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "none",
     billing: "read",
     inventory: "read",
+    hr: "none",
     reports: "limited",
     team: "none",
     admin: "none",
@@ -201,6 +212,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "none",
     billing: "full",
     inventory: "read",
+    hr: "none",
     reports: "full",
     team: "none",
     admin: "none",
@@ -216,6 +228,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     chair_inventory: "read",
     billing: "read",
     inventory: "full",
+    hr: "none",
     reports: "limited",
     team: "none",
     admin: "none",
@@ -311,6 +324,10 @@ function permissionKeyToCheck(permission: PermissionKey): { resource: Resource; 
       return { resource: "inventory", action: "read" };
     case PERMISSIONS.inventory.write:
       return { resource: "inventory", action: "write" };
+    case PERMISSIONS.hr.read:
+      return { resource: "hr", action: "read" };
+    case PERMISSIONS.hr.write:
+      return { resource: "hr", action: "write" };
     case PERMISSIONS.crm.read:
       return { resource: "crm", action: "read" };
     case PERMISSIONS.crm.write:
