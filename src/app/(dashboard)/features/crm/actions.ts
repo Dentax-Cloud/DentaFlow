@@ -9,6 +9,7 @@ import { assertPlanFeature } from "@/lib/features/gate";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
+import { requireTenantContext } from "@/lib/tenant/context";
 import { sendMail } from "@/lib/mail";
 import type { CampaignAudience } from "./crm-types";
 
@@ -18,9 +19,10 @@ async function requireCrmPlan(ctx: Awaited<ReturnType<typeof import("@/lib/tenan
 }
 
 export async function getTargetPatients(
-  tenantId: string,
   audience: CampaignAudience | string | null | undefined,
 ) {
+  const ctx = await requireTenantContext();
+  const tenantId = ctx.tenantId;
   const base = { tenantId, deletedAt: null, email: { not: null } };
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -61,11 +63,8 @@ export async function getTargetPatients(
   }
 }
 
-export async function countCampaignAudience(
-  tenantId: string,
-  audience: CampaignAudience,
-) {
-  const patients = await getTargetPatients(tenantId, audience);
+export async function countCampaignAudience(audience: CampaignAudience) {
+  const patients = await getTargetPatients(audience);
   return patients.length;
 }
 
@@ -108,7 +107,7 @@ export const sendCampaign = createAction({
     });
     if (!campaign) throw new Error("Campaign not found");
 
-    const patients = await getTargetPatients(ctx.tenant.id, campaign.targetAudience);
+    const patients = await getTargetPatients(campaign.targetAudience);
     let sent = 0;
 
     for (const patient of patients) {

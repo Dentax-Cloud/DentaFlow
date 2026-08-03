@@ -13,15 +13,16 @@ import {
 } from "@/lib/stripe";
 import { getUsageSummary } from "@/lib/features/gate";
 import { getTenantMetrics } from "@/lib/tenant/metrics";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { getTenantUsage } from "@/lib/features/usage";
+import { listStripeInvoicesForCustomer } from "@/lib/stripe/billing-history";
 import type { StripeInvoiceItem } from "./subscription-types";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-export async function getSubscriptionOverview(tenantId: string) {
-  const metrics = await getTenantMetrics(tenantId);
-  return metrics;
+export async function getSubscriptionOverview() {
+  const ctx = await requireTenantContext();
+  return getTenantMetrics(ctx.tenantId);
 }
 
 export const createSubscriptionCheckoutAction = createAction({
@@ -71,35 +72,17 @@ export const openBillingPortalAction = createAction({
   },
 });
 
-export async function getStripeBillingHistory(
-  stripeCustomerId: string | null,
-): Promise<StripeInvoiceItem[]> {
-  if (!stripeCustomerId) return [];
-
-  const stripe = await getStripeClient();
-  if (!stripe) return [];
-
-  const invoices = await stripe.invoices.list({
-    customer: stripeCustomerId,
-    limit: 12,
-  });
-
-  return invoices.data.map((inv) => ({
-    id: inv.id,
-    number: inv.number,
-    amount: inv.amount_paid / 100,
-    currency: inv.currency.toUpperCase(),
-    status: inv.status,
-    created: inv.created,
-    hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
-    pdfUrl: inv.invoice_pdf ?? null,
-  }));
+/** Session-scoped only — never accepts a client-supplied Stripe customer id. */
+export async function getStripeBillingHistory(): Promise<StripeInvoiceItem[]> {
+  const ctx = await requireTenantContext();
+  return listStripeInvoicesForCustomer(ctx.tenant.stripeCustomerId);
 }
 
-export async function getSubscriptionUsage(tenantId: string) {
+export async function getSubscriptionUsage() {
+  const ctx = await requireTenantContext();
   const [usage, metrics] = await Promise.all([
-    getTenantUsage(tenantId),
-    getTenantMetrics(tenantId),
+    getTenantUsage(ctx.tenantId),
+    getTenantMetrics(ctx.tenantId),
   ]);
 
   return {

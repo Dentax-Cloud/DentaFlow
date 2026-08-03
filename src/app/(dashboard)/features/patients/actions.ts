@@ -9,7 +9,7 @@ import { tenantWhere } from "@/lib/tenant/scoped";
 import { checkPatientLimit, requireActiveSubscription } from "@/lib/features/gate";
 import { generatePatientNumber } from "@/lib/utils";
 import { generatePatientId } from "@/lib/ids/generate-ids";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { AuditAction } from "@prisma/client";
 import { createPatientSchema, updatePatientSchema } from "./schemas";
 import { buildPatientFormFields } from "@/lib/countries/patient-form-config";
@@ -19,8 +19,9 @@ import {
 } from "@/lib/tenant/sync-country-profile";
 import { sendPatientWelcomeEmail } from "@/lib/email/send-patient-welcome";
 
-export async function getPatientFormFieldsForTenant(tenantId: string, countryCode: string) {
-  return buildPatientFormFields(tenantId, countryCode);
+export async function getPatientFormFieldsForTenant(countryCode: string) {
+  const ctx = await requireTenantContext();
+  return buildPatientFormFields(ctx.tenantId, countryCode);
 }
 
 const createPatientDynamicSchema = z.object({
@@ -334,10 +335,11 @@ export const linkPatientPortalUser = createAction({
   },
 });
 
-export async function getPatients(tenantId: string, search?: string) {
+export async function getPatients(search?: string) {
+  const ctx = await requireTenantContext();
   return db.patient.findMany({
     where: {
-      tenantId,
+      tenantId: ctx.tenantId,
       deletedAt: null,
       ...(search
         ? {
@@ -354,9 +356,10 @@ export async function getPatients(tenantId: string, search?: string) {
   });
 }
 
-export async function getPatientById(tenantId: string, id: string) {
+export async function getPatientById(id: string) {
+  const ctx = await requireTenantContext();
   return db.patient.findFirst({
-    where: tenantWhere(tenantId, { id, deletedAt: null }),
+    where: tenantWhere(ctx.tenantId, { id, deletedAt: null }),
     include: {
       customFieldValues: { include: { field: true } },
       appointments: { orderBy: { startTime: "desc" }, take: 10 },

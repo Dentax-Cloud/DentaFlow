@@ -59,8 +59,8 @@ export function CrmClient({
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   useEffect(() => {
-    void countCampaignAudience(tenantId, audience).then(setRecipientCount);
-  }, [tenantId, audience]);
+    void countCampaignAudience(audience).then(setRecipientCount);
+  }, [audience]);
 
   async function generateWithAi() {
     setAiLoading(true);

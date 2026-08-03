@@ -13,7 +13,7 @@ import { requireFeature } from "@/lib/features/gate";
 
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
@@ -140,7 +140,7 @@ export const loadPatientChart = createAction({
   permission: () => requirePermission(PERMISSIONS.clinical_chart.read),
   handler: async (input, ctx) => {
     await requirePatientInTenant(ctx.tenant.id, input.patientId);
-    const teeth = await getPatientChartRecords(ctx.tenant.id, input.patientId);
+    const teeth = await getPatientChartRecords(input.patientId);
     return buildChartData(teeth);
   },
 });
@@ -505,14 +505,15 @@ export const saveSuggestedTreatmentPlan = createAction({
 
 
 
-export async function getPatientChart(tenantId: string, patientId: string) {
-  const teeth = await getPatientChartRecords(tenantId, patientId);
+export async function getPatientChart(patientId: string) {
+  const teeth = await getPatientChartRecords(patientId);
   return buildChartData(teeth);
 }
 
-export async function getPatientChartRecords(tenantId: string, patientId: string) {
+export async function getPatientChartRecords(patientId: string) {
+  const ctx = await requireTenantContext();
   return db.tooth.findMany({
-    where: { tenantId, patientId },
+    where: { tenantId: ctx.tenantId, patientId },
     include: { conditions: { orderBy: { recordedAt: "desc" } } },
   });
 }
@@ -586,14 +587,21 @@ export const generateInvoiceFromProcedures = createAction({
         continue;
       }
       for (const { inventoryItemId, quantity } of consumption) {
+        const ownedItem = await db.inventoryItem.findFirst({
+          where: { id: inventoryItemId, tenantId: ctx.tenant.id, deletedAt: null },
+          select: { id: true },
+        });
+        if (!ownedItem) {
+          throw new Error("Inventory item not found.");
+        }
         await db.inventoryItem.update({
-          where: { id: inventoryItemId },
+          where: { id: ownedItem.id },
           data: { quantity: { decrement: quantity } },
         });
         await db.stockTransaction.create({
           data: {
             tenantId: ctx.tenant.id,
-            itemId: inventoryItemId,
+            itemId: ownedItem.id,
             type: "USAGE",
             quantity,
             notes: `Used in procedure: ${catalogItem.name}`,

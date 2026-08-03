@@ -15,7 +15,7 @@ import { calculateInvoiceTaxAndLines } from "@/lib/billing/calculate-invoice-tax
 import { resolveInvoicePayerType } from "@/lib/billing/invoice-payer-type";
 import { notifyInvoicePaid, sendInvoiceEmailToPatient, sendPaymentReceiptEmailToPatient } from "@/lib/notifications/invoice-notifications";
 import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 
 const createInvoiceSchema = z.object({
   patientId: z.string(),
@@ -237,7 +237,9 @@ export const markInvoiceSent = createAction({
   },
 });
 
-export async function createStripePaymentLink(tenantId: string, invoiceId: string) {
+export async function createStripePaymentLink(invoiceId: string) {
+  const ctx = await requireTenantContext();
+  const tenantId = ctx.tenantId;
   const invoice = await db.invoice.findFirst({
     where: tenantWhere(tenantId, { id: invoiceId }),
     include: { patient: true },
@@ -278,18 +280,20 @@ export async function createStripePaymentLink(tenantId: string, invoiceId: strin
   return session.url;
 }
 
-export async function getInvoices(tenantId: string, status?: InvoiceStatus) {
+export async function getInvoices(status?: InvoiceStatus) {
+  const ctx = await requireTenantContext();
   return db.invoice.findMany({
-    where: { tenantId, deletedAt: null, ...(status ? { status } : {}) },
+    where: { tenantId: ctx.tenantId, deletedAt: null, ...(status ? { status } : {}) },
     include: { patient: true, payments: true, items: true },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 }
 
-export async function getProcedureCatalog(tenantId: string) {
+export async function getProcedureCatalog() {
+  const ctx = await requireTenantContext();
   return db.procedureCatalog.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId: ctx.tenantId, isActive: true },
     orderBy: { name: "asc" },
   });
 }

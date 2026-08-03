@@ -13,7 +13,7 @@ import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import {
   CLAIM_DENIAL_CATEGORIES,
@@ -87,9 +87,10 @@ async function getClaimOrThrow(tenantId: string, claimId: string) {
   return claim;
 }
 
-export async function getClaims(tenantId: string) {
+export async function getClaims() {
+  const ctx = await requireTenantContext();
   const claims = await db.claim.findMany({
-    where: { tenantId },
+    where: { tenantId: ctx.tenantId },
     include: claimInclude,
     orderBy: { updatedAt: "desc" },
     take: 200,
@@ -97,15 +98,17 @@ export async function getClaims(tenantId: string) {
   return claims.map(serializeClaim);
 }
 
-export async function getClaimById(tenantId: string, claimId: string) {
-  const claim = await getClaimOrThrow(tenantId, claimId);
+export async function getClaimById(claimId: string) {
+  const ctx = await requireTenantContext();
+  const claim = await getClaimOrThrow(ctx.tenantId, claimId);
   return serializeClaim(claim);
 }
 
-export async function getClaimableInvoices(tenantId: string) {
+export async function getClaimableInvoices() {
+  const ctx = await requireTenantContext();
   const invoices = await db.invoice.findMany({
     where: {
-      tenantId,
+      tenantId: ctx.tenantId,
       deletedAt: null,
       insuranceAmount: { gt: 0 },
     },

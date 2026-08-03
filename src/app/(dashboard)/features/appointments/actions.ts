@@ -17,7 +17,7 @@ import {
   clinicLocalToUtc,
   resolveClinicTimezone,
 } from "@/lib/datetime/clinic-timezone";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 import { AuditAction, AppointmentStatus } from "@prisma/client";
 import {
@@ -286,17 +286,17 @@ export const updateAppointmentTime = createAction({
 });
 
 export async function getAppointments(
-  tenantId: string,
   range?: { start: Date; end: Date },
   options?: { includeCanceled?: boolean },
 ) {
+  const ctx = await requireTenantContext();
   const statusFilter = options?.includeCanceled
     ? {}
     : { status: { notIn: [AppointmentStatus.CANCELED, AppointmentStatus.NO_SHOW] } };
 
   return db.appointment.findMany({
     where: {
-      tenantId,
+      tenantId: ctx.tenantId,
       deletedAt: null,
       ...statusFilter,
       ...(range
@@ -312,9 +312,10 @@ export async function getAppointments(
   });
 }
 
-export async function getChairs(tenantId: string) {
+export async function getChairs() {
+  const ctx = await requireTenantContext();
   return db.chair.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId: ctx.tenantId, isActive: true },
     include: {
       doctor: { include: { user: true } },
       appointments: {
@@ -328,9 +329,10 @@ export async function getChairs(tenantId: string) {
   });
 }
 
-export async function getDoctors(tenantId: string) {
+export async function getDoctors() {
+  const ctx = await requireTenantContext();
   return db.doctor.findMany({
-    where: { tenantId },
+    where: { tenantId: ctx.tenantId },
     include: { user: true },
     orderBy: { user: { lastName: "asc" } },
   });

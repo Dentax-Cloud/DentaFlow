@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { createAction, createAuditLog } from "@/lib/actions/safe-action";
 import { requirePermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
-import { getStaffActor } from "@/lib/tenant/context";
+import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import {
   DEFAULT_VERIFICATION_VALIDITY_DAYS,
@@ -80,22 +80,21 @@ async function assertRankSlotAvailable(
   }
 }
 
-export async function getPatientInsurancePolicies(tenantId: string, patientId: string) {
+export async function getPatientInsurancePolicies(patientId: string) {
+  const ctx = await requireTenantContext();
   const policies = await db.patientInsurancePolicy.findMany({
-    where: tenantWhere(tenantId, { patientId, isActive: true }),
+    where: tenantWhere(ctx.tenantId, { patientId, isActive: true }),
     include: { provider: true },
     orderBy: { rank: "asc" },
   });
   return policies.map((p) => serializeInsurancePolicy(p));
 }
 
-export async function getPrimaryInsuranceStatusMap(
-  tenantId: string,
-  patientIds?: string[],
-) {
+export async function getPrimaryInsuranceStatusMap(patientIds?: string[]) {
+  const ctx = await requireTenantContext();
   const policies = await db.patientInsurancePolicy.findMany({
     where: {
-      tenantId,
+      tenantId: ctx.tenantId,
       isActive: true,
       rank: "PRIMARY",
       ...(patientIds?.length ? { patientId: { in: patientIds } } : {}),
