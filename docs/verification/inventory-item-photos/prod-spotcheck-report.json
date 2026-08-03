@@ -1,0 +1,26 @@
+{
+  "base": "https://dentax.cloud",
+  "startedAt": "2026-08-03T13:17:59.873Z",
+  "tip": "f17962bd8",
+  "imageUrlCol": "imageUrl",
+  "items": {
+    "withPhoto": {
+      "id": "cmr60tsy402iho9d2tsgk5rkj",
+      "name": "Alginate Impression Material"
+    },
+    "placeholder": {
+      "id": "cmr60tt1o02klo9d2c8dcnsey",
+      "name": "Amalgam Carrier"
+    }
+  },
+  "seededImageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/120px-PNG_transparency_demonstration_1.png",
+  "storeLogin": "store.gb.kensington@test.dentaflow.io",
+  "detailAHasImg": true,
+  "uploadControlVisible": true,
+  "uploadAttempt": "files-set",
+  "chairsUrl": "https://dentax.cloud/inventory/chairs",
+  "chairsOk": true,
+  "doctorUploadHidden": true,
+  "doctorUrl": "https://dentax.cloud/inventory/cmr60tt1o02klo9d2c8dcnsey",
+  "finishedAt": "2026-08-03T13:18:55.095Z"
+}
