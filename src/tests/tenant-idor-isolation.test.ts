@@ -177,12 +177,14 @@ describe("tenant IDOR isolation — session-derived getters", () => {
   let getInvoices: typeof import("@/app/(dashboard)/features/billing/actions").getInvoices;
   let createStripePaymentLink: typeof import("@/app/(dashboard)/features/billing/actions").createStripePaymentLink;
 
+  // Heavy server-action imports; under full-suite RAM pressure on the 8GB dev box
+  // these routinely exceed vitest's default 10s hookTimeout.
   beforeAll(async () => {
     ({ getPatients } = await import("@/app/(dashboard)/features/patients/actions"));
     ({ getInvoices, createStripePaymentLink } = await import(
       "@/app/(dashboard)/features/billing/actions"
     ));
-  });
+  }, 60_000);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -236,7 +238,7 @@ describe("tenant IDOR isolation — treatmentItemId ownership", () => {
     ({ createProcedureLine, closeProcedureLine } = await import(
       "@/app/(dashboard)/features/procedure-lines/actions"
     ));
-  });
+  }, 60_000);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -287,7 +289,7 @@ describe("tenant IDOR isolation — inventory decrement ownership", () => {
     ({ generateInvoiceFromProcedures } = await import(
       "@/app/(dashboard)/features/clinical/actions"
     ));
-  });
+  }, 60_000);
 
   beforeEach(() => {
     vi.clearAllMocks();
