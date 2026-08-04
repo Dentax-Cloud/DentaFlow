@@ -30,6 +30,8 @@ const mockStockTransactionCreate = vi.hoisted(() => vi.fn());
 const mockProcedureCatalogFindMany = vi.hoisted(() => vi.fn());
 const mockAppointmentUpdateMany = vi.hoisted(() => vi.fn());
 const mockRevalidatePath = vi.hoisted(() => vi.fn());
+const mockCreateInvoiceFromItems = vi.hoisted(() => vi.fn());
+const mockAutoCloseChairsideSessionsForAppointment = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/tenant/context", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/tenant/context")>();
@@ -83,11 +85,12 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/billing/invoice-from-items", () => ({
-  createInvoiceFromItems: vi.fn().mockResolvedValue({ id: "inv_a" }),
+  createInvoiceFromItems: (...a: unknown[]) => mockCreateInvoiceFromItems(...a),
 }));
 
 vi.mock("@/lib/clinical/chairside-lifecycle", () => ({
-  autoCloseChairsideSessionsForAppointment: vi.fn().mockResolvedValue(undefined),
+  autoCloseChairsideSessionsForAppointment: (...a: unknown[]) =>
+    mockAutoCloseChairsideSessionsForAppointment(...a),
 }));
 
 vi.mock("@/lib/insurance/maybe-create-draft-claim", () => ({
@@ -308,6 +311,8 @@ describe("tenant IDOR isolation — inventory decrement ownership", () => {
     ]);
     mockInventoryItemFindFirst.mockResolvedValue(null);
     mockAppointmentUpdateMany.mockResolvedValue({ count: 1 });
+    mockCreateInvoiceFromItems.mockResolvedValue({ id: "inv_a" });
+    mockAutoCloseChairsideSessionsForAppointment.mockResolvedValue(undefined);
   });
 
   it("generateInvoiceFromProcedures refuses foreign inventoryItemId in consumption JSON", async () => {
@@ -330,6 +335,63 @@ describe("tenant IDOR isolation — inventory decrement ownership", () => {
       }),
     );
     expect(mockInventoryItemUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a bad inventoryItemId with zero writes (no invoice, no appointment status change)", async () => {
+    const result = await generateInvoiceFromProcedures({
+      appointmentId: "appt_a",
+      patientId: "patient_a_1",
+      procedures: [{ procedureId: "proc_poison", quantity: 1 }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/Inventory item not found/i);
+    }
+    expect(mockCreateInvoiceFromItems).not.toHaveBeenCalled();
+    expect(mockAppointmentUpdateMany).not.toHaveBeenCalled();
+    expect(mockAutoCloseChairsideSessionsForAppointment).not.toHaveBeenCalled();
+    expect(mockInventoryItemUpdate).not.toHaveBeenCalled();
+    expect(mockStockTransactionCreate).not.toHaveBeenCalled();
+  });
+
+  it("valid inventory consumption still creates invoice and marks appointment INVOICED", async () => {
+    mockProcedureCatalogFindMany.mockResolvedValue([
+      {
+        id: "proc_ok",
+        name: "Filling",
+        code: "D2391",
+        price: 150,
+        inventoryConsumption: JSON.stringify([
+          { inventoryItemId: "inv_a_1", quantity: 2 },
+        ]),
+      },
+    ]);
+    mockInventoryItemFindFirst.mockResolvedValue({ id: "inv_a_1" });
+    mockInventoryItemUpdate.mockResolvedValue({ id: "inv_a_1" });
+    mockStockTransactionCreate.mockResolvedValue({ id: "stx_1" });
+
+    const result = await generateInvoiceFromProcedures({
+      appointmentId: "appt_a",
+      patientId: "patient_a_1",
+      procedures: [{ procedureId: "proc_ok", quantity: 1 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockCreateInvoiceFromItems).toHaveBeenCalledTimes(1);
+    expect(mockAppointmentUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "appt_a", tenantId: "tenant_a" }),
+        data: { status: "INVOICED" },
+      }),
+    );
+    expect(mockInventoryItemUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "inv_a_1" },
+        data: { quantity: { decrement: 2 } },
+      }),
+    );
+    expect(mockStockTransactionCreate).toHaveBeenCalledTimes(1);
   });
 });
 

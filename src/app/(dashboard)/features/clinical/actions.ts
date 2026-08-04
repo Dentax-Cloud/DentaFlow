@@ -545,6 +545,37 @@ export const generateInvoiceFromProcedures = createAction({
 
     if (catalogItems.length === 0) throw new Error("No valid procedures selected");
 
+    // Validate all inventory ownership before any write (invoice / appointment / stock).
+    type PendingUsage = {
+      inventoryItemId: string;
+      quantity: number;
+      procedureName: string;
+    };
+    const pendingUsages: PendingUsage[] = [];
+    for (const catalogItem of catalogItems) {
+      if (!catalogItem.inventoryConsumption) continue;
+      let consumption: { inventoryItemId: string; quantity: number }[] = [];
+      try {
+        consumption = JSON.parse(catalogItem.inventoryConsumption);
+      } catch {
+        continue;
+      }
+      for (const { inventoryItemId, quantity } of consumption) {
+        const ownedItem = await db.inventoryItem.findFirst({
+          where: { id: inventoryItemId, tenantId: ctx.tenant.id, deletedAt: null },
+          select: { id: true },
+        });
+        if (!ownedItem) {
+          throw new Error("Inventory item not found.");
+        }
+        pendingUsages.push({
+          inventoryItemId: ownedItem.id,
+          quantity,
+          procedureName: catalogItem.name,
+        });
+      }
+    }
+
     const lineItems = catalogItems.map((item) => {
       const qty = input.procedures.find((p) => p.procedureId === item.id)?.quantity ?? 1;
       const unitPrice = Number(item.price);
@@ -578,36 +609,20 @@ export const generateInvoiceFromProcedures = createAction({
       allowInvoice: true,
     }).catch(() => null);
 
-    for (const catalogItem of catalogItems) {
-      if (!catalogItem.inventoryConsumption) continue;
-      let consumption: { inventoryItemId: string; quantity: number }[] = [];
-      try {
-        consumption = JSON.parse(catalogItem.inventoryConsumption);
-      } catch {
-        continue;
-      }
-      for (const { inventoryItemId, quantity } of consumption) {
-        const ownedItem = await db.inventoryItem.findFirst({
-          where: { id: inventoryItemId, tenantId: ctx.tenant.id, deletedAt: null },
-          select: { id: true },
-        });
-        if (!ownedItem) {
-          throw new Error("Inventory item not found.");
-        }
-        await db.inventoryItem.update({
-          where: { id: ownedItem.id },
-          data: { quantity: { decrement: quantity } },
-        });
-        await db.stockTransaction.create({
-          data: {
-            tenantId: ctx.tenant.id,
-            itemId: ownedItem.id,
-            type: "USAGE",
-            quantity,
-            notes: `Used in procedure: ${catalogItem.name}`,
-          },
-        });
-      }
+    for (const usage of pendingUsages) {
+      await db.inventoryItem.update({
+        where: { id: usage.inventoryItemId },
+        data: { quantity: { decrement: usage.quantity } },
+      });
+      await db.stockTransaction.create({
+        data: {
+          tenantId: ctx.tenant.id,
+          itemId: usage.inventoryItemId,
+          type: "USAGE",
+          quantity: usage.quantity,
+          notes: `Used in procedure: ${usage.procedureName}`,
+        },
+      });
     }
 
     revalidatePath("/billing");
