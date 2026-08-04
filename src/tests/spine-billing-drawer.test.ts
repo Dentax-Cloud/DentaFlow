@@ -41,7 +41,7 @@ describe("SpineBillingDrawer post-close display", () => {
           total: 588,
           status: "draft",
         },
-        insuranceStatus: "verified" as const,
+        insuranceChipStatus: "cleared" as const,
         open: true,
         onOpenChange: () => {},
       }),
@@ -61,7 +61,7 @@ describe("SpineBillingDrawer post-close display", () => {
       createElement(SpineBillingDrawer, {
         preview: postClosePreview,
         billedInvoice: null,
-        insuranceStatus: "pending" as const,
+        insuranceChipStatus: "blocked" as const,
         open: true,
         onOpenChange: () => {},
       }),
@@ -70,5 +70,22 @@ describe("SpineBillingDrawer post-close display", () => {
     expect(screen.getByText(/No billable procedure/i)).toBeTruthy();
     expect(screen.queryByTestId("spine-invoiced-summary")).toBeNull();
     expect(screen.getByText("Projected total")).toBeTruthy();
+  });
+
+  it("shows BLOCKED for stale insurance (same chip status as Gate Summary)", () => {
+    render(
+      createElement(SpineBillingDrawer, {
+        preview: postClosePreview,
+        billedInvoice: null,
+        insuranceChipStatus: "blocked" as const,
+        insuranceLabel: "Insurance (stale)",
+        open: true,
+        onOpenChange: () => {},
+      }),
+    );
+
+    expect(screen.getByText("Insurance (stale)")).toBeTruthy();
+    expect(screen.getByText("BLOCKED")).toBeTruthy();
+    expect(screen.queryByText("PENDING")).toBeNull();
   });
 });

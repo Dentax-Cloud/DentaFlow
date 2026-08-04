@@ -9,7 +9,9 @@ import {
   evaluateRiskGate,
   evaluateSterilizationGate,
   isVerificationStale,
+  resolveInsuranceUiDisplay,
 } from "@/lib/encounter/gates";
+import { summarizeGatesFromRecords } from "@/lib/encounter/gate-enforcement";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 import type {
   ConsentRecord,
@@ -152,6 +154,63 @@ describe("encounter gates", () => {
         preAuthOverridden: true,
       }).cleared,
     ).toBe(true);
+  });
+});
+
+describe("Gate Summary vs Running Total insurance chip", () => {
+  it("agrees on blocked+stale for an eligible but stale verification (Harry Smith class)", () => {
+    const now = new Date("2026-08-04T12:00:00Z");
+    const v = insurance({
+      eligibilityStatus: "eligible",
+      preAuthStatus: "approved",
+      verifiedAt: new Date("2026-07-23T14:06:23.236Z"),
+      staleAfterMinutes: 1440,
+    });
+
+    const gateSummary = summarizeGatesFromRecords({
+      risk: risk({ clearedAt: new Date(), clearedByStaffId: "s1" }),
+      consent: consent({}),
+      insurance: v,
+      sterilizationLogs: [],
+      preAuthOverridden: false,
+      now,
+    });
+    const runningTotal = resolveInsuranceUiDisplay({
+      verification: v,
+      preAuthOverridden: false,
+      now,
+    });
+
+    expect(gateSummary.insurance).toBe("blocked");
+    expect(runningTotal.chipStatus).toBe(gateSummary.insurance);
+    expect(runningTotal.reasonTag).toBe("stale");
+  });
+
+  it("agrees on cleared when verification is fresh and eligible", () => {
+    const now = new Date("2026-01-01T12:00:00Z");
+    const v = insurance({});
+    const gateSummary = summarizeGatesFromRecords({
+      risk: risk({ clearedAt: new Date(), clearedByStaffId: "s1" }),
+      consent: consent({}),
+      insurance: v,
+      sterilizationLogs: [],
+      now,
+    });
+    const runningTotal = resolveInsuranceUiDisplay({ verification: v, now });
+    expect(gateSummary.insurance).toBe("cleared");
+    expect(runningTotal.chipStatus).toBe(gateSummary.insurance);
+    expect(runningTotal.reasonTag).toBeUndefined();
+  });
+
+  it("agrees on overridden when pre-auth override is set", () => {
+    const now = new Date("2026-01-01T12:00:00Z");
+    const v = insurance({ preAuthStatus: "denied" });
+    const runningTotal = resolveInsuranceUiDisplay({
+      verification: v,
+      preAuthOverridden: true,
+      now,
+    });
+    expect(runningTotal.chipStatus).toBe("overridden");
   });
 });
 

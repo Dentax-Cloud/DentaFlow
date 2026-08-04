@@ -85,3 +85,46 @@ export function evaluateInsuranceGate(
 
   return { cleared: true, verification, stale: false };
 }
+
+/** Chip vocabulary shared by Gate Summary and Running Total. */
+export type InsuranceUiChipStatus =
+  | "cleared"
+  | "blocked"
+  | "overridden"
+  | "pending"
+  | "unknown";
+
+export type InsuranceUiDisplay = {
+  chipStatus: InsuranceUiChipStatus;
+  /** When set, UI may render the label as `Insurance (${reasonTag})`. */
+  reasonTag?: "stale";
+};
+
+/**
+ * Canonical insurance chip for Gate Summary + Running Total.
+ * Derives from evaluateInsuranceGate; pre-auth override matches EncounterGateSummary.
+ */
+export function resolveInsuranceUiDisplay(params: {
+  verification: InsuranceVerification | null;
+  preAuthOverridden?: boolean;
+  now?: Date;
+}): InsuranceUiDisplay {
+  if (params.preAuthOverridden) {
+    return { chipStatus: "overridden" };
+  }
+
+  const result = evaluateInsuranceGate(params.verification, {
+    preAuthOverridden: params.preAuthOverridden,
+    now: params.now,
+  });
+
+  if (result.cleared) {
+    return { chipStatus: "cleared" };
+  }
+
+  return {
+    chipStatus: "blocked",
+    reasonTag:
+      result.verification != null && result.stale ? "stale" : undefined,
+  };
+}
