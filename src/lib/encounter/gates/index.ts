@@ -71,5 +71,7 @@ export {
   evaluateInsuranceGate,
   clampStaleAfterMinutes,
   isVerificationStale,
+  resolveInsuranceUiDisplay,
 } from "./insurance";
+export type { InsuranceUiChipStatus, InsuranceUiDisplay } from "./insurance";
 export { evaluateSterilizationGate, evaluateSterilizationGates } from "./sterilization";

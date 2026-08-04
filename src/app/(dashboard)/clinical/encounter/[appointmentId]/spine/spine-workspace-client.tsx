@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EncounterGateSummary } from "@/components/clinical/encounter-gate-summary";
+import type { GateChipStatus } from "@/components/clinical/gate-status-chip";
 import {
   LEGAL_FORWARD_TRANSITIONS,
   INTERRUPTIBLE_STATUSES,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/encounter/state-machine";
 import type { EncounterStatus, EncounterProcedureLineStatus } from "@/lib/encounter/types";
 import type { GateSummary } from "@/lib/encounter/types";
+import { isVerificationStale } from "@/lib/encounter/gates";
 import type {
   SpineCatalogSnippet,
   SpineEncounterSerialized,
@@ -325,25 +327,26 @@ export function SpineWorkspaceClient({
     draft.materialBillable,
   ]);
 
-  const insuranceDrawerStatus = useMemo(():
-    | "verified"
-    | "stale"
-    | "overridden"
-    | "pending" => {
-    if (encounter.preAuthOverridden) return "overridden";
-    if (!insuranceVerification?.verifiedAt) return "pending";
-    if (!hasMounted) return "verified";
-    const verifiedMs = Date.parse(insuranceVerification.verifiedAt);
-    if (!Number.isFinite(verifiedMs)) return "pending";
-    const staleMs = insuranceVerification.staleAfterMinutes * 60_000;
-    if (Date.now() - verifiedMs > staleMs) return "stale";
-    return "verified";
-  }, [encounter.preAuthOverridden, insuranceVerification, hasMounted]);
+  // Same chip source as Gate Summary (live gates from buildLiveGateSummary /
+  // evaluateInsuranceGate) — do not re-derive with a softer stale→pending map.
+  const insuranceChipStatus: GateChipStatus = encounter.preAuthOverridden
+    ? "overridden"
+    : gates.insurance;
 
-  const staleLabel =
-    insuranceDrawerStatus === "stale" && insuranceVerification?.verifiedAt && hasMounted
-      ? "stale"
-      : undefined;
+  const insuranceDrawerLabel = useMemo(() => {
+    if (!hasMounted || !insuranceVerification?.verifiedAt) return "Insurance";
+    const verifiedAt = new Date(insuranceVerification.verifiedAt);
+    if (!Number.isFinite(verifiedAt.getTime())) return "Insurance";
+    if (
+      isVerificationStale({
+        verifiedAt,
+        staleAfterMinutes: insuranceVerification.staleAfterMinutes,
+      })
+    ) {
+      return "Insurance (stale)";
+    }
+    return "Insurance";
+  }, [hasMounted, insuranceVerification]);
 
   const findings = initial.clinicalFindings;
   const chartData = (findings?.chartData ?? {}) as ToothChartData;
@@ -1650,8 +1653,8 @@ export function SpineWorkspaceClient({
               }
             : null
         }
-        insuranceStatus={insuranceDrawerStatus}
-        staleLabel={staleLabel}
+        insuranceChipStatus={insuranceChipStatus}
+        insuranceLabel={insuranceDrawerLabel}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
       >

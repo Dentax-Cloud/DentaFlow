@@ -17,22 +17,6 @@ function money(n: number): string {
   return n.toFixed(2);
 }
 
-function insuranceToChipStatus(
-  status: "verified" | "stale" | "overridden" | "pending",
-): GateChipStatus {
-  switch (status) {
-    case "verified":
-      return "cleared";
-    case "overridden":
-      return "overridden";
-    case "stale":
-      return "pending";
-    case "pending":
-    default:
-      return "pending";
-  }
-}
-
 export type SpineBilledInvoiceSummary = {
   invoiceNumber: string;
   total: number | string;
@@ -43,8 +27,8 @@ export function SpineBillingDrawer({
   preview,
   pendingRows = [],
   billedInvoice = null,
-  insuranceStatus,
-  staleLabel,
+  insuranceChipStatus,
+  insuranceLabel = "Insurance",
   open,
   onOpenChange,
   children,
@@ -54,16 +38,13 @@ export function SpineBillingDrawer({
   pendingRows?: SpinePendingPriceRow[];
   /** When set, drawer shows post-close invoiced state instead of empty projected totals. */
   billedInvoice?: SpineBilledInvoiceSummary | null;
-  insuranceStatus: "verified" | "stale" | "overridden" | "pending";
-  staleLabel?: string;
+  /** Must match Gate Summary insurance chip (same canonical evaluateInsuranceGate source). */
+  insuranceChipStatus: GateChipStatus;
+  insuranceLabel?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children?: ReactNode;
 }) {
-  const insuranceLabel =
-    insuranceStatus === "stale" && staleLabel
-      ? `Insurance (${staleLabel})`
-      : "Insurance";
   const invoicedTotal =
     billedInvoice == null
       ? null
@@ -123,7 +104,7 @@ export function SpineBillingDrawer({
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
             <GateStatusChip
               label={insuranceLabel}
-              status={insuranceToChipStatus(insuranceStatus)}
+              status={insuranceChipStatus}
               className="w-full"
             />
 
