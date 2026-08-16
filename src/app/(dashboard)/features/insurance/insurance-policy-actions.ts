@@ -82,6 +82,7 @@ async function assertRankSlotAvailable(
 
 export async function getPatientInsurancePolicies(patientId: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.patients.read);
   const policies = await db.patientInsurancePolicy.findMany({
     where: tenantWhere(ctx.tenantId, { patientId, isActive: true }),
     include: { provider: true },
@@ -92,6 +93,7 @@ export async function getPatientInsurancePolicies(patientId: string) {
 
 export async function getPrimaryInsuranceStatusMap(patientIds?: string[]) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.patients.read);
   const policies = await db.patientInsurancePolicy.findMany({
     where: {
       tenantId: ctx.tenantId,

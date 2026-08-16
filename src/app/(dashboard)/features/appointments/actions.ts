@@ -315,6 +315,7 @@ export async function getAppointments(
 
 export async function getChairs() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   return db.chair.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
     include: {
@@ -332,6 +333,7 @@ export async function getChairs() {
 
 export async function getDoctors() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   return db.doctor.findMany({
     where: { tenantId: ctx.tenantId },
     include: { user: true },

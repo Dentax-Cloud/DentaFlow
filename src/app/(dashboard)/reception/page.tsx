@@ -16,6 +16,7 @@ export default async function ReceptionPage() {
   const ctx = await requireRouteAccess("appointments", "read");
   const role = requireStaffMemberRole(ctx);
   const spineEnabled = isEncounterSpineEnabled(ctx.tenant);
+  const canWriteAppointments = hasPermission(role, PERMISSIONS.appointments.write);
   const canVerifyInsurance =
     spineEnabled && hasPermission(role, PERMISSIONS.insurance.write);
 
@@ -83,9 +84,11 @@ export default async function ReceptionPage() {
         </div>
       </div>
 
-      <WalkInPanel />
+      {canWriteAppointments ? <WalkInPanel /> : null}
 
-      <QuickScan spineEnabled={spineEnabled} canVerifyInsurance={canVerifyInsurance} />
+      {canWriteAppointments ? (
+        <QuickScan spineEnabled={spineEnabled} canVerifyInsurance={canVerifyInsurance} />
+      ) : null}
 
       <WaitingRoomList
         spineEnabled={spineEnabled}

@@ -293,6 +293,7 @@ export async function getInvoices(status?: InvoiceStatus) {
 
 export async function getProcedureCatalog() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
   return db.procedureCatalog.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
     orderBy: { name: "asc" },

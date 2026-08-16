@@ -2,10 +2,14 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getPatients } from "@/app/(dashboard)/features/patients/actions";
 import { getInvoices, getProcedureCatalog } from "@/app/(dashboard)/features/billing/actions";
 import { serializeDecimal, serializeEntity } from "@/lib/utils/serialize";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { BillingClient } from "./billing-client";
 
 export default async function BillingPage() {
   const ctx = await requireRouteAccess("billing", "read");
+  const role = requireStaffMemberRole(ctx);
+  const canWrite = hasPermission(role, PERMISSIONS.billing.write);
   const [invoices, patients, procedures] = await Promise.all([
     getInvoices(),
     getPatients(),
@@ -22,6 +26,7 @@ export default async function BillingPage() {
       patients={patients}
       procedures={procedures.map(serializeDecimal)}
       countryCode={ctx.tenant.countryCode}
+      canWrite={canWrite}
     />
   );
 }

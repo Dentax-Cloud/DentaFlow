@@ -26,6 +26,10 @@
 tmp-*/
 tmp-*.sql
 tmp-*.txt
+tmp-*.ts
+tmp-*.mjs
+tmp-*.sh
+tmp-*.ps1
 
 # debug
 npm-debug.log*

@@ -83,6 +83,9 @@ describe("RBAC permission matrix", () => {
     expect(can(UserRole.STORE, "write", "inventory")).toBe(true);
     expect(can(UserRole.STORE, "write", "billing")).toBe(false);
     expect(can(UserRole.STORE, "write", "patients")).toBe(false);
+    expect(can(UserRole.STORE, "read", "patients")).toBe(false);
+    expect(can(UserRole.STORE, "read", "appointments")).toBe(false);
+    expect(can(UserRole.STORE, "read", "billing")).toBe(false);
   });
 
   it("store has chair_inventory read but not clinical_chart", () => {

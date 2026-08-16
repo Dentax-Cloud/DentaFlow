@@ -1,12 +1,15 @@
 "use server";
 
 import { requireTenantContext } from "@/lib/tenant/context";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { notifyAppointmentStatus } from "@/lib/notifications/notification-service";
 
 export async function lookupByBarcode(scannedCode: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.patients.read);
 
   const normalized = scannedCode.replace(/-/g, "").toUpperCase().trim();
 
@@ -97,6 +100,7 @@ export async function lookupByBarcode(scannedCode: string) {
 
 export async function checkinByBarcode(patientId: string, appointmentId: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.write);
 
   const appointment = await db.appointment.update({
     where: { id: appointmentId, tenantId: ctx.tenantId, isBlock: false },
