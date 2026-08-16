@@ -56,26 +56,53 @@ describe("other dashboard roles — nav vs matrix (Finding 4 remainder)", () => 
     expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.billing.write)).toBe(false);
   });
 
-  it("NURSE has clinical chart read, not billing write", () => {
+  it("NURSE has clinical chart read, not billing or clinic-wide reports", () => {
     expect(canAccessPath(UserRole.NURSE, "/clinical")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/billing")).toBe(false);
+    expect(canAccessPath(UserRole.NURSE, "/reports")).toBe(false);
+    expect(canAccessPath(UserRole.NURSE, "/dashboard")).toBe(true);
     expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_chart.write)).toBe(false);
     expect(hasPermission(UserRole.NURSE, PERMISSIONS.billing.write)).toBe(false);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.billing.read)).toBe(false);
+    const hrefs = getNavItemsForRole(UserRole.NURSE).map((item) => item.href);
+    expect(hrefs).not.toContain("/billing");
+    expect(hrefs).not.toContain("/reports");
   });
 
-  it("RECEPTIONIST has front office, not clinical chart", () => {
+  it("RECEPTIONIST has front office and billing read, not inventory or clinical chart", () => {
     expect(canAccessPath(UserRole.RECEPTIONIST, "/reception")).toBe(true);
     expect(canAccessPath(UserRole.RECEPTIONIST, "/appointments")).toBe(true);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/billing")).toBe(true);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/reports")).toBe(false);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/inventory")).toBe(false);
     expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical")).toBe(false);
     expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.clinical_chart.read)).toBe(false);
     expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.appointments.write)).toBe(true);
     expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.billing.write)).toBe(false);
+    expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.billing.read)).toBe(true);
+    expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.inventory.write)).toBe(false);
+    const hrefs = getNavItemsForRole(UserRole.RECEPTIONIST).map((item) => item.href);
+    expect(hrefs).toContain("/billing");
+    expect(hrefs).not.toContain("/inventory");
+    expect(hrefs).not.toContain("/reports");
   });
 
-  it("FINANCE has billing write, not clinical", () => {
+  it("FINANCE has billing write and clinic-wide reports, not clinical", () => {
     expect(canAccessPath(UserRole.FINANCE, "/billing")).toBe(true);
+    expect(canAccessPath(UserRole.FINANCE, "/reports")).toBe(true);
     expect(canAccessPath(UserRole.FINANCE, "/clinical")).toBe(false);
     expect(hasPermission(UserRole.FINANCE, PERMISSIONS.billing.write)).toBe(true);
+    expect(hasPermission(UserRole.FINANCE, PERMISSIONS.reports.export)).toBe(true);
     expect(hasPermission(UserRole.FINANCE, PERMISSIONS.clinical_schedule.read)).toBe(false);
+  });
+
+  it("DOCTOR keeps billing read and dashboard, not clinic-wide /reports export", () => {
+    expect(canAccessPath(UserRole.DOCTOR, "/billing")).toBe(true);
+    expect(canAccessPath(UserRole.DOCTOR, "/reports")).toBe(false);
+    expect(canAccessPath(UserRole.DOCTOR, "/dashboard")).toBe(true);
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.billing.read)).toBe(true);
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.billing.write)).toBe(false);
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.reports.export)).toBe(false);
   });
 
   it("HR self-service is identity-scoped; directory is admin-only", () => {

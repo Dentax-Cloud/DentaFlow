@@ -59,6 +59,11 @@ vi.mock("@/lib/db", () => ({
     chair: { findMany: vi.fn().mockResolvedValue([]) },
     doctor: { findMany: vi.fn().mockResolvedValue([]) },
     staffMember: { findMany: vi.fn().mockResolvedValue([]) },
+    inventoryItem: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    stockTransaction: { create: vi.fn() },
   },
 }));
 
@@ -149,6 +154,7 @@ describe("STORE PHI getters/mutations — action-level isolation", () => {
   let getPatientPhotos: typeof import("@/app/(dashboard)/features/clinical/photo-actions").getPatientPhotos;
   let lookupByBarcode: typeof import("@/app/(dashboard)/features/patients/barcode-actions").lookupByBarcode;
   let checkinByBarcode: typeof import("@/app/(dashboard)/features/patients/barcode-actions").checkinByBarcode;
+  let addStock: typeof import("@/app/(dashboard)/features/inventory/actions").addStock;
 
   beforeAll(async () => {
     getPatients = (await import("@/app/(dashboard)/features/patients/actions")).getPatients;
@@ -167,6 +173,7 @@ describe("STORE PHI getters/mutations — action-level isolation", () => {
     const barcode = await import("@/app/(dashboard)/features/patients/barcode-actions");
     lookupByBarcode = barcode.lookupByBarcode;
     checkinByBarcode = barcode.checkinByBarcode;
+    addStock = (await import("@/app/(dashboard)/features/inventory/actions")).addStock;
   }, 120_000);
 
   beforeEach(() => {
@@ -202,9 +209,23 @@ describe("STORE PHI getters/mutations — action-level isolation", () => {
     await expect(getInvoices()).resolves.toEqual([expect.objectContaining({ id: "inv_1" })]);
   });
 
-  it("allows RECEPTIONIST getPatients (patients.read control)", async () => {
+  it("allows RECEPTIONIST getPatients and getInvoices (front-desk billing read)", async () => {
     mockRequireTenantContext.mockResolvedValue(staffContext(UserRole.RECEPTIONIST, "front"));
     await expect(getPatients()).resolves.toEqual([expect.objectContaining({ id: "pat_1" })]);
+    await expect(getInvoices()).resolves.toEqual([expect.objectContaining({ id: "inv_1" })]);
+  });
+
+  it("denies NURSE getInvoices (billing:none — live identical /billing was matrix over-grant, not a missing page gate)", async () => {
+    mockRequireTenantContext.mockResolvedValue(staffContext(UserRole.NURSE, "nurse"));
+    await expect(getInvoices()).rejects.toThrow("FORBIDDEN");
+    expect(mockInvoiceFindMany).not.toHaveBeenCalled();
+  });
+
+  it("RECEPTIONIST addStock is not callable (inventory.write gated — buttons were visible-only)", async () => {
+    mockRequireTenantContext.mockResolvedValue(staffContext(UserRole.RECEPTIONIST, "front"));
+    await expect(
+      addStock({ inventoryItemId: "item_1", quantity: 1 }),
+    ).resolves.toMatchObject({ success: false, error: "You do not have permission" });
   });
 
   it("STORE recordPayment / markInvoiceSent / Check in remain non-callable", async () => {
@@ -244,5 +265,27 @@ describe("STORE PHI getters/mutations — action-level isolation", () => {
     );
     expect(src).toContain("getPatientTreatmentPlanPreAuths");
     expect(src).toContain('error.message === "FORBIDDEN"');
+  });
+
+  it("dashboard error boundary turns FORBIDDEN into an access-denied page", () => {
+    const src = readFileSync(
+      resolve(__dirname, "../app/(dashboard)/error.tsx"),
+      "utf8",
+    );
+    expect(src).toContain('error.message === "FORBIDDEN"');
+    expect(src).toContain("You don’t have access to this page");
+  });
+
+  it("/billing and /reports pages do call requireRouteAccess (not an ungated route)", () => {
+    const billing = readFileSync(
+      resolve(__dirname, "../app/(dashboard)/billing/page.tsx"),
+      "utf8",
+    );
+    const reports = readFileSync(
+      resolve(__dirname, "../app/(dashboard)/reports/page.tsx"),
+      "utf8",
+    );
+    expect(billing).toContain('requireRouteAccess("billing", "read")');
+    expect(reports).toContain('requireRouteAccess("reports", "export")');
   });
 });

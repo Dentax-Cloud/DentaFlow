@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { listSuppliers } from "@/app/(dashboard)/features/inventory/supplier-actions";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { SuppliersClient } from "./suppliers-client";
 import { Button } from "@/components/ui/button";
 
 export const runtime = "nodejs";
 
 export default async function SuppliersPage() {
-  await requireRouteAccess("inventory", "read");
+  const ctx = await requireRouteAccess("inventory", "read");
+  const role = requireStaffMemberRole(ctx);
+  const canWrite = hasPermission(role, PERMISSIONS.inventory.write);
   const rows = await listSuppliers();
 
   return (
@@ -22,6 +26,7 @@ export default async function SuppliersPage() {
         </Button>
       </div>
       <SuppliersClient
+        canWrite={canWrite}
         suppliers={rows.map((s) => ({
           id: s.id,
           name: s.name,

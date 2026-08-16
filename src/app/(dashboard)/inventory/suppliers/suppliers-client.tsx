@@ -33,7 +33,13 @@ type FormState = {
 
 const emptyForm: FormState = { name: "", email: "", phone: "", address: "" };
 
-export function SuppliersClient({ suppliers: initial }: { suppliers: SupplierRow[] }) {
+export function SuppliersClient({
+  suppliers: initial,
+  canWrite = false,
+}: {
+  suppliers: SupplierRow[];
+  canWrite?: boolean;
+}) {
   const [suppliers, setSuppliers] = useState(initial);
   const [dialog, setDialog] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<SupplierRow | null>(null);
@@ -116,7 +122,7 @@ export function SuppliersClient({ suppliers: initial }: { suppliers: SupplierRow
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openCreate}>Add supplier</Button>
+        {canWrite ? <Button onClick={openCreate}>Add supplier</Button> : null}
       </div>
 
       {suppliers.length === 0 ? (
@@ -136,9 +142,11 @@ export function SuppliersClient({ suppliers: initial }: { suppliers: SupplierRow
                     {s.itemCount} linked item{s.itemCount === 1 ? "" : "s"}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
-                  Edit
-                </Button>
+                {canWrite ? (
+                  <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
+                    Edit
+                  </Button>
+                ) : null}
               </CardHeader>
               <CardContent className="space-y-1 text-sm text-muted-foreground">
                 {s.email && <div>Email: {s.email}</div>}

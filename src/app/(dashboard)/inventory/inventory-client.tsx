@@ -81,11 +81,13 @@ export function InventoryClient({
   lowStockCount,
   chairs = [],
   staff = [],
+  canWrite = false,
 }: {
   items: ItemWithHistory[];
   lowStockCount: number;
   chairs?: ChairOpt[];
   staff?: StaffOpt[];
+  canWrite?: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [stockFilter, setStockFilter] = useState<InventoryListStockFilter>("all");
@@ -461,18 +463,22 @@ export function InventoryClient({
                     />
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    <Button size="sm" variant="outline" onClick={() => openDialog("add", item)}>
-                      <Plus className="mr-1 h-3 w-3" />
-                      Add stock
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openDialog("issue", item)}>
-                      <Send className="mr-1 h-3 w-3" />
-                      Issue
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openDialog("remove", item)}>
-                      <Minus className="mr-1 h-3 w-3" />
-                      Remove
-                    </Button>
+                    {canWrite ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => openDialog("add", item)}>
+                          <Plus className="mr-1 h-3 w-3" />
+                          Add stock
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openDialog("issue", item)}>
+                          <Send className="mr-1 h-3 w-3" />
+                          Issue
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openDialog("remove", item)}>
+                          <Minus className="mr-1 h-3 w-3" />
+                          Remove
+                        </Button>
+                      </>
+                    ) : null}
                     <Button size="sm" variant="ghost" onClick={() => openDialog("history", item)}>
                       <History className="mr-1 h-3 w-3" />
                       History

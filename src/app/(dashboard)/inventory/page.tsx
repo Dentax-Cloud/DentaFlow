@@ -4,11 +4,14 @@ import { serializeEntity } from "@/lib/utils/serialize";
 import { InventoryClient } from "./inventory-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { can } from "@/lib/rbac/permissions";
+import { can, hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 
 export default async function InventoryPage() {
   const ctx = await requireRouteAccess("inventory", "read");
-  const canSeeChairs = can(ctx.staffMember!.role, "read", "chair_inventory");
+  const role = requireStaffMemberRole(ctx);
+  const canSeeChairs = can(role, "read", "chair_inventory");
+  const canWrite = hasPermission(role, PERMISSIONS.inventory.write);
 
   const [items, chairs, staff] = await Promise.all([
     db.inventoryItem.findMany({
@@ -79,6 +82,7 @@ export default async function InventoryPage() {
         lowStockCount={lowStock.length}
         chairs={chairs}
         staff={staffOpts}
+        canWrite={canWrite}
       />
     </div>
   );

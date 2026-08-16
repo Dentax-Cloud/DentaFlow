@@ -82,7 +82,7 @@ const reportsItem: NavItem = {
   label: "Reports",
   icon: BarChart3,
   resource: "reports",
-  action: "read",
+  action: "export",
 };
 
 const aiItem: NavItem = {
