@@ -30,6 +30,11 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/ai", resource: "ai", action: "use" },
   { prefix: "/dashboard", resource: "reports", action: "read" },
   { prefix: "/super-admin", resource: "admin", action: "write" },
+  // Identity-scoped staff profile (session member only). patients:read is held
+  // by every current dashboard role; canAccessPath also special-cases /account.
+  { prefix: "/account", resource: "patients", action: "read" },
+  // Clinic setup checklist — admin destinations (catalog, team, profile).
+  { prefix: "/onboarding", resource: "admin", action: "read" },
 ];
 
 const ROLE_HOME: Record<ReturnType<typeof normalizeDashboardRole>, string> = {
@@ -54,6 +59,8 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   // Identity-scoped self-service: any authenticated dashboard role may open
   // /hr/me; the page itself requires HR_MODULE_ENABLED + linked Employee.
   if (pathname === "/hr/me" || pathname.startsWith("/hr/me/")) return true;
+  // Identity-scoped staff profile at /account (own session member only).
+  if (pathname === "/account" || pathname.startsWith("/account/")) return true;
   const rule = resolveRouteRule(pathname);
   if (!rule) return true;
   return can(role, rule.action, rule.resource);

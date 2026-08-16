@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { can, hasPermission, PERMISSIONS, normalizeDashboardRole } from "@/lib/rbac/permissions";
-import { canAccessPath, getRoleHomePath } from "@/lib/rbac/routes";
+import { canAccessPath, getRoleHomePath, resolveRouteRule } from "@/lib/rbac/routes";
 import { getNavItemsForRole } from "@/lib/rbac/navigation";
 import { UserRole } from "@prisma/client";
 
@@ -141,6 +141,35 @@ describe("RBAC routes and navigation", () => {
     expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical/radiographs")).toBe(false);
     expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical/treatment-plans")).toBe(true);
     expect(canAccessPath(UserRole.RECEPTIONIST, "/clinical")).toBe(false);
+  });
+
+  it("allows every dashboard role onto identity-scoped /account", () => {
+    for (const role of [
+      UserRole.ADMIN,
+      UserRole.DOCTOR,
+      UserRole.NURSE,
+      UserRole.RECEPTIONIST,
+      UserRole.FINANCE,
+      UserRole.STORE,
+    ]) {
+      expect(canAccessPath(role, "/account")).toBe(true);
+    }
+  });
+
+  it("gates /onboarding to admin.read (no fail-open omission)", () => {
+    expect(canAccessPath(UserRole.ADMIN, "/onboarding")).toBe(true);
+    expect(canAccessPath(UserRole.OWNER, "/onboarding/checklist")).toBe(true);
+    expect(canAccessPath(UserRole.DOCTOR, "/onboarding/checklist")).toBe(false);
+    expect(canAccessPath(UserRole.NURSE, "/onboarding")).toBe(false);
+    expect(canAccessPath(UserRole.STORE, "/onboarding/checklist")).toBe(false);
+    expect(canAccessPath(UserRole.FINANCE, "/onboarding")).toBe(false);
+    expect(canAccessPath(UserRole.RECEPTIONIST, "/onboarding/checklist")).toBe(false);
+  });
+
+  it("binds /account and /onboarding to explicit ROUTE_RULES", () => {
+    expect(resolveRouteRule("/account")?.prefix).toBe("/account");
+    expect(resolveRouteRule("/onboarding/checklist")?.prefix).toBe("/onboarding");
+    expect(resolveRouteRule("/onboarding")?.resource).toBe("admin");
   });
 
   it("filters sidebar items by role", () => {

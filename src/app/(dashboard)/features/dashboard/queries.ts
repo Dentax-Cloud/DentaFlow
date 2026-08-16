@@ -94,12 +94,15 @@ export async function getStoreDashboardStats(tenantId: string): Promise<StoreDas
   const expiryCutoff = new Date();
   expiryCutoff.setDate(expiryCutoff.getDate() + 30);
 
-  const items = await db.inventoryItem.findMany({
-    where: { tenantId, deletedAt: null },
-    select: { quantity: true, reorderLevel: true, minStockAlert: true },
-  });
-
-  const [supplierCount, expiringBatchCount] = await Promise.all([
+  const [itemCount, lowStockRows, supplierCount, expiringBatchCount] = await Promise.all([
+    db.inventoryItem.count({ where: { tenantId, deletedAt: null } }),
+    db.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS count
+      FROM "InventoryItem"
+      WHERE "tenantId" = ${tenantId}
+        AND "deletedAt" IS NULL
+        AND quantity <= COALESCE("minStockAlert", "reorderLevel")
+    `,
     db.supplier.count({ where: { tenantId } }),
     db.inventoryBatch.count({
       where: {
@@ -111,13 +114,9 @@ export async function getStoreDashboardStats(tenantId: string): Promise<StoreDas
     }),
   ]);
 
-  const lowStockCount = items.filter(
-    (i) => i.quantity <= (i.minStockAlert ?? i.reorderLevel),
-  ).length;
-
   return {
-    itemCount: items.length,
-    lowStockCount,
+    itemCount,
+    lowStockCount: lowStockRows[0]?.count ?? 0,
     supplierCount,
     expiringBatchCount,
   };
