@@ -26,7 +26,7 @@ import {
   IdCard,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
-import { can, type Action, type Resource } from "./permissions";
+import { can, normalizeDashboardRole, type Action, type Resource } from "./permissions";
 
 export type NavItem = {
   href: string;
@@ -361,7 +361,13 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 function filterItemsForRole(role: UserRole, items: NavItem[]): NavItem[] {
-  return items.filter((item) => can(role, item.action ?? "read", item.resource));
+  const allowed = items.filter((item) => can(role, item.action ?? "read", item.resource));
+  // STORE keeps reports:limited so /dashboard stays reachable; the clinic-wide
+  // Reports page is still PHI-adjacent and is not part of the store job.
+  if (normalizeDashboardRole(role) === "STORE") {
+    return allowed.filter((item) => item.href !== "/reports");
+  }
+  return allowed;
 }
 
 export type NavFilterOptions = {

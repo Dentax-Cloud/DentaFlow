@@ -230,14 +230,15 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     ai: "none",
   },
   STORE: {
-    patients: "read",
-    appointments: "read",
+    patients: "none",
+    appointments: "none",
     clinical_schedule: "none",
     clinical_chart: "none",
     clinical_assist: "none",
     insurance: "none",
     chair_inventory: "read",
-    billing: "read",
+    // Store job is stock/POS — PHI-adjacent clinic browse is not granted.
+    billing: "none",
     inventory: "full",
     hr: "none",
     reports: "limited",

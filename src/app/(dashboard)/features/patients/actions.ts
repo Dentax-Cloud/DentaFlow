@@ -337,6 +337,7 @@ export const linkPatientPortalUser = createAction({
 
 export async function getPatients(search?: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.patients.read);
   return db.patient.findMany({
     where: {
       tenantId: ctx.tenantId,
@@ -358,6 +359,7 @@ export async function getPatients(search?: string) {
 
 export async function getPatientById(id: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.patients.read);
   return db.patient.findFirst({
     where: tenantWhere(ctx.tenantId, { id, deletedAt: null }),
     include: {

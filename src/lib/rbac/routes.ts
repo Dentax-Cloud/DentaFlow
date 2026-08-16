@@ -54,6 +54,14 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   // Identity-scoped self-service: any authenticated dashboard role may open
   // /hr/me; the page itself requires HR_MODULE_ENABLED + linked Employee.
   if (pathname === "/hr/me" || pathname.startsWith("/hr/me/")) return true;
+  // STORE keeps reports:limited so /dashboard works; clinic-wide /reports is not
+  // part of the store job (PHI-adjacent KPIs).
+  if (
+    normalizeDashboardRole(role) === "STORE" &&
+    (pathname === "/reports" || pathname.startsWith("/reports/"))
+  ) {
+    return false;
+  }
   const rule = resolveRouteRule(pathname);
   if (!rule) return true;
   return can(role, rule.action, rule.resource);

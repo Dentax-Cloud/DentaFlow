@@ -290,6 +290,7 @@ export async function getAppointments(
   options?: { includeCanceled?: boolean },
 ) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   const statusFilter = options?.includeCanceled
     ? {}
     : { status: { notIn: [AppointmentStatus.CANCELED, AppointmentStatus.NO_SHOW] } };

@@ -28,7 +28,7 @@ async function requireStaffId(ctx: Awaited<ReturnType<typeof import("@/lib/tenan
   return staffId;
 }
 
-export async function seedPlatformTemplates() {
+async function seedPlatformTemplates() {
   const existing = await db.clinicalTemplate.findMany({
     where: { tenantId: null },
     select: { name: true, type: true },
@@ -51,7 +51,7 @@ export async function seedPlatformTemplates() {
   });
 }
 
-export async function seedClinicalTemplatesForTenant(tenantId: string) {
+async function seedClinicalTemplatesForTenant(tenantId: string) {
   const existing = await db.clinicalTemplate.findMany({
     where: { tenantId },
     select: { name: true, type: true },
