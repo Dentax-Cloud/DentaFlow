@@ -138,7 +138,7 @@ function doctorContext(): TenantContext {
 
 describe("front-office insurance — action-level permission isolation", () => {
   // Spine actions module is large; first import under parallel suite load can exceed 20s.
-  const ACTION_MS = 60_000;
+  const ACTION_MS = 120_000;
 
   let clearSpineRisk: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").clearSpineRisk;
   let upsertSpineInsuranceVerification: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").upsertSpineInsuranceVerification;

@@ -75,6 +75,7 @@ model Tenant {
   chairsideEntryVersions ChairsideEntryVersion[]
   toothConditionVersions ToothConditionVersion[]
   treatmentPlanShares  TreatmentPlanShare[]
+  encounterVisitShares EncounterVisitShare[]
   clinicalImages       ClinicalImage[]
   photoSeries          PhotoSeries[]
   casePresentations    CasePresentation[]
@@ -233,6 +234,8 @@ model StaffMember {
   leaveRequestsApproved   LeaveRequest[]       @relation("LeaveRequestApprover")
   examinedEncounters      Encounter[]              @relation("EncounterExaminer")
   preparedChairPrepDays   ChairPrepDay[]           @relation("ChairPrepPreparedBy")
+  procedureLineCosigns    EncounterProcedureLine[] @relation("EncounterLineCosign")
+  procedureLineCosignActors EncounterProcedureLine[] @relation("EncounterLineCosignActor")
 
   @@index([tenantId])
   @@index([authUserId])
@@ -834,6 +837,22 @@ model TreatmentPlanShare {
   @@index([token])
 }
 
+/// Module 6 Phase 3b — public patient-facing visit view (mirrors TreatmentPlanShare).
+model EncounterVisitShare {
+  id          String    @id @default(cuid())
+  encounterId String
+  tenantId    String
+  token       String    @unique
+  expiresAt   DateTime
+  viewedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  encounter   Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([tenantId, encounterId])
+}
+
 model ClinicalImage {
   id              String    @id @default(cuid())
   tenantId        String
@@ -858,6 +877,8 @@ model ClinicalImage {
   photoSeriesId   String?
   photoCategory   String?
   isBeforePhoto   Boolean   @default(false)
+  /// When true, eligible for patient-facing visit display if clinical consent is active.
+  patientShareable Boolean  @default(false)
   afterImageId    String?
   /// Module 6: pre/post comparison pair (nullable; additive — afterImageId retained for legacy).
   comparesToId    String?
@@ -2491,6 +2512,7 @@ model Encounter {
   riskAssessments        RiskAssessment[]
   clinicalAlerts         ClinicalAlert[]
   providerPresences      ProviderPresence[]
+  visitShares            EncounterVisitShare[]
 
   @@index([tenantId])
   @@index([tenantId, patientId])
@@ -2539,6 +2561,11 @@ model EncounterProcedureLine {
   billedInvoiceId    String?
   startedAt          DateTime?
   completedAt        DateTime?
+  /// Second provider who co-signed anaesthesia/sedation completion (distinct from actor).
+  cosignStaffId      String?
+  /// Provider who logged the completion (the first signer).
+  cosignActorStaffId String?
+  cosignAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -2548,6 +2575,8 @@ model EncounterProcedureLine {
   procedureBundle  EncounterProcedureBundle? @relation(fields: [procedureBundleId], references: [id], onDelete: SetNull)
   procedureCatalog ProcedureCatalog         @relation(fields: [procedureCatalogId], references: [id], onDelete: Restrict)
   provider         StaffMember?             @relation("EncounterLineProvider", fields: [providerId], references: [id], onDelete: SetNull)
+  cosignStaff      StaffMember?             @relation("EncounterLineCosign", fields: [cosignStaffId], references: [id], onDelete: SetNull)
+  cosignActorStaff StaffMember?             @relation("EncounterLineCosignActor", fields: [cosignActorStaffId], references: [id], onDelete: SetNull)
 
   materialUsages MaterialUsage[]
   consentRecords ConsentRecord[]

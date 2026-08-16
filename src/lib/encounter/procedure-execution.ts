@@ -15,6 +15,12 @@ import {
 import type { EncounterProcedureLineStatus, PlannedVsPerformed } from "./types";
 import { isProcedureLineTerminal } from "./state-machine";
 import { treatmentItemIdsForWriteBack } from "./close-out";
+import { isAnaesthesiaOrSedationCategory } from "./anaesthesia";
+import {
+  authenticateCosignProvider,
+  auditAnaesthesiaCosign,
+  type CosignCredentials,
+} from "./anaesthesia-cosign";
 
 const LINE_TRANSITIONS: Record<
   EncounterProcedureLineStatus,
@@ -119,10 +125,15 @@ export async function transitionProcedureLineStatus(params: {
   toStatus: EncounterProcedureLineStatus;
   providerId?: string | null;
   userId?: string;
+  /** Required when completing an anaesthesia/sedation-tagged line. */
+  cosign?: CosignCredentials | null;
 }) {
   const line = await db.encounterProcedureLine.findFirst({
     where: { id: params.lineId, tenantId: params.tenantId },
-    include: { encounter: true },
+    include: {
+      encounter: true,
+      procedureCatalog: { select: { category: true } },
+    },
   });
   if (!line) throw new Error("Procedure line not found.");
   if (line.encounter.deletedAt || line.encounter.closedAt) {
@@ -154,6 +165,27 @@ export async function transitionProcedureLineStatus(params: {
   }
   if (params.toStatus === "completed") {
     data.completedAt = new Date();
+    if (isAnaesthesiaOrSedationCategory(line.procedureCatalog.category)) {
+      const actorStaffId = params.providerId ?? params.userId ?? null;
+      const cosigner = await authenticateCosignProvider({
+        tenantId: params.tenantId,
+        actorStaffId,
+        credentials: params.cosign,
+      });
+      data.cosignStaff = { connect: { id: cosigner.staffId } };
+      if (actorStaffId) {
+        data.cosignActorStaff = { connect: { id: actorStaffId } };
+      }
+      data.cosignAt = new Date();
+      await auditAnaesthesiaCosign({
+        tenantId: params.tenantId,
+        lineId: line.id,
+        encounterId: line.encounterId,
+        actorStaffId: actorStaffId ?? "unknown",
+        cosignStaffId: cosigner.staffId,
+        userId: params.userId,
+      });
+    }
   }
   if (params.toStatus === "declined") {
     data.plannedVsPerformed = "declined";

@@ -406,7 +406,7 @@ export function encounterSelectForWorkspace() {
     closedAt: true,
     procedureLines: {
       include: {
-        procedureCatalog: { select: { id: true, code: true, name: true, price: true } },
+        procedureCatalog: { select: { id: true, code: true, name: true, price: true, category: true } },
         materialUsages: {
           include: {
             item: { select: { id: true, name: true } },
