@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getTenantContext } from "@/lib/tenant/context";
+import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { getOnboardingChecklist } from "@/lib/tenant/onboarding";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { Button } from "@/components/ui/button";
 
 export default async function OnboardingChecklistPage() {
-  const ctx = await getTenantContext();
-  if (!ctx) redirect("/login");
+  const ctx = await requireRouteAccess("admin", "read");
 
   const checklist = await getOnboardingChecklist(ctx.tenant);
   if (!checklist.showChecklist) redirect("/dashboard");

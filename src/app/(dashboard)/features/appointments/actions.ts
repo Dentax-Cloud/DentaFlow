@@ -309,6 +309,7 @@ export async function getAppointments(
       doctor: { include: { user: true } },
     },
     orderBy: { startTime: "asc" },
+    take: 100,
   });
 }
 

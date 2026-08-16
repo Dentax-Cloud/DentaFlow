@@ -88,15 +88,31 @@ export async function getBillingQueue(): Promise<BillingQueueResult> {
   const ctx = await requireTenantContext();
   await requirePermission(PERMISSIONS.billing.read);
 
+  const queueAppointments = await db.appointment.findMany({
+    where: {
+      tenantId: ctx.tenantId,
+      deletedAt: null,
+      isBlock: false,
+      patientId: { not: null },
+      status: { notIn: ["CANCELED", "NO_SHOW"] },
+      procedureLines: { some: {} },
+    },
+    orderBy: { startTime: "desc" },
+    take: 50,
+    select: { id: true },
+  });
+  const appointmentIds = queueAppointments.map((appointment) => appointment.id);
+  if (appointmentIds.length === 0) {
+    return {
+      ready: { "0-24h": [], "1-3d": [], "3d+": [] },
+      interim: [],
+    };
+  }
+
   const lines = await db.procedureLine.findMany({
     where: {
       tenantId: ctx.tenantId,
-      appointment: {
-        deletedAt: null,
-        isBlock: false,
-        patientId: { not: null },
-        status: { notIn: ["CANCELED", "NO_SHOW"] },
-      },
+      appointmentId: { in: appointmentIds },
     },
     include: {
       appointment: {

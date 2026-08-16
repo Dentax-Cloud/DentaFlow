@@ -18,7 +18,6 @@ import { getStaffActor, requireTenantContext } from "@/lib/tenant/context";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { autoCloseChairsideSessionsForAppointment } from "@/lib/clinical/chairside-lifecycle";
 import { createInvoiceFromItems } from "@/lib/billing/invoice-from-items";
-import { maybeCreateDraftClaimForInvoice } from "@/lib/insurance/maybe-create-draft-claim";
 
 import { generateClinicalNotes, suggestTreatmentPlan } from "@/lib/ai";
 
@@ -734,76 +733,6 @@ export const removeTreatmentItem = createAction({
 
     revalidatePath(`/clinical/treatment-plans/${input.planId}`);
     return { ok: true };
-  },
-});
-
-const generateInvoiceFromPlanSchema = z.object({
-  planId: z.string(),
-});
-
-export const generateInvoiceFromTreatmentPlan = createAction({
-  schema: generateInvoiceFromPlanSchema,
-  permission: () => requirePermission(PERMISSIONS.billing.write),
-  handler: async (input, ctx) => {
-    const plan = await db.treatmentPlan.findFirst({
-      where: tenantWhere(ctx.tenant.id, { id: input.planId, deletedAt: null }),
-      include: { items: true, patient: true },
-    });
-    if (!plan) throw new Error("Treatment plan not found");
-
-    const activeItems = plan.items.filter(
-      (i) => !["completed", "declined"].includes(i.status.toLowerCase()),
-    );
-    if (activeItems.length === 0) throw new Error("No billable treatment items");
-
-    const count = await db.invoice.count({ where: { tenantId: ctx.tenant.id } });
-    const { generateInvoiceNumber } = await import("@/lib/utils");
-    const settings = await db.settings.findUnique({ where: { tenantId: ctx.tenant.id } });
-    const taxRate = settings?.taxRate ?? 0;
-
-    const lineItems = activeItems.map((item) => ({
-      tenantId: ctx.tenant.id,
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: Number(item.unitCost),
-      total: Number(item.totalCost),
-      procedureCode: item.procedureCode ?? undefined,
-    }));
-
-    const subtotal = lineItems.reduce((s, i) => s + i.total, 0);
-    const tax = subtotal * (taxRate / 100);
-    const total = subtotal + tax;
-
-    const invoice = await db.invoice.create({
-      data: {
-        tenantId: ctx.tenant.id,
-        patientId: plan.patientId,
-        invoiceNumber: generateInvoiceNumber(count + 1),
-        status: "DRAFT",
-        subtotal,
-        tax,
-        total,
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        notes: `Treatment plan: ${plan.title}`,
-        items: { create: lineItems },
-      },
-      include: { items: true },
-    });
-
-    await db.treatmentItem.updateMany({
-      where: { treatmentPlanId: plan.id, id: { in: activeItems.map((i) => i.id) } },
-      data: { status: "completed" },
-    });
-
-    await maybeCreateDraftClaimForInvoice({
-      tenantId: ctx.tenant.id,
-      invoiceId: invoice.id,
-    }).catch(() => null);
-
-    revalidatePath("/billing");
-    revalidatePath("/billing/claims");
-    revalidatePath(`/clinical/treatment-plans/${plan.id}`);
-    return invoice;
   },
 });
 

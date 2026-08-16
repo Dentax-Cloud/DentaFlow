@@ -492,23 +492,6 @@ async function assertEncounterOwned(tenantId: string, encounterId: string) {
   return encounter;
 }
 
-export async function getOrCreateSpineEncounter(
-  appointmentId: string,
-  opts?: { walkIn?: boolean; originRecallId?: string },
-) {
-  const ctx = await requireSpineWrite();
-  const encounter = await createEncounterFromAppointment({
-    tenantId: ctx.tenantId,
-    appointmentId,
-    userId: ctx.staffMember?.id,
-    staffMemberId: ctx.staffMember?.id ?? null,
-    walkIn: opts?.walkIn,
-    originRecallId: opts?.originRecallId,
-  });
-  revalidateSpinePaths(appointmentId);
-  return encounter;
-}
-
 export async function transitionSpineEncounter(input: {
   encounterId: string;
   toStatus: EncounterStatus;
