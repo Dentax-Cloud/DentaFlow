@@ -1,0 +1,24 @@
+{
+  "phase": "flag-on-owner",
+  "startedAt": "2026-08-02T10:32:55.421Z",
+  "featureFlags": {
+    "ENCOUNTER_SPINE_ENABLED": true
+  },
+  "spineUrl": "http://127.0.0.1:3650/clinical/encounter/phase3a_clicktest_appt/spine",
+  "examMarked": true,
+  "invoiceEnabled": true,
+  "encounter": {
+    "id": "cmsbnwdkk00a4k53c48ekcuwc",
+    "status": "recall_scheduled",
+    "closedAt": "2026-08-02T10:33:46.683Z",
+    "examCompletedAt": "2026-08-02T10:33:10.836Z",
+    "examinedByStaffId": "cmr5s7yiu01p1o99gmprmx4lc"
+  },
+  "invoice": {
+    "number": "INV-000025",
+    "total": "168"
+  },
+  "hydrationWarnings": [],
+  "console": [],
+  "ok": true
+}

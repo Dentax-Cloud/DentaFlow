@@ -9,6 +9,16 @@ export type DefaultTemplateSeed = {
 
 export const PLATFORM_DEFAULT_TEMPLATES: DefaultTemplateSeed[] = [
   {
+    name: "Chief Complaint / Exam",
+    type: "EXAM",
+    isDefault: true,
+    content: `Chief complaint: {{chief_complaint}}
+
+Findings: {{findings}}
+
+Provisional diagnosis: {{diagnosis}}`,
+  },
+  {
     name: "Standard SOAP Note",
     type: "SOAP",
     isDefault: true,

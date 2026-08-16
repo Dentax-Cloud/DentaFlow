@@ -1,0 +1,45 @@
+﻿{
+  "base": "http://127.0.0.1:3650",
+  "tip": "4706672",
+  "startedAt": "2026-08-02T10:32:37.308Z",
+  "flagOff": {
+    "phase": "flag-off",
+    "ok": true,
+    "spineUnreachable": true,
+    "chairPrepUnreachable": true,
+    "examCardAbsent": true,
+    "chairPrepNavAbsent": true,
+    "hydrationWarnings": []
+  },
+  "flagOnOwner": {
+    "phase": "flag-on-owner",
+    "ok": true,
+    "examMarked": true,
+    "invoice": { "number": "INV-000025", "total": "168" },
+    "encounter": {
+      "id": "cmsbnwdkk00a4k53c48ekcuwc",
+      "status": "recall_scheduled",
+      "closedAt": "2026-08-02T10:33:46.683Z",
+      "examCompletedAt": "2026-08-02T10:33:10.836Z",
+      "examinedByStaffId": "cmr5s7yiu01p1o99gmprmx4lc"
+    },
+    "hydrationWarnings": []
+  },
+  "flagOnNurse": {
+    "phase": "flag-on-nurse",
+    "ok": true,
+    "clearRiskAbsent": true,
+    "grantConsentAbsent": true,
+    "overrideAbsent": true,
+    "bomItems": [
+      "Amoxicillin 500mg1 BOX",
+      "Articaine 4% + Epinephrine (Carpule)1 CARPULE"
+    ],
+    "checklistCount": 2,
+    "chairMarkedPrepared": true,
+    "consumableUiVisible": true,
+    "hydrationWarnings": []
+  },
+  "endedAt": "2026-08-02T10:34:36.620Z",
+  "ok": true
+}

@@ -21,6 +21,10 @@ export const PERMISSIONS = {
     read: "clinical_chart:read",
     write: "clinical_chart:write",
   },
+  /** Nurse chairside assistance, distinct from clinical charting and gates. */
+  clinical_assist: {
+    write: "clinical_assist:write",
+  },
   /** Front-office encounter insurance verification (Module 6). */
   insurance: {
     write: "insurance:write",
@@ -75,6 +79,7 @@ export const RESOURCES = {
   appointments: "appointments",
   clinical_schedule: "clinical_schedule",
   clinical_chart: "clinical_chart",
+  clinical_assist: "clinical_assist",
   insurance: "insurance",
   chair_inventory: "chair_inventory",
   billing: "billing",
@@ -144,6 +149,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "full",
     clinical_schedule: "full",
     clinical_chart: "full",
+    clinical_assist: "full",
     insurance: "full",
     chair_inventory: "full",
     billing: "full",
@@ -160,6 +166,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "read",
     clinical_chart: "full",
+    clinical_assist: "write",
     insurance: "none",
     chair_inventory: "none",
     billing: "read",
@@ -176,6 +183,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "read",
     clinical_chart: "read",
+    clinical_assist: "write",
     insurance: "none",
     chair_inventory: "read",
     billing: "read",
@@ -192,6 +200,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "full",
     clinical_schedule: "read",
     clinical_chart: "none",
+    clinical_assist: "none",
     insurance: "write",
     chair_inventory: "none",
     billing: "read",
@@ -208,6 +217,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "none",
     clinical_chart: "none",
+    clinical_assist: "none",
     insurance: "none",
     chair_inventory: "none",
     billing: "full",
@@ -224,6 +234,7 @@ export const PERMISSION_MATRIX: Record<DashboardRole, Record<Resource, AccessLev
     appointments: "read",
     clinical_schedule: "none",
     clinical_chart: "none",
+    clinical_assist: "none",
     insurance: "none",
     chair_inventory: "read",
     billing: "read",
@@ -310,6 +321,8 @@ function permissionKeyToCheck(permission: PermissionKey): { resource: Resource; 
       return { resource: "clinical_chart", action: "read" };
     case PERMISSIONS.clinical_chart.write:
       return { resource: "clinical_chart", action: "write" };
+    case PERMISSIONS.clinical_assist.write:
+      return { resource: "clinical_assist", action: "write" };
     case PERMISSIONS.insurance.write:
       return { resource: "insurance", action: "write" };
     case PERMISSIONS.chair_inventory.read:

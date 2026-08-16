@@ -60,6 +60,15 @@ async function main() {
     userId,
     staffMemberId: staff?.id,
   });
+  if (!staff?.id) throw new Error("Expected clinical staff for examination.");
+  await db.encounter.update({
+    where: { id: encounter.id },
+    data: {
+      examCompletedAt: new Date(),
+      examinedByStaffId: staff.id,
+      examClinicalNoteId: "phase2-lib-verify-exam",
+    },
+  });
   await transitionEncounterStatus({
     tenantId: TENANT,
     encounterId: encounter.id,

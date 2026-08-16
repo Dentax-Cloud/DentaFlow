@@ -28,6 +28,15 @@ describe("RBAC permission matrix", () => {
     expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_chart.write)).toBe(false);
     expect(can(UserRole.NURSE, "read", "clinical_schedule")).toBe(true);
     expect(can(UserRole.NURSE, "write", "patients")).toBe(true);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_assist.write)).toBe(true);
+    expect(hasPermission(UserRole.NURSE, PERMISSIONS.clinical_chart.write)).toBe(false);
+  });
+
+  it("clinical assist write is limited to clinical staff", () => {
+    expect(hasPermission(UserRole.DOCTOR, PERMISSIONS.clinical_assist.write)).toBe(true);
+    expect(hasPermission(UserRole.ADMIN, PERMISSIONS.clinical_assist.write)).toBe(true);
+    expect(hasPermission(UserRole.RECEPTIONIST, PERMISSIONS.clinical_assist.write)).toBe(false);
+    expect(hasPermission(UserRole.STORE, PERMISSIONS.clinical_assist.write)).toBe(false);
   });
 
   it("hygienist retains clinical chart write access", () => {
@@ -111,6 +120,7 @@ describe("RBAC routes and navigation", () => {
   it("allows nurse clinical chart read routes including chair setup", () => {
     expect(canAccessPath(UserRole.NURSE, "/clinical")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/chair-setup")).toBe(true);
+    expect(canAccessPath(UserRole.NURSE, "/clinical/chair-prep")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/radiographs")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/encounter/appt-1")).toBe(true);
     expect(canAccessPath(UserRole.NURSE, "/clinical/chairside")).toBe(true);
@@ -153,6 +163,10 @@ describe("RBAC routes and navigation", () => {
     const nurseNav = getNavItemsForRole(UserRole.NURSE);
     expect(nurseNav.some((item) => item.href === "/clinical")).toBe(true);
     expect(nurseNav.some((item) => item.href === "/clinical/chair-setup")).toBe(true);
+    expect(nurseNav.some((item) => item.href === "/clinical/chair-prep")).toBe(true);
     expect(nurseNav.some((item) => item.href === "/clinical/radiographs")).toBe(false);
+
+    const nurseNavSpineOff = getNavItemsForRole(UserRole.NURSE, { spineEnabled: false });
+    expect(nurseNavSpineOff.some((item) => item.href === "/clinical/chair-prep")).toBe(false);
   });
 });

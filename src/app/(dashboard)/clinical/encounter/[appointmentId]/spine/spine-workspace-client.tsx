@@ -39,7 +39,10 @@ import {
   loadSpineWorkspaceData,
   scheduleSpineRecall,
   saveSpineCloseOutNote,
+  completeSpineExam,
+  recordSpineNursePresence,
 } from "@/app/(dashboard)/features/clinical/encounter-spine-actions";
+import { NURSE_PRESENCE_STAGES } from "@/lib/encounter/types";
 import { findPrescriptionAllergyConflicts } from "@/lib/encounter/close-out";
 import { PreClinicalChecks } from "@/components/clinical/pre-clinical-checks";
 import { ImageGallery } from "@/components/clinical/image-gallery";
@@ -57,6 +60,7 @@ import { SpineStageCard } from "./spine-stage-card";
 import { SpineClinicalFindings } from "./spine-clinical-findings";
 import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
+import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
 
 type DraftState = {
   asaClass: string;
@@ -81,6 +85,9 @@ type DraftState = {
   closeOutNote: string;
   ackAllergyConflict: boolean;
   recallMonths: string;
+  chiefComplaint: string;
+  findings: string;
+  provisionalDiagnosis: string;
 };
 
 const EMPTY_DRAFT: DraftState = {
@@ -106,6 +113,9 @@ const EMPTY_DRAFT: DraftState = {
   closeOutNote: "",
   ackAllergyConflict: false,
   recallMonths: "6",
+  chiefComplaint: "",
+  findings: "",
+  provisionalDiagnosis: "",
 };
 
 function draftKey(encounterId: string) {
@@ -138,11 +148,13 @@ const labelCls = "block text-xs font-medium uppercase tracking-wide text-slate-5
 export function SpineWorkspaceClient({
   appointmentId,
   canWrite,
+  canAssist = false,
   canWriteInsurance = false,
   initial,
 }: {
   appointmentId: string;
   canWrite: boolean;
+  canAssist?: boolean;
   /** Approve/edit insurance verification — insurance.write only (not clinical write). */
   canWriteInsurance?: boolean;
   initial: SpineWorkspaceData;
@@ -170,6 +182,7 @@ export function SpineWorkspaceClient({
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
+    ...insuranceDraftFromVerification(initial.encounter.insuranceVerifications[0]),
     painScore:
       initial.encounter.painScore != null ? String(initial.encounter.painScore) : "",
     painNextAction: initial.encounter.painNextAction ?? "",
@@ -199,7 +212,16 @@ export function SpineWorkspaceClient({
       const raw = localStorage.getItem(draftKey(encounter.id));
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<DraftState>;
-      setDraft((prev) => ({ ...prev, ...parsed }));
+      // Insurance fields are server-owned (InsuranceVerification). Do not let a
+      // stale local draft wipe front-office values seeded into the form.
+      const {
+        insuranceEligibility: _ie,
+        insurancePreAuth: _ip,
+        estimatedCoverage: _ec,
+        estimatedCopay: _ey,
+        ...rest
+      } = parsed;
+      setDraft((prev) => ({ ...prev, ...rest }));
     } catch {
       // ignore corrupt draft
     }
@@ -208,7 +230,14 @@ export function SpineWorkspaceClient({
   useEffect(() => {
     if (!hasMounted || !encounter.id) return;
     try {
-      localStorage.setItem(draftKey(encounter.id), JSON.stringify(draft));
+      const {
+        insuranceEligibility: _ie,
+        insurancePreAuth: _ip,
+        estimatedCoverage: _ec,
+        estimatedCopay: _ey,
+        ...persistable
+      } = draft;
+      localStorage.setItem(draftKey(encounter.id), JSON.stringify(persistable));
     } catch {
       // ignore quota
     }
@@ -261,6 +290,7 @@ export function SpineWorkspaceClient({
   const canInterrupt = INTERRUPTIBLE_STATUSES.includes(status);
   const closed = Boolean(encounter.closedAt) || status === "recall_scheduled";
   const write = canWrite && !closed && !pending;
+  const assistWrite = canAssist && !closed && !pending;
 
   const insuranceVerification = encounter.insuranceVerifications[0] ?? null;
   const billingPreview = useMemo(
@@ -353,6 +383,7 @@ export function SpineWorkspaceClient({
   const stageProgress = (panel: SpineNavPanelId): "current" | "completed" | "upcoming" => {
     const order: SpineNavPanelId[] = [
       "intake",
+      "exam",
       "gates",
       "findings",
       "procedures",
@@ -500,7 +531,7 @@ export function SpineWorkspaceClient({
       </div>
     ) : null;
 
-  const materialsSlot = canWrite && !closed && encounter.procedureLines.length > 0 ? (
+  const materialsSlot = (canWrite || canAssist) && !closed && encounter.procedureLines.length > 0 ? (
     <div className="space-y-2">
       {bomChecklistSlot}
       <p className={labelCls}>Add item (BoM or ad-hoc)</p>
@@ -527,10 +558,11 @@ export function SpineWorkspaceClient({
           disabled={pending}
         >
           <option value="">Select material…</option>
-          {inventoryItems.map((i) => (
+          {inventoryItems
+            .filter((i) => canWrite || i.defaultTier === "consumable")
+            .map((i) => (
             <option key={i.id} value={i.id}>
               {i.name}
-              {i.defaultTier === "tracked" ? " (tracked)" : ""}
               {selectedBomLines.some((b) => b.inventoryItemId === i.id)
                 ? ""
                 : " · ad-hoc"}
@@ -632,7 +664,11 @@ export function SpineWorkspaceClient({
       <button
         type="button"
         className={btnSecondary}
-        disabled={!write || !draft.materialItemId}
+        disabled={
+          !(canWrite ? write : assistWrite) ||
+          !draft.materialItemId ||
+          (!canWrite && draft.materialTier !== "consumable")
+        }
         onClick={() =>
           run(
             () =>
@@ -640,7 +676,8 @@ export function SpineWorkspaceClient({
                 procedureLineId:
                   draft.materialLineId || encounter.procedureLines[0]!.id,
                 itemId: draft.materialItemId,
-                tier: draft.materialTier,
+                // Nurses (assist-only) may log consumable-tier materials only.
+                tier: canWrite ? draft.materialTier : "consumable",
                 quantity: Number(draft.materialQty) || 1,
                 isBillable: matchingBomLine
                   ? matchingBomLine.isBillable
@@ -801,6 +838,34 @@ export function SpineWorkspaceClient({
         </dl>
       </section>
       </SpineStageCard>
+      </div>
+
+      <div id="spine-stage-exam">
+        <SpineStageCard
+          id="exam"
+          title="Chief Complaint / Exam"
+          summary={
+            encounter.examCompletedAt
+              ? `Completed ${formatTime(encounter.examCompletedAt, hasMounted)}`
+              : "Document exam before gates"
+          }
+          state={stageProgress("exam")}
+        >
+          {encounter.examCompletedAt ? (
+            <p className="text-sm text-slate-600">Exam recorded by clinical staff.</p>
+          ) : canWrite ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <textarea className={field} rows={3} placeholder="Chief complaint" value={draft.chiefComplaint} onChange={(e) => patchDraft({ chiefComplaint: e.target.value })} disabled={pending} />
+              <textarea className={field} rows={3} placeholder="Findings" value={draft.findings} onChange={(e) => patchDraft({ findings: e.target.value })} disabled={pending} />
+              <div className="space-y-2">
+                <textarea className={field} rows={3} placeholder="Provisional diagnosis" value={draft.provisionalDiagnosis} onChange={(e) => patchDraft({ provisionalDiagnosis: e.target.value })} disabled={pending} />
+                <button type="button" className={btnPrimary} disabled={!write} onClick={() => run(() => completeSpineExam({ encounterId: encounter.id, chiefComplaint: draft.chiefComplaint, findings: draft.findings, provisionalDiagnosis: draft.provisionalDiagnosis }), "Exam completed")}>Mark exam complete</button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">A clinician must complete the exam.</p>
+          )}
+        </SpineStageCard>
       </div>
 
       {/* Gates */}
@@ -1655,11 +1720,48 @@ export function SpineWorkspaceClient({
         }
         insuranceChipStatus={insuranceChipStatus}
         insuranceLabel={insuranceDrawerLabel}
+        nurseMode={canAssist && !canWrite}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
       >
         <div className="hidden xl:block">{materialsSlot}</div>
       </SpineBillingDrawer>
+
+      {canAssist && !canWrite ? (
+        <div className="fixed bottom-4 left-4 z-30 flex max-w-md flex-col gap-2 rounded-md border border-slate-200 bg-white p-3 shadow-md">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Nurse presence
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {NURSE_PRESENCE_STAGES.map((stage) => (
+              <button
+                key={stage}
+                type="button"
+                className={btnSecondary}
+                disabled={!assistWrite}
+                onClick={() =>
+                  run(
+                    () =>
+                      recordSpineNursePresence({
+                        encounterId: encounter.id,
+                        stage,
+                      }),
+                    `Presence: ${stage.replaceAll("_", " ")}`,
+                  )
+                }
+              >
+                {stage.replaceAll("_", " ")}
+              </button>
+            ))}
+          </div>
+          <Link
+            href="/clinical/chair-prep"
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-teal-800 px-3 py-2 text-sm font-medium text-white"
+          >
+            Chair prep
+          </Link>
+        </div>
+      ) : null}
 
       <SpineToolOverlay
         open={overlayTool != null}

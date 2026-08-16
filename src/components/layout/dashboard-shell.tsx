@@ -19,6 +19,7 @@ export function DashboardShell({
   trialDaysLeft = null,
   showHrSelfService = false,
   showHrNav = false,
+  spineEnabled = true,
 }: {
   children: React.ReactNode;
   userRole: UserRole;
@@ -28,6 +29,7 @@ export function DashboardShell({
   trialDaysLeft?: number | null;
   showHrSelfService?: boolean;
   showHrNav?: boolean;
+  spineEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -67,6 +69,7 @@ export function DashboardShell({
           tenantLogoUrl={tenantLogoUrl}
           showHrSelfService={showHrSelfService}
           showHrNav={showHrNav}
+          spineEnabled={spineEnabled}
         />
       </div>
 

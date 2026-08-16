@@ -11,6 +11,7 @@ import {
 } from "@/lib/rbac/staff-role";
 import { isHrModuleEnabled } from "@/lib/hr/feature-flag";
 import { db } from "@/lib/db";
+import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
 
 export default async function DashboardLayout({
   children,
@@ -41,6 +42,7 @@ export default async function DashboardLayout({
   }
 
   const userRole = requireStaffMemberRole(ctx);
+  const spineEnabled = isEncounterSpineEnabled(ctx.tenant);
 
   let showHrSelfService = false;
   if (isHrModuleEnabled(ctx.tenant) && ctx.staffMember.id) {
@@ -78,6 +80,7 @@ export default async function DashboardLayout({
       }
       showHrSelfService={showHrSelfService}
       showHrNav={isHrModuleEnabled(ctx.tenant)}
+      spineEnabled={spineEnabled}
     >
       {children}
     </DashboardShell>

@@ -155,6 +155,7 @@ model Tenant {
   providerPresences     ProviderPresence[]
   inventoryLocations    InventoryLocation[]
   procedureBomItems     ProcedureBomItem[]
+  chairPrepDays         ChairPrepDay[]
 }
 
 model TenantApprovalRequest {
@@ -230,6 +231,8 @@ model StaffMember {
   employeeDocumentsUploaded EmployeeDocument[] @relation("EmployeeDocumentUploader")
   timeEntriesApproved     TimeEntry[]          @relation("TimeEntryApprover")
   leaveRequestsApproved   LeaveRequest[]       @relation("LeaveRequestApprover")
+  examinedEncounters      Encounter[]              @relation("EncounterExaminer")
+  preparedChairPrepDays   ChairPrepDay[]           @relation("ChairPrepPreparedBy")
 
   @@index([tenantId])
   @@index([authUserId])
@@ -436,6 +439,7 @@ model Chair {
   tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   schedules    DoctorChairSchedule[]
   daySetups    ChairDaySetup[]
+  prepDays     ChairPrepDay[]
 
   @@unique([tenantId, branchId, number])
   @@index([tenantId])
@@ -2460,6 +2464,9 @@ model Encounter {
   painScore        Int?
   /// extra_anesthetic | paused | follow_up_flagged
   painNextAction   String?
+  examCompletedAt  DateTime?
+  examinedByStaffId String?
+  examClinicalNoteId String?
   preAuthOverridden Boolean  @default(false)
   preAuthOverrideReason String?
   preAuthOverrideByStaffId String?
@@ -2475,6 +2482,7 @@ model Encounter {
   appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
   billedInvoice Invoice?       @relation("EncounterInvoice")
+  examinedByStaff StaffMember? @relation("EncounterExaminer", fields: [examinedByStaffId], references: [id], onDelete: SetNull)
 
   procedureLines         EncounterProcedureLine[]
   procedureBundles       EncounterProcedureBundle[]
@@ -2489,6 +2497,26 @@ model Encounter {
   @@index([tenantId, appointmentId])
   @@index([tenantId, status])
   @@index([tenantId, deletedAt])
+  @@index([examinedByStaffId])
+}
+
+model ChairPrepDay {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  chairId            String
+  prepDate           String
+  preparedAt         DateTime?
+  preparedByStaffId  String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chair              Chair        @relation(fields: [chairId], references: [id], onDelete: Cascade)
+  preparedByStaff    StaffMember? @relation("ChairPrepPreparedBy", fields: [preparedByStaffId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, chairId, prepDate])
+  @@index([tenantId])
+  @@index([chairId])
 }
 
 /// Module 6 spine procedure step (Prompt “ProcedureLine”).
@@ -2687,7 +2715,7 @@ model ProviderPresence {
   tenantId    String
   encounterId String
   staffId     String
-  /// Matches Encounter.status values
+  /// Encounter.status values, plus nurse stages: tray_setup | chairside_assist | turnover
   stage       String
   presentFrom DateTime  @default(now())
   presentTo   DateTime?

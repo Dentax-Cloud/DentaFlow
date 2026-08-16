@@ -1,0 +1,22 @@
+{
+  "phase": "flag-on-nurse",
+  "startedAt": "2026-08-02T10:33:54.007Z",
+  "featureFlags": {
+    "ENCOUNTER_SPINE_ENABLED": true
+  },
+  "spineUrl": "http://127.0.0.1:3650/clinical/encounter/phase3a_clicktest_appt/spine",
+  "clearRiskAbsent": true,
+  "grantConsentAbsent": true,
+  "overrideAbsent": true,
+  "consumableUiVisible": true,
+  "chairPrepUrl": "http://127.0.0.1:3650/clinical/chair-prep",
+  "bomItems": [
+    "Amoxicillin 500mg1 BOX",
+    "Articaine 4% + Epinephrine (Carpule)1 CARPULE"
+  ],
+  "checklistCount": 2,
+  "chairMarkedPrepared": true,
+  "hydrationWarnings": [],
+  "console": [],
+  "ok": true
+}

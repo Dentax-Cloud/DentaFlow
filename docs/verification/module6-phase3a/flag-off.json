@@ -1,0 +1,17 @@
+{
+  "phase": "flag-off",
+  "startedAt": "2026-08-02T10:32:38.656Z",
+  "featureFlags": {},
+  "spineUrl": "http://127.0.0.1:3650/clinical/encounter/phase3a_clicktest_appt",
+  "spineUnreachable": true,
+  "chairPrepUrl": "http://127.0.0.1:3650/clinical",
+  "chairPrepUnreachable": true,
+  "legacyUrl": "http://127.0.0.1:3650/clinical/encounter/phase3a_clicktest_appt",
+  "examCardAbsent": true,
+  "chairPrepNavAbsent": true,
+  "hydrationWarnings": [],
+  "console": [
+    "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "ok": true
+}

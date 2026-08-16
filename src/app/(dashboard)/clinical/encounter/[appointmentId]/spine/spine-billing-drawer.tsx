@@ -29,6 +29,7 @@ export function SpineBillingDrawer({
   billedInvoice = null,
   insuranceChipStatus,
   insuranceLabel = "Insurance",
+  nurseMode = false,
   open,
   onOpenChange,
   children,
@@ -41,6 +42,8 @@ export function SpineBillingDrawer({
   /** Must match Gate Summary insurance chip (same canonical evaluateInsuranceGate source). */
   insuranceChipStatus: GateChipStatus;
   insuranceLabel?: string;
+  /** Assist-only users may log consumables but should not see billing projections. */
+  nurseMode?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children?: ReactNode;
@@ -102,13 +105,15 @@ export function SpineBillingDrawer({
 
         {open ? (
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-            <GateStatusChip
-              label={insuranceLabel}
-              status={insuranceChipStatus}
-              className="w-full"
-            />
+            {!nurseMode ? (
+              <GateStatusChip
+                label={insuranceLabel}
+                status={insuranceChipStatus}
+                className="w-full"
+              />
+            ) : null}
 
-            <ul className="space-y-2">
+            {!nurseMode ? <ul className="space-y-2">
               {preview.lines.length === 0 ? (
                 <li className="text-sm text-slate-500">No procedure lines yet</li>
               ) : (
@@ -139,9 +144,9 @@ export function SpineBillingDrawer({
                   </li>
                 ))
               )}
-            </ul>
+            </ul> : null}
 
-            <div className="space-y-2 border-t border-slate-100 pt-3 text-sm">
+            {!nurseMode ? <div className="space-y-2 border-t border-slate-100 pt-3 text-sm">
               {billedInvoice && invoicedTotal != null ? (
                 <div
                   className="rounded-md bg-teal-50 px-2.5 py-2 text-sm text-teal-950 ring-1 ring-inset ring-teal-200"
@@ -195,9 +200,9 @@ export function SpineBillingDrawer({
                   {preview.gateMessage}
                 </p>
               ) : null}
-            </div>
+            </div> : null}
 
-            {pendingRows.length > 0 ? (
+            {!nurseMode && pendingRows.length > 0 ? (
               <div
                 className="space-y-2 border-t border-dashed border-slate-200 pt-3"
                 data-pending-prices

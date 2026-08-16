@@ -14,6 +14,7 @@ import {
   isEncounterStatus,
 } from "./state-machine";
 import type { EncounterStatus } from "./types";
+import { assertExamCompleteForGatesTransition } from "./exam";
 
 export type CreateEncounterFromAppointmentParams = {
   tenantId: string;
@@ -154,6 +155,8 @@ export type TransitionEncounterParams = {
   userId?: string;
   staffMemberId?: string | null;
   handoffToStaffId?: string | null;
+  /** Optional non-status stage for a provider handoff/presence record. */
+  presenceStage?: string;
 };
 
 export async function transitionEncounterStatus(params: TransitionEncounterParams) {
@@ -170,6 +173,9 @@ export async function transitionEncounterStatus(params: TransitionEncounterParam
   }
 
   assertTransition(encounter.status as EncounterStatus, params.toStatus);
+  if (params.toStatus === "gates") {
+    assertExamCompleteForGatesTransition(encounter);
+  }
 
   const from = encounter.status as EncounterStatus;
   const updated = await updateEncounterAudited(
@@ -205,7 +211,7 @@ export async function transitionEncounterStatus(params: TransitionEncounterParam
         tenant: { connect: { id: params.tenantId } },
         encounter: { connect: { id: encounter.id } },
         staff: { connect: { id: presenceStaffId } },
-        stage: params.toStatus,
+        stage: params.presenceStage ?? params.toStatus,
         presentFrom: new Date(),
       },
       { tenantId: params.tenantId, userId: params.userId },
@@ -223,7 +229,7 @@ export async function transitionEncounterStatus(params: TransitionEncounterParam
         kind: "provider_handoff",
         fromStaffId: params.staffMemberId,
         toStaffId: params.handoffToStaffId,
-        stage: params.toStatus,
+        stage: params.presenceStage ?? params.toStatus,
       },
     });
   }
@@ -390,6 +396,9 @@ export function encounterSelectForWorkspace() {
     closedReason: true,
     painScore: true,
     painNextAction: true,
+    examCompletedAt: true,
+    examinedByStaffId: true,
+    examClinicalNoteId: true,
     preAuthOverridden: true,
     preAuthOverrideReason: true,
     patientAckPreAuthAt: true,
