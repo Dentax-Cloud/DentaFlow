@@ -56,9 +56,16 @@ type Props = {
   patients: Patient[];
   procedures: ProcedureCatalog[];
   countryCode: string;
+  canWrite?: boolean;
 };
 
-export function BillingClient({ invoices, patients, procedures, countryCode }: Props) {
+export function BillingClient({
+  invoices,
+  patients,
+  procedures,
+  countryCode,
+  canWrite = false,
+}: Props) {
   const router = useRouter();
   const money = (amount: number) => formatCurrency(amount, countryCode);
   const [createOpen, setCreateOpen] = useState(false);
@@ -198,6 +205,7 @@ export function BillingClient({ invoices, patients, procedures, countryCode }: P
           <Button variant="outline" asChild>
             <Link href="/billing/claims">Insurance claims</Link>
           </Button>
+          {canWrite ? (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -314,6 +322,7 @@ export function BillingClient({ invoices, patients, procedures, countryCode }: P
             </form>
           </DialogContent>
         </Dialog>
+          ) : null}
         </div>
       </div>
 
@@ -344,12 +353,12 @@ export function BillingClient({ invoices, patients, procedures, countryCode }: P
                   <span className="font-semibold">{money(Number(inv.total))}</span>
                   <Badge variant="outline">{invoicePayerTypeLabel(inv.payerType)}</Badge>
                   <Badge variant={statusColors[inv.status] ?? "secondary"}>{inv.status}</Badge>
-                  {inv.status === "DRAFT" && (
+                  {canWrite && inv.status === "DRAFT" && (
                     <Button type="button" size="sm" variant="outline" onClick={() => handleMarkSent(inv.id)}>
                       Mark sent
                     </Button>
                   )}
-                  {balance > 0 && inv.status !== "VOID" && (
+                  {canWrite && balance > 0 && inv.status !== "VOID" && (
                     <Button type="button" size="sm" onClick={() => openPaymentDialog(inv)}>
                       <Receipt className="mr-1 h-3.5 w-3.5" />
                       Record payment

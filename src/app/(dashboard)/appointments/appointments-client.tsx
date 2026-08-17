@@ -40,6 +40,7 @@ import { InsuranceStatusBadge } from "@/components/insurance/insurance-status-ba
 import type { InsuranceVerificationStatus } from "@/lib/insurance/policy-types";
 import type { Appointment, Chair, Patient, Doctor, StaffMember, UserRole } from "@prisma/client";
 import { AppointmentStatus } from "@prisma/client";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
 
 type AppointmentWithRelations = Appointment & {
   patient: Patient | null;
@@ -145,6 +146,15 @@ export function AppointmentsClient({
   );
   const realtimeEnabled = isRealtimeAvailable();
   const { confirmBeforeStatusChange, dialog: chairsideDialog } = useChairsideAppointmentConfirm();
+  const canUpdateAppointment = staffRole
+    ? hasPermission(staffRole, PERMISSIONS.appointments.write)
+    : false;
+  const canOpenClinical = staffRole
+    ? hasPermission(staffRole, PERMISSIONS.clinical_chart.read)
+    : false;
+  const canStartChairside = staffRole
+    ? hasPermission(staffRole, PERMISSIONS.clinical_chart.write)
+    : false;
 
   useEffect(() => {
     setAppointments(initialAppointments);
@@ -233,17 +243,19 @@ export function AppointmentsClient({
     if (apt.isBlock) return null;
 
     const actions: { label: string; status: AppointmentStatus }[] = [];
-    if (apt.status === "SCHEDULED" || apt.status === "CONFIRMED") {
-      actions.push({ label: "Check in", status: "ARRIVED" });
-    }
-    if (apt.status === "ARRIVED") {
-      actions.push({ label: "Start", status: "IN_CHAIR" });
-    }
-    if (apt.status === "IN_CHAIR") {
-      actions.push({ label: "Complete", status: "COMPLETED" });
-    }
-    if (apt.status === "COMPLETED") {
-      actions.push({ label: "Create invoice", status: "INVOICED" });
+    if (canUpdateAppointment) {
+      if (apt.status === "SCHEDULED" || apt.status === "CONFIRMED") {
+        actions.push({ label: "Check in", status: "ARRIVED" });
+      }
+      if (apt.status === "ARRIVED") {
+        actions.push({ label: "Start", status: "IN_CHAIR" });
+      }
+      if (apt.status === "IN_CHAIR") {
+        actions.push({ label: "Complete", status: "COMPLETED" });
+      }
+      if (apt.status === "COMPLETED") {
+        actions.push({ label: "Create invoice", status: "INVOICED" });
+      }
     }
 
     return (
@@ -271,29 +283,35 @@ export function AppointmentsClient({
             {action.label}
           </Button>
         ))}
-        <Button size="sm" variant="ghost" asChild>
-          <Link href={encounterWorkspacePath(apt.id)}>
-            Open encounter
-          </Link>
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          type="button"
-          onClick={() => router.push(encounterWorkspacePath(apt.id))}
-        >
-          Chairside
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link href={`/clinical/radiographs?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
-            Radiographs
-          </Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link href={`/clinical/photos?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
-            Photos
-          </Link>
-        </Button>
+        {canOpenClinical ? (
+          <>
+            <Button size="sm" variant="ghost" asChild>
+              <Link href={encounterWorkspacePath(apt.id)}>
+                Open encounter
+              </Link>
+            </Button>
+            {canStartChairside ? (
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={() => router.push(encounterWorkspacePath(apt.id))}
+              >
+                Chairside
+              </Button>
+            ) : null}
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/clinical/radiographs?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
+                Radiographs
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/clinical/photos?patientId=${apt.patientId}&appointmentId=${apt.id}`}>
+                Photos
+              </Link>
+            </Button>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -390,26 +408,30 @@ export function AppointmentsClient({
           <p className="text-muted-foreground">Calendar & chair board</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/clinical/emergency">
-              <AlertCircle className="mr-2 h-4 w-4" />
-              Emergency
-              {emergencyWaiting > 0 && (
-                <Badge className="ml-2 bg-yellow-500 text-white">{emergencyWaiting}</Badge>
-              )}
-              {emergencyImmediate > 0 && (
-                <Badge className="ml-1 animate-pulse bg-red-600 text-white">
-                  {emergencyImmediate} urgent
-                </Badge>
-              )}
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/appointments/book">
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Book
-            </Link>
-          </Button>
+          {canOpenClinical ? (
+            <Button variant="outline" asChild>
+              <Link href="/clinical/emergency">
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Emergency
+                {emergencyWaiting > 0 && (
+                  <Badge className="ml-2 bg-yellow-500 text-white">{emergencyWaiting}</Badge>
+                )}
+                {emergencyImmediate > 0 && (
+                  <Badge className="ml-1 animate-pulse bg-red-600 text-white">
+                    {emergencyImmediate} urgent
+                  </Badge>
+                )}
+              </Link>
+            </Button>
+          ) : null}
+          {canUpdateAppointment ? (
+            <Button asChild>
+              <Link href="/appointments/book">
+                <CalendarPlus className="mr-2 h-4 w-4" />
+                Book
+              </Link>
+            </Button>
+          ) : null}
           <Button
             variant={view === "calendar" ? "default" : "outline"}
             onClick={() => setView("calendar")}

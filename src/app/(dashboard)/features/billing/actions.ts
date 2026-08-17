@@ -282,6 +282,7 @@ export async function createStripePaymentLink(invoiceId: string) {
 
 export async function getInvoices(status?: InvoiceStatus) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
   return db.invoice.findMany({
     where: { tenantId: ctx.tenantId, deletedAt: null, ...(status ? { status } : {}) },
     include: { patient: true, payments: true, items: true },
@@ -292,6 +293,7 @@ export async function getInvoices(status?: InvoiceStatus) {
 
 export async function getProcedureCatalog() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
   return db.procedureCatalog.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
     orderBy: { name: "asc" },

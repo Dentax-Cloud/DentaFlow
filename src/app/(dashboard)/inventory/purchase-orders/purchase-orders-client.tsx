@@ -38,10 +38,12 @@ export function PurchaseOrdersClient({
   orders: initialOrders,
   catalog,
   suppliers,
+  canWrite = false,
 }: {
   orders: PoRow[];
   catalog: CatalogItem[];
   suppliers: SupplierOpt[];
+  canWrite?: boolean;
 }) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -152,9 +154,11 @@ export function PurchaseOrdersClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => setCreateOpen((o) => !o)}>
-          {createOpen ? "Hide create form" : "New purchase order"}
-        </Button>
+        {canWrite ? (
+          <Button size="sm" onClick={() => setCreateOpen((o) => !o)}>
+            {createOpen ? "Hide create form" : "New purchase order"}
+          </Button>
+        ) : null}
         {selectedPo && (
           <Button size="sm" variant="outline" onClick={() => setSelectedPoId(null)}>
             Clear PO selection
@@ -232,13 +236,15 @@ export function PurchaseOrdersClient({
                 <CardTitle className="font-mono text-base">{po.poRef ?? po.id}</CardTitle>
                 <div className="flex items-center gap-2">
                   <Badge>{po.status}</Badge>
-                  <Button
-                    size="sm"
-                    variant={selectedPoId === po.id ? "default" : "outline"}
-                    onClick={() => setSelectedPoId(po.id === selectedPoId ? null : po.id)}
-                  >
-                    {selectedPoId === po.id ? "Selected" : "Receive against"}
-                  </Button>
+                  {canWrite ? (
+                    <Button
+                      size="sm"
+                      variant={selectedPoId === po.id ? "default" : "outline"}
+                      onClick={() => setSelectedPoId(po.id === selectedPoId ? null : po.id)}
+                    >
+                      {selectedPoId === po.id ? "Selected" : "Receive against"}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </CardHeader>

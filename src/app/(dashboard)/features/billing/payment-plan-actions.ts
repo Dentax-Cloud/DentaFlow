@@ -2,6 +2,8 @@
 
 import { randomUUID } from "crypto";
 import { requireTenantContext } from "@/lib/tenant/context";
+import { requirePermission } from "@/lib/rbac/guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { serializeDecimal } from "@/lib/utils/serialize";
@@ -16,6 +18,7 @@ export async function createPaymentPlan(input: {
   notes?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.write);
 
   const patient = await db.patient.findFirst({
     where: { id: input.patientId, tenantId: ctx.tenantId, deletedAt: null },
@@ -76,6 +79,7 @@ export async function recordInstallmentPayment(input: {
   paymentRef?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.write);
 
   const installment = await db.paymentPlanInstallment.findFirst({
     where: { id: input.installmentId },
@@ -114,6 +118,7 @@ export async function recordInstallmentPayment(input: {
 
 export async function getPaymentPlan(planId: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
 
   const plan = await db.paymentPlan.findFirst({
     where: { id: planId, tenantId: ctx.tenantId },
@@ -128,6 +133,7 @@ export async function getPaymentPlan(planId: string) {
 
 export async function getOverdueInstallments() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
   const now = new Date();
 
   const installments = await db.paymentPlanInstallment.findMany({
@@ -151,6 +157,7 @@ export async function getOverdueInstallments() {
 
 export async function getPaymentPlansForTenant() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.billing.read);
 
   const plans = await db.paymentPlan.findMany({
     where: { tenantId: ctx.tenantId },

@@ -290,6 +290,7 @@ export async function getAppointments(
   options?: { includeCanceled?: boolean },
 ) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   const statusFilter = options?.includeCanceled
     ? {}
     : { status: { notIn: [AppointmentStatus.CANCELED, AppointmentStatus.NO_SHOW] } };
@@ -314,6 +315,7 @@ export async function getAppointments(
 
 export async function getChairs() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   return db.chair.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
     include: {
@@ -331,6 +333,7 @@ export async function getChairs() {
 
 export async function getDoctors() {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   return db.doctor.findMany({
     where: { tenantId: ctx.tenantId },
     include: { user: true },

@@ -41,6 +41,7 @@ vi.mock("@/lib/tenant/context", async (importOriginal) => {
   };
 });
 
+
 vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => mockRevalidatePath(...a),
 }));
@@ -398,8 +399,7 @@ describe("tenant IDOR isolation — inventory decrement ownership", () => {
 describe("tenant IDOR isolation — /reception route rule", () => {
   it("gates /reception on appointments:read (no fail-open omission)", () => {
     expect(canAccessPath(UserRole.RECEPTIONIST, "/reception")).toBe(true);
-    expect(canAccessPath(UserRole.STORE, "/reception")).toBe(true);
-    // All matrix roles currently have appointments:read; rule still binds the path.
+    expect(canAccessPath(UserRole.STORE, "/reception")).toBe(false);
     expect(canAccessPath(UserRole.DOCTOR, "/reception")).toBe(true);
   });
 });

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { db } from "@/lib/db";
 import { serializeEntity } from "@/lib/utils/serialize";
+import { hasPermission, PERMISSIONS } from "@/lib/rbac/permissions";
+import { requireStaffMemberRole } from "@/lib/rbac/staff-role";
 import { Button } from "@/components/ui/button";
 import { PurchaseOrdersClient } from "./purchase-orders-client";
 
@@ -9,6 +11,8 @@ export const runtime = "nodejs";
 
 export default async function PurchaseOrdersPage() {
   const ctx = await requireRouteAccess("inventory", "read");
+  const role = requireStaffMemberRole(ctx);
+  const canWrite = hasPermission(role, PERMISSIONS.inventory.write);
 
   const [orders, catalog, suppliers] = await Promise.all([
     db.purchaseOrder.findMany({
@@ -72,6 +76,7 @@ export default async function PurchaseOrdersPage() {
         orders={serializedOrders}
         catalog={serializedCatalog}
         suppliers={suppliers}
+        canWrite={canWrite}
       />
     </div>
   );

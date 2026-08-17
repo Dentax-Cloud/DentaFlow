@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { getTenantContext } from "@/lib/tenant/context";
 import { getServerAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { isClinicalRole } from "@/lib/rbac/permissions";
+import { isClinicalRole, normalizeDashboardRole } from "@/lib/rbac/permissions";
 import {
   getDashboardKPIs,
   getRoleDashboardExtras,
@@ -38,9 +38,23 @@ export default async function DashboardPage() {
   }
 
   const staffMemberId = ctx.staffMember?.id ?? null;
+  const dashboardRole = normalizeDashboardRole(userRole);
 
   const [kpis, extras, checklist] = await Promise.all([
-    getDashboardKPIs(ctx.tenant.id),
+    dashboardRole === "STORE"
+      ? Promise.resolve({
+          todayAppointments: 0,
+          completedToday: 0,
+          pendingInvoices: 0,
+          revenueThisMonth: 0,
+          chairUtilization: 0,
+          patientCount: 0,
+          inChairNow: 0,
+          totalChairs: 0,
+          emergencyWaiting: 0,
+          emergencyImmediate: 0,
+        })
+      : getDashboardKPIs(ctx.tenant.id),
     getRoleDashboardExtras(ctx.tenant.id, userRole, staffMemberId),
     getOnboardingChecklist(ctx.tenant),
   ]);

@@ -232,6 +232,7 @@ export async function getNextAvailableSlot(input: {
   branchId?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   const { getNextAvailableSlotAnyDoctor } =
     await import("@/lib/appointments/availability");
   return getNextAvailableSlotAnyDoctor(
@@ -247,6 +248,7 @@ export async function getEmergencyDoctorOptions(input?: {
   branchId?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
   const clinicTz = resolveClinicTimezone(ctx.tenant.timezone);
   const { getClinicNowParts } = await import("@/lib/datetime/clinic-timezone");
   const { dateStr: today } = getClinicNowParts(clinicTz);
@@ -265,6 +267,7 @@ export async function getDoctorsWithAvailability(input: {
   branchId?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
 
   const { getAllDoctorAvailability } =
     await import("@/lib/appointments/availability");
@@ -284,6 +287,7 @@ export async function getSlotsForDoctor(input: {
   branchId?: string;
 }) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.appointments.read);
 
   return getDoctorSlots({
     tenantId: ctx.tenantId,

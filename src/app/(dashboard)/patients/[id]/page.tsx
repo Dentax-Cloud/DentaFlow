@@ -82,7 +82,12 @@ export default async function PatientDetailPage({
       : Promise.resolve([]),
     getPatientInsurancePolicies(id),
     getTenantInsuranceProviders(),
-    getPatientTreatmentPlanPreAuths(id),
+    getPatientTreatmentPlanPreAuths(id).catch((error: unknown) => {
+      // Roles with patients:read but not clinical_schedule (e.g. FINANCE) must
+      // still open the 360 page; unhandled FORBIDDEN was a generic RSC crash.
+      if (error instanceof Error && error.message === "FORBIDDEN") return {};
+      throw error;
+    }),
   ]);
 
   if (!patient) notFound();

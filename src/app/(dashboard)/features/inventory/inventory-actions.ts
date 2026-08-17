@@ -28,6 +28,7 @@ function derivePurchaseOrderStatus(
 
 export async function scanSupplierBarcode(barcode: string) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.inventory.read);
 
   const barcodeType = detectBarcodeType(barcode);
 
@@ -532,6 +533,7 @@ export async function createPurchaseOrder(input: {
 
 export async function getExpiryAlerts(daysAhead = 30) {
   const ctx = await requireTenantContext();
+  await requirePermission(PERMISSIONS.inventory.read);
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + daysAhead);

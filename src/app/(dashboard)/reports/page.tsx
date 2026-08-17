@@ -11,7 +11,7 @@ import { serializeDecimal } from "@/lib/utils/serialize";
 import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
-  const ctx = await requireRouteAccess("reports", "read");
+  const ctx = await requireRouteAccess("reports", "export");
 
   const [kpis, doctorProductivity, revenueByProcedure, retention, chairUtil, taxSummary] =
     await Promise.all([
