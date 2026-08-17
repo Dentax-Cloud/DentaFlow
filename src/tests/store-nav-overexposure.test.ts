@@ -113,7 +113,7 @@ describe("other dashboard roles — nav vs matrix (Finding 4 remainder)", () => 
   });
 });
 
-describe("Finding 3 — post-login vs getRoleHomePath (intentional, not changed)", () => {
+describe("Finding 3 — post-login /dashboard is confirmed-intentional", () => {
   it("login destination is hardcoded /dashboard; getRoleHomePath is bounce-only", async () => {
     const fs = await import("node:fs/promises");
     const src = await fs.readFile("src/lib/auth/post-login-redirect.ts", "utf8");
