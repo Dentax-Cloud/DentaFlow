@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EncounterGateSummary } from "@/components/clinical/encounter-gate-summary";
@@ -61,6 +61,7 @@ import { SpineClinicalFindings } from "./spine-clinical-findings";
 import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
 import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
+import { useSpineMutation } from "./use-spine-mutation";
 
 type DraftState = {
   asaClass: string;
@@ -160,12 +161,20 @@ export function SpineWorkspaceClient({
   initial: SpineWorkspaceData;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [hasMounted, setHasMounted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [encounter, setEncounter] = useState<SpineEncounterSerialized>(initial.encounter);
   const [gates, setGates] = useState<GateSummary>(initial.gates);
+  const { pending, error, message, run } = useSpineMutation({
+    appointmentId,
+    loadWorkspace: loadSpineWorkspaceData,
+    applyWorkspace: (data) => {
+      setEncounter(data.encounter);
+      setGates(data.gates);
+    },
+    refreshRouter: () => {
+      router.refresh();
+    },
+  });
   const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
   const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
@@ -245,44 +254,6 @@ export function SpineWorkspaceClient({
 
   function patchDraft(partial: Partial<DraftState>) {
     setDraft((prev) => ({ ...prev, ...partial }));
-  }
-
-  async function refresh() {
-    const data = await loadSpineWorkspaceData(appointmentId);
-    setEncounter(data.encounter);
-    setGates(data.gates);
-    router.refresh();
-  }
-
-  function run(
-    action: () => Promise<unknown>,
-    successMsg?: string,
-    afterSuccess?: () => void,
-  ) {
-    setError(null);
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await action();
-        // Spine actions return { ok:false, error } for expected validation failures
-        // (gates / billing) so production Next.js does not mask them as RSC digests.
-        if (
-          result &&
-          typeof result === "object" &&
-          "ok" in result &&
-          (result as { ok: unknown }).ok === false &&
-          "error" in result
-        ) {
-          setError(String((result as { error: unknown }).error));
-          return;
-        }
-        await refresh();
-        afterSuccess?.();
-        if (successMsg) setMessage(successMsg);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong.");
-      }
-    });
   }
 
   const status = encounter.status as EncounterStatus;
