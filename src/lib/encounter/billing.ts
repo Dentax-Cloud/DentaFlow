@@ -13,6 +13,10 @@ import {
   isSpineLineIncludedInInvoice,
 } from "./billing-selection";
 import { isMaterialUsageBillableOnInvoice } from "./billing-materials";
+import { GateAssertionError } from "./errors";
+import {
+  assertProcedureStartGatesFromSummary,
+} from "./stage-transition-blockers";
 
 export {
   getEncounterInvoiceGateMessage,
@@ -252,25 +256,22 @@ export async function advanceToProcedureExecutionIfReady(params: {
   userId?: string;
   staffMemberId?: string | null;
 }) {
-  const { evaluateEncounterGates } = await import("./gates");
-  const { loadGateBundleForEncounter } = await import("./gate-enforcement");
+  const { loadGateBundleForEncounter, summarizeGatesFromRecords } = await import(
+    "./gate-enforcement"
+  );
   const loaded = await loadGateBundleForEncounter(params.tenantId, params.encounterId);
   if (!loaded) throw new Error("Encounter not found.");
   if (loaded.encounter.status !== "gates") {
-    throw new Error("Encounter must be in gates status.");
+    throw new GateAssertionError("Can't move to Procedure Execution yet: encounter is not in Gates.");
   }
-  const result = evaluateEncounterGates({
+  const summary = summarizeGatesFromRecords({
     risk: loaded.encounter.riskAssessments[0] ?? null,
     consent: loaded.encounter.consentRecords[0] ?? null,
     insurance: loaded.encounter.insuranceVerifications[0] ?? null,
     sterilizationLogs: [],
     preAuthOverridden: loaded.encounter.preAuthOverridden,
   });
-  if (!(result.risk.cleared && result.consent?.cleared && result.insurance?.cleared)) {
-    throw new Error(
-      "Risk, consent, and insurance gates must all be clear before procedures.",
-    );
-  }
+  assertProcedureStartGatesFromSummary(summary);
   return transitionEncounterStatus({
     tenantId: params.tenantId,
     encounterId: params.encounterId,

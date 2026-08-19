@@ -311,9 +311,11 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
 
     await expect(clearSpineRisk({ encounterId: "enc_test", asaClass: "II" })).resolves.toEqual({
       ok: true,
+      data: { asaClass: "II" },
     });
     await expect(grantSpineConsent({ encounterId: "enc_test" })).resolves.toMatchObject({
-      id: "consent_1",
+      ok: true,
+      data: { id: "consent_1" },
     });
     await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({ noteId: "note_exam" });
     await expect(
@@ -342,9 +344,11 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
 
     await expect(clearSpineRisk({ encounterId: "enc_test", asaClass: "II" })).resolves.toEqual({
       ok: true,
+      data: { asaClass: "II" },
     });
     await expect(grantSpineConsent({ encounterId: "enc_test" })).resolves.toMatchObject({
-      id: "consent_1",
+      ok: true,
+      data: { id: "consent_1" },
     });
     await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({ noteId: "note_exam" });
     await expect(
@@ -356,5 +360,60 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
     ).resolves.toEqual({ ok: true });
     await expect(logSpineMaterial(CONSUMABLE_LOG)).resolves.toMatchObject({ ok: true });
     await expect(logSpineMaterial(TRACKED_LOG)).resolves.toMatchObject({ ok: true });
+  }, ACTION_MS);
+
+  it("rejects empty ASA and does not persist a cleared risk", async () => {
+    mockRequireTenantContext.mockResolvedValue(dentistContext());
+    await expect(clearSpineRisk({ encounterId: "enc_test", asaClass: "" })).resolves.toEqual({
+      ok: false,
+      error: "Select an ASA class (I–VI, optional emergency E) before clearing risk.",
+    });
+    await expect(clearSpineRisk({ encounterId: "enc_test" })).resolves.toMatchObject({
+      ok: false,
+    });
+    expect(mockCreateRisk).not.toHaveBeenCalled();
+    expect(mockUpdateRisk).not.toHaveBeenCalled();
+  }, ACTION_MS);
+
+  it("persists the selected ASA class on a new risk record", async () => {
+    mockRequireTenantContext.mockResolvedValue(dentistContext());
+    await expect(
+      clearSpineRisk({ encounterId: "enc_test", asaClass: "II" }),
+    ).resolves.toEqual({
+      ok: true,
+      data: { asaClass: "II" },
+    });
+    expect(mockCreateRisk).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asaClass: "II",
+        clearedAt: expect.any(Date),
+      }),
+      expect.anything(),
+    );
+  }, ACTION_MS);
+
+  it("persists emergency ASA II-E on an existing uncleared risk record", async () => {
+    mockRequireTenantContext.mockResolvedValue(dentistContext());
+    mockRiskFindFirst.mockResolvedValue({
+      id: "risk_existing",
+      asaClass: null,
+      clearedAt: null,
+    });
+    await expect(
+      clearSpineRisk({ encounterId: "enc_test", asaClass: "II-E" }),
+    ).resolves.toEqual({
+      ok: true,
+      data: { asaClass: "II-E" },
+    });
+    expect(mockUpdateRisk).toHaveBeenCalledWith(
+      "risk_existing",
+      "tenant_test",
+      expect.objectContaining({
+        asaClass: "II-E",
+        clearedAt: expect.any(Date),
+      }),
+      expect.anything(),
+    );
+    expect(mockCreateRisk).not.toHaveBeenCalled();
   }, ACTION_MS);
 });
