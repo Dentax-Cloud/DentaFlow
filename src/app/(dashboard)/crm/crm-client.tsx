@@ -186,13 +186,19 @@ export function CrmClient({
             {recalls.map((r) => (
               <div key={r.id} className="flex justify-between border-b pb-2 text-sm">
                 <span>
-                  {r.patient.firstName} {r.patient.lastName} — {r.type}
+                  <Link
+                    href={`/patients/${r.patientId}`}
+                    className="font-medium hover:underline"
+                  >
+                    {r.patient.firstName} {r.patient.lastName}
+                  </Link>
+                  <span className="text-muted-foreground"> — {r.type}</span>
                 </span>
                 {r.churnRisk && <Badge variant="destructive">{r.churnRisk}</Badge>}
               </div>
             ))}
             {recalls.length === 0 && (
-              <p className="text-sm text-muted-foreground">No pending recalls</p>
+              <p className="text-sm text-muted-foreground">No overdue or upcoming recalls</p>
             )}
           </CardContent>
         </Card>
