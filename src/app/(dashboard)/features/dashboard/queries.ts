@@ -2,10 +2,12 @@ import { db } from "@/lib/db";
 import { startOfDay, endOfDay } from "date-fns";
 import type { UserRole } from "@prisma/client";
 import { normalizeDashboardRole } from "@/lib/rbac/permissions";
+import { billedInvoiceWhere, reportRangeBounds, roundMoney } from "@/lib/reports/revenue";
 
 export async function getDashboardKPIs(tenantId: string) {
   const todayStart = startOfDay(new Date());
   const todayEnd = endOfDay(new Date());
+  const monthRange = reportRangeBounds("month");
 
   const [
     todayAppointments,
@@ -33,12 +35,9 @@ export async function getDashboardKPIs(tenantId: string) {
         deletedAt: null,
       },
     }),
-    db.payment.aggregate({
-      where: {
-        tenantId,
-        paidAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
-      },
-      _sum: { amount: true },
+    db.invoice.aggregate({
+      where: billedInvoiceWhere(tenantId, monthRange.start, monthRange.end),
+      _sum: { total: true },
     }),
     db.chair.count({ where: { tenantId, isActive: true } }),
     db.appointment.count({
@@ -63,7 +62,7 @@ export async function getDashboardKPIs(tenantId: string) {
     todayAppointments,
     completedToday,
     pendingInvoices,
-    revenueThisMonth: Number(revenueThisMonth._sum.amount ?? 0),
+    revenueThisMonth: roundMoney(Number(revenueThisMonth._sum.total ?? 0)),
     chairUtilization,
     patientCount,
     inChairNow,

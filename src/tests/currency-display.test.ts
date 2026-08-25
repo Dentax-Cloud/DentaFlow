@@ -13,4 +13,10 @@ describe("tenant-aware currency display", () => {
     expect(formatted).toContain("₹");
     expect(formatted).not.toContain("$");
   });
+
+  it("formats UK amounts with pound sterling, not USD", () => {
+    const formatted = formatCurrency(0, "GB");
+    expect(formatted).toContain("£");
+    expect(formatted).not.toContain("$");
+  });
 });

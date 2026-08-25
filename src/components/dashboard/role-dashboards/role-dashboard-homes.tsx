@@ -14,6 +14,7 @@ import {
   Truck,
 } from "lucide-react";
 import type { StoreDashboardStats } from "@/app/(dashboard)/features/dashboard/queries";
+import { formatCurrency } from "@/lib/countries";
 
 type KPIs = {
   todayAppointments: number;
@@ -102,7 +103,13 @@ export function ReceptionistDashboardHome({ kpis }: { kpis: KPIs }) {
   );
 }
 
-export function FinanceDashboardHome({ kpis }: { kpis: KPIs }) {
+export function FinanceDashboardHome({
+  kpis,
+  countryCode,
+}: {
+  kpis: KPIs;
+  countryCode: string;
+}) {
   return (
     <div className="space-y-6">
       <div>
@@ -111,7 +118,13 @@ export function FinanceDashboardHome({ kpis }: { kpis: KPIs }) {
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard title="Pending invoices" value={kpis.pendingInvoices} icon={Receipt} />
-        <StatCard title="Revenue (month)" value={kpis.revenueThisMonth} icon={Receipt} formatCurrency />
+        <StatCard
+          title="Billed revenue (month)"
+          value={kpis.revenueThisMonth}
+          icon={Receipt}
+          formatCurrency
+          countryCode={countryCode}
+        />
         <StatCard title="Active patients" value={kpis.patientCount} icon={Users} />
       </div>
       <QuickLinks
@@ -154,17 +167,17 @@ function StatCard({
   title,
   value,
   icon: Icon,
-  formatCurrency = false,
+  formatCurrency: asCurrency = false,
+  countryCode = "AE",
 }: {
   title: string;
   value: number | string;
   icon: React.ComponentType<{ className?: string }>;
   formatCurrency?: boolean;
+  countryCode?: string;
 }) {
   const display =
-    formatCurrency && typeof value === "number"
-      ? new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(value)
-      : value;
+    asCurrency && typeof value === "number" ? formatCurrency(value, countryCode) : value;
 
   return (
     <Card>

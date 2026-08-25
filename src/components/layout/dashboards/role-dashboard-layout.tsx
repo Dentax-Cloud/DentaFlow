@@ -23,10 +23,12 @@ export function RoleDashboardHome({
   role,
   kpis,
   tenantName,
+  countryCode,
 }: {
   role: UserRole;
   kpis: KPIs;
   tenantName: string;
+  countryCode: string;
 }) {
   switch (normalizeDashboardRole(role)) {
     case "DOCTOR":
@@ -34,7 +36,7 @@ export function RoleDashboardHome({
     case "RECEPTIONIST":
       return <ReceptionistDashboardHome kpis={kpis} />;
     case "FINANCE":
-      return <FinanceDashboardHome kpis={kpis} />;
+      return <FinanceDashboardHome kpis={kpis} countryCode={countryCode} />;
     case "STORE":
       return (
         <StoreDashboardHome
