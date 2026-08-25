@@ -12,6 +12,23 @@ afterEach(() => {
 
 const workspace = { encounter: { id: "enc-1" }, gates: {} };
 
+/** `router.refresh()` hang stand-in. Must not be awaited; flush so vitest can exit. */
+function hangingRefresh() {
+  const releases: Array<() => void> = [];
+  const refreshRouter = vi.fn((): void => {
+    return new Promise<void>((resolve) => {
+      releases.push(resolve);
+    }) as unknown as void;
+  });
+  return {
+    refreshRouter,
+    flush() {
+      for (const release of releases) release();
+      releases.length = 0;
+    },
+  };
+}
+
 const clientSource = readFileSync(
   path.resolve(
     process.cwd(),
@@ -104,29 +121,26 @@ function SpineMutationButtons({
   });
   const write = !pending;
 
+  const button = (name: string, successMsg?: string) =>
+    createElement(
+      "button",
+      {
+        type: "button",
+        disabled: !write,
+        onClick: () => run(action, successMsg),
+      },
+      name,
+    );
+
   return createElement(
     "div",
     null,
     createElement("span", { "data-testid": "pending" }, String(pending)),
     createElement("span", { "data-testid": "applied" }, String(applied)),
-    createElement(
-      "button",
-      {
-        type: "button",
-        disabled: !write,
-        onClick: () => run(action, "Consent granted"),
-      },
-      "Grant clinical consent",
-    ),
-    createElement(
-      "button",
-      {
-        type: "button",
-        disabled: !write,
-        onClick: () => run(action),
-      },
-      "Complete",
-    ),
+    button("Grant clinical consent", "Consent granted"),
+    button("Complete"),
+    button("Add line", "Procedure line added"),
+    button("GATES → PROCEDURE EXECUTION", "Moved to procedure execution"),
   );
 }
 
@@ -174,12 +188,7 @@ describe("useSpineMutation sequential actions", () => {
   it("clears pending after the first success even if router.refresh never settles, so the next button can run", async () => {
     const action = vi.fn(async () => ({ ok: true }));
     const loadWorkspace = vi.fn(async () => workspace);
-    let releaseRefresh: (() => void) | undefined;
-    const refreshRouter = vi.fn((): void => {
-      return new Promise<void>((resolve) => {
-        releaseRefresh = resolve;
-      }) as unknown as void;
-    });
+    const { refreshRouter, flush } = hangingRefresh();
 
     render(
       createElement(SpineMutationButtons, {
@@ -203,7 +212,38 @@ describe("useSpineMutation sequential actions", () => {
       expect(screen.getByTestId("pending").textContent).toBe("false"),
     );
     expect(screen.getByTestId("applied").textContent).toBe("2");
-    releaseRefresh?.();
+    flush();
+  });
+
+  it("clears pending after Add line so GATES → PROCEDURE EXECUTION can run without a reload", async () => {
+    const action = vi.fn(async () => ({ ok: true }));
+    const loadWorkspace = vi.fn(async () => workspace);
+    const { refreshRouter, flush } = hangingRefresh();
+
+    render(
+      createElement(SpineMutationButtons, {
+        action,
+        loadWorkspace,
+        refreshRouter,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add line" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId("pending").textContent).toBe("false"),
+    );
+    expect(screen.getByTestId("applied").textContent).toBe("1");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "GATES → PROCEDURE EXECUTION" }),
+    );
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByTestId("pending").textContent).toBe("false"),
+    );
+    expect(screen.getByTestId("applied").textContent).toBe("2");
+    flush();
   });
 
   it("still clears pending when the server returns { ok: false }, so a retry is possible", async () => {
