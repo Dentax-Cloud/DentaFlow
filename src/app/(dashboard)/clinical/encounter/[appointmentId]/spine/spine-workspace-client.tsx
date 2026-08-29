@@ -61,6 +61,13 @@ import { SpineClinicalFindings } from "./spine-clinical-findings";
 import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
 import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
+import { formatCollapsedGateSummary } from "@/lib/encounter/stage-transition-blockers";
+import {
+  ASA_CLASS_VALUES,
+  asaClassOptionLabel,
+  isValidAsaClass,
+} from "@/lib/encounter/asa-class";
+import { SpineStatusTransitions } from "./spine-status-transitions";
 
 type DraftState = {
   asaClass: string;
@@ -219,6 +226,7 @@ export function SpineWorkspaceClient({
         insurancePreAuth: _ip,
         estimatedCoverage: _ec,
         estimatedCopay: _ey,
+        asaClass: _asa,
         ...rest
       } = parsed;
       setDraft((prev) => ({ ...prev, ...rest }));
@@ -235,6 +243,7 @@ export function SpineWorkspaceClient({
         insurancePreAuth: _ip,
         estimatedCoverage: _ec,
         estimatedCopay: _ey,
+        asaClass: _asa,
         ...persistable
       } = draft;
       localStorage.setItem(draftKey(encounter.id), JSON.stringify(persistable));
@@ -251,6 +260,12 @@ export function SpineWorkspaceClient({
     const data = await loadSpineWorkspaceData(appointmentId);
     setEncounter(data.encounter);
     setGates(data.gates);
+    const storedAsa = data.encounter.riskAssessments[0]?.asaClass;
+    if (storedAsa) {
+      setDraft((prev) =>
+        prev.asaClass === storedAsa ? prev : { ...prev, asaClass: storedAsa },
+      );
+    }
     router.refresh();
   }
 
@@ -775,38 +790,25 @@ export function SpineWorkspaceClient({
       </header>
 
       {/* Status transitions stay outside collapsible cards so advances are always reachable. */}
-      <section className="space-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-slate-500">
-          Status
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {nextStatuses.map((to) => (
-            <button
-              key={to}
-              type="button"
-              className={btnPrimary}
-              disabled={!write}
-              onClick={() =>
-                run(async () => {
-                  if (status === "gates" && to === "procedure_execution") {
-                    await advanceSpinePastGates(encounter.id);
-                  } else {
-                    await transitionSpineEncounter({
-                      encounterId: encounter.id,
-                      toStatus: to,
-                    });
-                  }
-                }, `Moved to ${statusLabel(to)}`)
-              }
-            >
-              → {statusLabel(to)}
-            </button>
-          ))}
-          {nextStatuses.length === 0 && status !== "interrupted" ? (
-            <p className="text-sm text-slate-500">No forward transitions available.</p>
-          ) : null}
-        </div>
-      </section>
+      <SpineStatusTransitions
+        nextStatuses={nextStatuses}
+        write={write}
+        examCompletedAt={encounter.examCompletedAt}
+        examinedByStaffId={encounter.examinedByStaffId}
+        gates={gates}
+        showEmptyHint={status !== "interrupted"}
+        onAdvance={(to) =>
+          run(async () => {
+            if (status === "gates" && to === "procedure_execution") {
+              return advanceSpinePastGates(encounter.id);
+            }
+            return transitionSpineEncounter({
+              encounterId: encounter.id,
+              toStatus: to,
+            });
+          }, `Moved to ${statusLabel(to)}`)
+        }
+      />
 
       <div id="spine-stage-intake">
       <SpineStageCard
@@ -873,7 +875,9 @@ export function SpineWorkspaceClient({
       <SpineStageCard
         id="gates"
         title="Gate summary"
-        summary={`R ${gates.risk} · C ${gates.consent} · I ${gates.insurance} · S ${gates.sterilization}`}
+        summary={formatCollapsedGateSummary(gates, {
+          insuranceOverridden: encounter.preAuthOverridden,
+        })}
         state={stageProgress("gates")}
       >
       <div className="space-y-4">
@@ -900,24 +904,35 @@ export function SpineWorkspaceClient({
                   <label className={labelCls} htmlFor="asa">
                     ASA class
                   </label>
-                  <input
+                  <select
                     id="asa"
                     className={field}
                     value={draft.asaClass}
                     onChange={(e) => patchDraft({ asaClass: e.target.value })}
-                    placeholder="e.g. II"
                     disabled={pending}
-                  />
+                  >
+                    <option value="">Select ASA class</option>
+                    {ASA_CLASS_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {asaClassOptionLabel(value)}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     className={btnPrimary}
-                    disabled={!write}
+                    disabled={!write || !isValidAsaClass(draft.asaClass)}
+                    title={
+                      isValidAsaClass(draft.asaClass)
+                        ? undefined
+                        : "Select an ASA class before clearing risk"
+                    }
                     onClick={() =>
                       run(
                         () =>
                           clearSpineRisk({
                             encounterId: encounter.id,
-                            asaClass: draft.asaClass || undefined,
+                            asaClass: draft.asaClass,
                           }),
                         "Risk cleared",
                       )

@@ -1,5 +1,6 @@
 import type { EncounterStatus } from "./types";
 import { ENCOUNTER_STATUSES } from "./types";
+import { GateAssertionError } from "./errors";
 
 /** Forward happy-path edges. Interrupt edges handled separately. */
 export const LEGAL_FORWARD_TRANSITIONS: Record<EncounterStatus, EncounterStatus[]> = {
@@ -49,7 +50,7 @@ export function canTransition(
 
 export function assertTransition(from: EncounterStatus, to: EncounterStatus): void {
   if (!canTransition(from, to)) {
-    throw new Error(`Illegal encounter transition: ${from} → ${to}`);
+    throw new GateAssertionError(`Illegal encounter transition: ${from} → ${to}`);
   }
 }
 

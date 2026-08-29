@@ -1,3 +1,6 @@
+import { GateAssertionError } from "@/lib/encounter/errors";
+import { examToGatesBlocker } from "@/lib/encounter/stage-transition-blockers";
+
 export type ExamGateEncounter = {
   examCompletedAt: Date | string | null;
   examinedByStaffId: string | null;
@@ -5,7 +8,6 @@ export type ExamGateEncounter = {
 
 /** Examination must be documented before entering the existing gate workflow. */
 export function assertExamCompleteForGatesTransition(encounter: ExamGateEncounter): void {
-  if (!encounter.examCompletedAt || !encounter.examinedByStaffId) {
-    throw new Error("Complete the chief complaint / exam before moving to gates.");
-  }
+  const blocker = examToGatesBlocker(encounter);
+  if (blocker) throw new GateAssertionError(blocker);
 }
