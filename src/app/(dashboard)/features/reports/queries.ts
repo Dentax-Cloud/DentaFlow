@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { overdueRecallWhere } from "@/lib/recall/queue";
 import {
   billedInvoiceParentWhere,
   billedInvoiceWhere,
@@ -287,12 +288,7 @@ export async function getPatientRetentionReport(tenantId: string, range: ReportD
       },
     }),
     db.recall.count({
-      where: {
-        tenantId,
-        status: "PENDING",
-        completedAt: null,
-        dueDate: { lt: new Date() },
-      },
+      where: overdueRecallWhere(tenantId),
     }),
     db.patient.findMany({
       where: { tenantId, deletedAt: null, lastVisitAt: { not: null } },

@@ -9,7 +9,7 @@ describe("Module 6 Phase 3a", () => {
     expect(() => assertExamCompleteForGatesTransition({
       examCompletedAt: null,
       examinedByStaffId: null,
-    })).toThrow(/Complete the chief complaint/);
+    })).toThrow(/Can't move to Gates yet: Exam is still incomplete/);
     expect(() => assertExamCompleteForGatesTransition({
       examCompletedAt: new Date(),
       examinedByStaffId: "staff-1",

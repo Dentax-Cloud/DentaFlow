@@ -2,6 +2,7 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { canUseFeature } from "@/lib/features/plans";
 import { FeatureUpgradePrompt } from "@/components/subscription/feature-upgrade-prompt";
 import { db } from "@/lib/db";
+import { overdueRecallWhere, upcomingRecallWhere } from "@/lib/recall/queue";
 import { serializeEntity } from "@/lib/utils/serialize";
 import { RecallsClient } from "./recalls-client";
 
@@ -17,29 +18,14 @@ export default async function RecallsPage() {
     );
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const in30 = new Date(today);
-  in30.setDate(in30.getDate() + 30);
-
   const [overdue, upcoming] = await Promise.all([
     db.recall.findMany({
-      where: {
-        tenantId: ctx.tenant.id,
-        status: "PENDING",
-        completedAt: null,
-        dueDate: { lt: today },
-      },
+      where: overdueRecallWhere(ctx.tenant.id),
       include: { patient: true },
       orderBy: { dueDate: "asc" },
     }),
     db.recall.findMany({
-      where: {
-        tenantId: ctx.tenant.id,
-        status: "PENDING",
-        completedAt: null,
-        dueDate: { gte: today, lte: in30 },
-      },
+      where: upcomingRecallWhere(ctx.tenant.id),
       include: { patient: true },
       orderBy: { dueDate: "asc" },
     }),
