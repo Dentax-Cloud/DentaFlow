@@ -48,6 +48,7 @@ import {
   withSpineExpectedFailureCatch,
   type SpineActionResult,
 } from "@/lib/encounter/spine-action-result";
+import { requireAsaClassForRiskClear } from "@/lib/encounter/asa-class";
 import type { EncounterStatus, EncounterProcedureLineStatus, PlannedVsPerformed } from "@/lib/encounter/types";
 import type { InterruptOutcome } from "@/lib/encounter/state-machine";
 import type { GateSummary } from "@/lib/encounter/types";
@@ -514,20 +515,22 @@ export async function transitionSpineEncounter(input: {
   toStatus: EncounterStatus;
   handoffToStaffId?: string;
   presenceStage?: string;
-}) {
+}): Promise<SpineActionResult<{ id: string; status: string }>> {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
-  const updated = await transitionEncounterStatus({
-    tenantId: ctx.tenantId,
-    encounterId: input.encounterId,
-    toStatus: input.toStatus,
-    userId: ctx.staffMember?.id,
-    staffMemberId: ctx.staffMember?.id ?? null,
-    handoffToStaffId: input.handoffToStaffId,
-    presenceStage: input.presenceStage,
+  return withSpineExpectedFailureCatch(async () => {
+    const updated = await transitionEncounterStatus({
+      tenantId: ctx.tenantId,
+      encounterId: input.encounterId,
+      toStatus: input.toStatus,
+      userId: ctx.staffMember?.id,
+      staffMemberId: ctx.staffMember?.id ?? null,
+      handoffToStaffId: input.handoffToStaffId,
+      presenceStage: input.presenceStage,
+    });
+    revalidateSpinePaths(owned.appointmentId);
+    return { id: updated.id, status: updated.status };
   });
-  revalidateSpinePaths(owned.appointmentId);
-  return updated;
 }
 
 export async function completeSpineExam(input: {
@@ -620,86 +623,94 @@ export async function clearSpineRisk(input: {
   encounterId: string;
   asaClass?: string;
   vitalsSnapshot?: Record<string, unknown>;
-}) {
+}): Promise<SpineActionResult<{ asaClass: string }>> {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
   if (!ctx.staffMember?.id) {
     throw new Error("Staff member required to clear risk assessment.");
   }
 
-  const existing = await db.riskAssessment.findFirst({
-    where: { tenantId: ctx.tenantId, encounterId: input.encounterId },
-    orderBy: { createdAt: "desc" },
+  return withSpineExpectedFailureCatch(async () => {
+    const asaClass = requireAsaClassForRiskClear(input.asaClass);
+
+    const existing = await db.riskAssessment.findFirst({
+      where: { tenantId: ctx.tenantId, encounterId: input.encounterId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const now = new Date();
+    const vitals =
+      input.vitalsSnapshot != null
+        ? (input.vitalsSnapshot as Prisma.InputJsonValue)
+        : undefined;
+
+    if (existing && !existing.clearedAt) {
+      await updateRiskAssessmentAudited(
+        existing.id,
+        ctx.tenantId,
+        {
+          asaClass,
+          ...(vitals != null ? { vitalsSnapshot: vitals } : {}),
+          clearedAt: now,
+          clearedByStaff: { connect: { id: ctx.staffMember!.id } },
+        },
+        { userId: ctx.staffMember?.id },
+      );
+    } else {
+      await createRiskAssessmentAudited(
+        {
+          tenant: { connect: { id: ctx.tenantId } },
+          encounter: { connect: { id: input.encounterId } },
+          asaClass,
+          ...(vitals != null ? { vitalsSnapshot: vitals } : { vitalsSnapshot: {} }),
+          clearedAt: now,
+          clearedByStaff: { connect: { id: ctx.staffMember!.id } },
+        },
+        { tenantId: ctx.tenantId, userId: ctx.staffMember?.id },
+      );
+    }
+
+    revalidateSpinePaths(owned.appointmentId);
+    return { asaClass };
   });
-
-  const now = new Date();
-  const vitals =
-    input.vitalsSnapshot != null
-      ? (input.vitalsSnapshot as Prisma.InputJsonValue)
-      : undefined;
-
-  if (existing && !existing.clearedAt) {
-    await updateRiskAssessmentAudited(
-      existing.id,
-      ctx.tenantId,
-      {
-        asaClass: input.asaClass?.trim() || existing.asaClass,
-        ...(vitals != null ? { vitalsSnapshot: vitals } : {}),
-        clearedAt: now,
-        clearedByStaff: { connect: { id: ctx.staffMember.id } },
-      },
-      { userId: ctx.staffMember?.id },
-    );
-  } else {
-    await createRiskAssessmentAudited(
-      {
-        tenant: { connect: { id: ctx.tenantId } },
-        encounter: { connect: { id: input.encounterId } },
-        asaClass: input.asaClass?.trim() || null,
-        ...(vitals != null ? { vitalsSnapshot: vitals } : { vitalsSnapshot: {} }),
-        clearedAt: now,
-        clearedByStaff: { connect: { id: ctx.staffMember.id } },
-      },
-      { tenantId: ctx.tenantId, userId: ctx.staffMember?.id },
-    );
-  }
-
-  revalidateSpinePaths(owned.appointmentId);
-  return { ok: true as const };
 }
 
-export async function grantSpineConsent(input: { encounterId: string }) {
+export async function grantSpineConsent(input: {
+  encounterId: string;
+}): Promise<SpineActionResult<{ id: string }>> {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
 
-  const { assertRiskClearedForEncounter } = await import("@/lib/encounter/gate-enforcement");
-  await assertRiskClearedForEncounter(ctx.tenantId, input.encounterId);
+  return withSpineExpectedFailureCatch(async () => {
+    const { assertRiskClearedForEncounter } = await import("@/lib/encounter/gate-enforcement");
+    await assertRiskClearedForEncounter(ctx.tenantId, input.encounterId);
 
-  const active = await db.consentRecord.findFirst({
-    where: {
-      tenantId: ctx.tenantId,
-      encounterId: input.encounterId,
-      purpose: "clinical",
-      revokedAt: null,
-    },
-    orderBy: { grantedAt: "desc" },
-  });
-  if (active) {
+    const active = await db.consentRecord.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        encounterId: input.encounterId,
+        purpose: "clinical",
+        revokedAt: null,
+      },
+      orderBy: { grantedAt: "desc" },
+    });
+    if (active) {
+      revalidateSpinePaths(owned.appointmentId);
+      return { id: active.id };
+    }
+
+    const record = await createConsentRecordAudited(
+      {
+        tenant: { connect: { id: ctx.tenantId } },
+        encounter: { connect: { id: input.encounterId } },
+        purpose: "clinical",
+        grantedAt: new Date(),
+      },
+      { tenantId: ctx.tenantId, userId: ctx.staffMember?.id },
+    );
     revalidateSpinePaths(owned.appointmentId);
-    return active;
-  }
-
-  const record = await createConsentRecordAudited(
-    {
-      tenant: { connect: { id: ctx.tenantId } },
-      encounter: { connect: { id: input.encounterId } },
-      purpose: "clinical",
-      grantedAt: new Date(),
-    },
-    { tenantId: ctx.tenantId, userId: ctx.staffMember?.id },
-  );
-  revalidateSpinePaths(owned.appointmentId);
-  return record;
+    return { id: record.id };
+  });
 }
 
 export async function upsertSpineInsuranceVerification(input: {
@@ -1036,17 +1047,21 @@ export async function recordSpinePainScore(input: {
   return updated;
 }
 
-export async function advanceSpinePastGates(encounterId: string) {
+export async function advanceSpinePastGates(
+  encounterId: string,
+): Promise<SpineActionResult<{ id: string; status: string }>> {
   const ctx = await requireSpineWrite();
   const owned = await assertEncounterOwned(ctx.tenantId, encounterId);
-  const updated = await advanceToProcedureExecutionIfReady({
-    tenantId: ctx.tenantId,
-    encounterId,
-    userId: ctx.staffMember?.id,
-    staffMemberId: ctx.staffMember?.id ?? null,
+  return withSpineExpectedFailureCatch(async () => {
+    const updated = await advanceToProcedureExecutionIfReady({
+      tenantId: ctx.tenantId,
+      encounterId,
+      userId: ctx.staffMember?.id,
+      staffMemberId: ctx.staffMember?.id ?? null,
+    });
+    revalidateSpinePaths(owned.appointmentId);
+    return { id: updated.id, status: updated.status };
   });
-  revalidateSpinePaths(owned.appointmentId);
-  return updated;
 }
 
 export async function closeAndInvoiceSpineEncounter(

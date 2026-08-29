@@ -2,6 +2,7 @@ import { requireRouteAccess } from "@/lib/rbac/require-route-access";
 import { canUseFeature } from "@/lib/features/plans";
 import { FeatureUpgradePrompt } from "@/components/subscription/feature-upgrade-prompt";
 import { db } from "@/lib/db";
+import { homepageRecallQueueWhere } from "@/lib/recall/queue";
 import { serializeEntity, serializeMany } from "@/lib/utils/serialize";
 import { CrmClient } from "./crm-client";
 
@@ -29,7 +30,7 @@ export default async function CrmPage() {
       take: 20,
     }),
     db.recall.findMany({
-      where: { tenantId: ctx.tenant.id, completedAt: null },
+      where: homepageRecallQueueWhere(ctx.tenant.id),
       include: { patient: true },
       orderBy: [{ priority: "desc" }, { dueDate: "asc" }],
       take: 30,

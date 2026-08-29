@@ -13,6 +13,7 @@ import {
 import type { UserRole } from "@prisma/client";
 import { GateAssertionError } from "./errors";
 import type { GateSummary } from "./types";
+import { assertProcedureStartGatesFromSummary } from "./stage-transition-blockers";
 
 export { GateAssertionError } from "./errors";
 
@@ -132,7 +133,7 @@ export async function assertProcedureStartGatesAllowed(params: {
   const line = encounter.procedureLines.find((l) => l.id === params.procedureLineId);
   if (!line) throw new Error("Procedure line not found on encounter.");
 
-  const gates = evaluateEncounterGates({
+  const summary = summarizeGatesFromRecords({
     risk: encounter.riskAssessments[0] ?? null,
     consent: encounter.consentRecords[0] ?? null,
     insurance: encounter.insuranceVerifications[0] ?? null,
@@ -144,25 +145,17 @@ export async function assertProcedureStartGatesAllowed(params: {
     ],
     preAuthOverridden: encounter.preAuthOverridden,
   });
+  assertProcedureStartGatesFromSummary(summary);
 
-  if (!gates.risk.cleared) {
-    throw new GateAssertionError(
-      gates.risk.reason ?? "Risk assessment must be cleared first.",
-    );
-  }
-  if (!gates.consent?.cleared) {
-    throw new GateAssertionError(
-      gates.consent?.reason ?? "Clinical consent is required.",
-    );
-  }
-  if (!gates.insurance?.cleared) {
-    throw new GateAssertionError(
-      gates.insurance?.reason ?? "Insurance verification is required.",
-    );
-  }
-  const steril = gates.sterilization[0];
-  if (steril && !steril.cleared) {
-    throw new GateAssertionError(steril.reason);
+  const steril = evaluateSterilizationGates([
+    {
+      procedureLineId: line.id,
+      loggedAt: line.sterilizationLoggedAt,
+    },
+  ]);
+  const sterilGate = steril[0];
+  if (sterilGate && !sterilGate.cleared) {
+    throw new GateAssertionError(sterilGate.reason);
   }
 }
 
