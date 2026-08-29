@@ -51,9 +51,10 @@ export function findSameDayPatientInvoice<
   T extends { id: string; patientId: string; createdAt: Date },
 >(
   invoices: T[],
-  appointment: { patientId: string; startTime: Date },
+  appointment: { patientId: string | null; startTime: Date },
   alreadyAttributed: Set<string>,
 ): T | undefined {
+  if (!appointment.patientId) return undefined;
   const apptDay = appointment.startTime.toDateString();
   return invoices.find(
     (inv) =>

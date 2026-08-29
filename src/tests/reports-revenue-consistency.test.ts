@@ -73,6 +73,18 @@ describe("billed revenue semantics", () => {
     expect(roundMoney(doctorRevenue)).toBe(1421);
     expect(attributed.has("inv20")).toBe(false);
   });
+
+  it("skips appointments with a null patientId", () => {
+    const invoices = [
+      { id: "inv-orphan", patientId: "p-real", createdAt: new Date("2026-07-22T10:00:00") },
+    ];
+    const match = findSameDayPatientInvoice(
+      invoices,
+      { patientId: null, startTime: new Date("2026-07-22T10:00:00") },
+      new Set(),
+    );
+    expect(match).toBeUndefined();
+  });
 });
 
 describe("dashboard + reports query wiring", () => {
