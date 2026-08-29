@@ -11,6 +11,7 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { tenantWhere } from "@/lib/tenant/scoped";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { sendMail } from "@/lib/mail";
+import { overdueRecallWhere } from "@/lib/recall/queue";
 import type { CampaignAudience } from "./crm-types";
 
 async function requireCrmPlan(ctx: Awaited<ReturnType<typeof import("@/lib/tenant/context").requireTenantContext>>) {
@@ -37,12 +38,7 @@ export async function getTargetPatients(
       });
     case "OVERDUE_RECALL": {
       const recalls = await db.recall.findMany({
-        where: {
-          tenantId,
-          status: "PENDING",
-          completedAt: null,
-          dueDate: { lt: new Date() },
-        },
+        where: overdueRecallWhere(tenantId),
         include: { patient: true },
       });
       const seen = new Set<string>();
