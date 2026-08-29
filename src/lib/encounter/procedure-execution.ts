@@ -4,7 +4,6 @@ import { createAuditLog } from "@/lib/actions/safe-action";
 import {
   createClinicalAlertAudited,
   createEncounterProcedureBundleAudited,
-  createEncounterProcedureLineAudited,
   updateEncounterAudited,
   updateEncounterProcedureLineAudited,
 } from "./repository";
@@ -15,6 +14,9 @@ import {
 import type { EncounterProcedureLineStatus, PlannedVsPerformed } from "./types";
 import { isProcedureLineTerminal } from "./state-machine";
 import { treatmentItemIdsForWriteBack } from "./close-out";
+import {
+  findActiveDuplicateAddLine,
+} from "./add-line-dedup";
 
 const LINE_TRANSITIONS: Record<
   EncounterProcedureLineStatus,
@@ -68,31 +70,73 @@ export async function addEncounterProcedureLine(params: {
     plannedVsPerformed = params.plannedVsPerformed ?? "matched";
   }
 
-  return createEncounterProcedureLineAudited(
-    {
-      tenant: { connect: { id: params.tenantId } },
-      encounter: { connect: { id: params.encounterId } },
-      procedureCatalog: { connect: { id: catalog.id } },
-      ...(params.treatmentItemId
-        ? { treatmentItem: { connect: { id: params.treatmentItemId } } }
-        : {}),
-      ...(params.procedureBundleId
-        ? { procedureBundle: { connect: { id: params.procedureBundleId } } }
-        : {}),
-      ...(params.providerId
-        ? { provider: { connect: { id: params.providerId } } }
-        : {}),
-      toothNumbers: params.toothNumbers ?? [],
-      surfaces: params.surfaces ?? [],
-      plannedVsPerformed,
-      status: "planned",
-      unitPrice:
-        params.unitPrice != null
-          ? new Prisma.Decimal(params.unitPrice)
-          : catalog.price,
-    },
-    { tenantId: params.tenantId, userId: params.userId },
-  );
+  const toothNumbers = params.toothNumbers ?? [];
+  const surfaces = params.surfaces ?? [];
+  const intent = {
+    procedureCatalogId: catalog.id,
+    toothNumbers,
+    surfaces,
+  };
+
+  const { row, created } = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT id FROM "Encounter"
+      WHERE id = ${params.encounterId}
+        AND "tenantId" = ${params.tenantId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE
+    `;
+
+    const recent = await tx.encounterProcedureLine.findMany({
+      where: {
+        tenantId: params.tenantId,
+        encounterId: params.encounterId,
+        procedureCatalogId: catalog.id,
+        status: { in: ["planned", "in_progress"] },
+      },
+    });
+    const duplicate = findActiveDuplicateAddLine(recent, intent);
+    if (duplicate) return { row: duplicate, created: false as const };
+
+    const createdRow = await tx.encounterProcedureLine.create({
+      data: {
+        tenant: { connect: { id: params.tenantId } },
+        encounter: { connect: { id: params.encounterId } },
+        procedureCatalog: { connect: { id: catalog.id } },
+        ...(params.treatmentItemId
+          ? { treatmentItem: { connect: { id: params.treatmentItemId } } }
+          : {}),
+        ...(params.procedureBundleId
+          ? { procedureBundle: { connect: { id: params.procedureBundleId } } }
+          : {}),
+        ...(params.providerId
+          ? { provider: { connect: { id: params.providerId } } }
+          : {}),
+        toothNumbers,
+        surfaces,
+        plannedVsPerformed,
+        status: "planned",
+        unitPrice:
+          params.unitPrice != null
+            ? new Prisma.Decimal(params.unitPrice)
+            : catalog.price,
+      },
+    });
+    return { row: createdRow, created: true as const };
+  });
+
+  if (created) {
+    await createAuditLog({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      action: AuditAction.CREATE,
+      entity: "EncounterProcedureLine",
+      entityId: row.id,
+      metadata: { encounterId: row.encounterId, status: row.status },
+    });
+  }
+
+  return row;
 }
 
 export async function createEncounterBundle(params: {

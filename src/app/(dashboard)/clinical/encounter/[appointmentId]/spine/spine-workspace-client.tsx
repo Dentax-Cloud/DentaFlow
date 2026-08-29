@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EncounterGateSummary } from "@/components/clinical/encounter-gate-summary";
@@ -61,6 +61,8 @@ import { SpineClinicalFindings } from "./spine-clinical-findings";
 import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-drawer";
 import { SpineToolOverlay } from "./spine-tool-overlay";
 import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
+import { useSpineMutation } from "./use-spine-mutation";
+import { ADD_LINE_DEDUP_WINDOW_MS, findActiveDuplicateAddLine } from "@/lib/encounter/add-line-dedup";
 import { formatCollapsedGateSummary } from "@/lib/encounter/stage-transition-blockers";
 import {
   ASA_CLASS_VALUES,
@@ -167,25 +169,9 @@ export function SpineWorkspaceClient({
   initial: SpineWorkspaceData;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [hasMounted, setHasMounted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [encounter, setEncounter] = useState<SpineEncounterSerialized>(initial.encounter);
   const [gates, setGates] = useState<GateSummary>(initial.gates);
-  const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
-  const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
-  const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
-  const [preCheckOk, setPreCheckOk] = useState(true);
-  const [navCollapsed, setNavCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(true);
-  const [activePanel, setActivePanel] = useState<SpineNavPanelId>(() =>
-    statusToNavStage(initial.encounter.status),
-  );
-  const [overlayTool, setOverlayTool] = useState<SpineToolId | null>(null);
-  const [focusTooth, setFocusTooth] = useState<string | undefined>();
-  const [fefoLots, setFefoLots] = useState<InventoryLotSuggestion[]>([]);
-  const [fefoLoading, setFefoLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
     asaClass: initial.encounter.riskAssessments[0]?.asaClass ?? "",
@@ -196,6 +182,39 @@ export function SpineWorkspaceClient({
     catalogId: "",
     materialItemId: "",
   }));
+  const { pending, error, message, run } = useSpineMutation({
+    appointmentId,
+    loadWorkspace: loadSpineWorkspaceData,
+    applyWorkspace: (data) => {
+      setEncounter(data.encounter);
+      setGates(data.gates);
+      const storedAsa = data.encounter.riskAssessments[0]?.asaClass;
+      if (storedAsa) {
+        setDraft((prev) =>
+          prev.asaClass === storedAsa ? prev : { ...prev, asaClass: storedAsa },
+        );
+      }
+    },
+    refreshRouter: () => {
+      router.refresh();
+    },
+  });
+  const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
+  const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
+  const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
+  const [preCheckOk, setPreCheckOk] = useState(true);
+  const [addLineCooldownCatalogId, setAddLineCooldownCatalogId] = useState<
+    string | null
+  >(null);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [activePanel, setActivePanel] = useState<SpineNavPanelId>(() =>
+    statusToNavStage(initial.encounter.status),
+  );
+  const [overlayTool, setOverlayTool] = useState<SpineToolId | null>(null);
+  const [focusTooth, setFocusTooth] = useState<string | undefined>();
+  const [fefoLots, setFefoLots] = useState<InventoryLotSuggestion[]>([]);
+  const [fefoLoading, setFefoLoading] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -208,6 +227,14 @@ export function SpineWorkspaceClient({
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (!addLineCooldownCatalogId) return;
+    const timer = window.setTimeout(() => {
+      setAddLineCooldownCatalogId(null);
+    }, ADD_LINE_DEDUP_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [addLineCooldownCatalogId]);
 
   useEffect(() => {
     setActivePanel(statusToNavStage(encounter.status));
@@ -256,56 +283,24 @@ export function SpineWorkspaceClient({
     setDraft((prev) => ({ ...prev, ...partial }));
   }
 
-  async function refresh() {
-    const data = await loadSpineWorkspaceData(appointmentId);
-    setEncounter(data.encounter);
-    setGates(data.gates);
-    const storedAsa = data.encounter.riskAssessments[0]?.asaClass;
-    if (storedAsa) {
-      setDraft((prev) =>
-        prev.asaClass === storedAsa ? prev : { ...prev, asaClass: storedAsa },
-      );
-    }
-    router.refresh();
-  }
-
-  function run(
-    action: () => Promise<unknown>,
-    successMsg?: string,
-    afterSuccess?: () => void,
-  ) {
-    setError(null);
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await action();
-        // Spine actions return { ok:false, error } for expected validation failures
-        // (gates / billing) so production Next.js does not mask them as RSC digests.
-        if (
-          result &&
-          typeof result === "object" &&
-          "ok" in result &&
-          (result as { ok: unknown }).ok === false &&
-          "error" in result
-        ) {
-          setError(String((result as { error: unknown }).error));
-          return;
-        }
-        await refresh();
-        afterSuccess?.();
-        if (successMsg) setMessage(successMsg);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong.");
-      }
-    });
-  }
-
   const status = encounter.status as EncounterStatus;
   const nextStatuses = LEGAL_FORWARD_TRANSITIONS[status] ?? [];
   const canInterrupt = INTERRUPTIBLE_STATUSES.includes(status);
   const closed = Boolean(encounter.closedAt) || status === "recall_scheduled";
   const write = canWrite && !closed && !pending;
   const assistWrite = canAssist && !closed && !pending;
+  const addLineBlockedAsDuplicate = Boolean(
+    draft.catalogId &&
+      findActiveDuplicateAddLine(
+        encounter.procedureLines.map((line) => ({
+          procedureCatalogId: line.procedureCatalogId,
+          toothNumbers: line.toothNumbers ?? [],
+          surfaces: line.surfaces ?? [],
+          status: line.status,
+        })),
+        { procedureCatalogId: draft.catalogId, toothNumbers: [], surfaces: [] },
+      ),
+  );
 
   const insuranceVerification = encounter.insuranceVerifications[0] ?? null;
   const billingPreview = useMemo(
@@ -1168,18 +1163,35 @@ export function SpineWorkspaceClient({
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={!write || !draft.catalogId || !preCheckOk}
-                onClick={() =>
+                disabled={
+                  !write ||
+                  !draft.catalogId ||
+                  !preCheckOk ||
+                  draft.catalogId === addLineCooldownCatalogId ||
+                  addLineBlockedAsDuplicate
+                }
+                onClick={() => {
+                  const catalogId = draft.catalogId;
+                  if (
+                    !catalogId ||
+                    catalogId === addLineCooldownCatalogId ||
+                    addLineBlockedAsDuplicate
+                  ) {
+                    return;
+                  }
                   run(
                     () =>
                       addSpineProcedureLine({
                         encounterId: encounter.id,
-                        procedureCatalogId: draft.catalogId,
+                        procedureCatalogId: catalogId,
                       }),
                     "Procedure line added",
-                    () => patchDraft({ catalogId: "" }),
-                  )
-                }
+                    () => {
+                      setAddLineCooldownCatalogId(catalogId);
+                      patchDraft({ catalogId: "" });
+                    },
+                  );
+                }}
               >
                 Add line
               </button>
