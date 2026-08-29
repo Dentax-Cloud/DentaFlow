@@ -36,6 +36,13 @@ const clientSource = readFileSync(
   ),
   "utf8",
 );
+const transitionsSource = readFileSync(
+  path.resolve(
+    process.cwd(),
+    "src/app/(dashboard)/clinical/encounter/[appointmentId]/spine/spine-status-transitions.tsx",
+  ),
+  "utf8",
+);
 
 describe("spine silent second-action (shared run helper)", () => {
   it("routes the four live-failing buttons through one write flag and one run() helper", () => {
@@ -44,7 +51,9 @@ describe("spine silent second-action (shared run helper)", () => {
     expect(clientSource).not.toMatch(/\buseTransition\b/);
     expect(clientSource).toContain("Grant clinical consent");
     expect(clientSource).toContain("Add line");
-    expect(clientSource).toContain("→ {statusLabel(to)}");
+    expect(clientSource).toContain("<SpineStatusTransitions");
+    expect(transitionsSource).toContain("→ {statusLabel(to)}");
+    expect(transitionsSource).toContain("disabled={!write || Boolean(blocker)}");
 
     const around = (needle: string) => {
       const at = clientSource.lastIndexOf(needle);
@@ -58,7 +67,7 @@ describe("spine silent second-action (shared run helper)", () => {
     );
     expect(around('toStatus: "completed"')).toContain("disabled={!write}");
     expect(around('toStatus: "completed"')).toContain("transitionSpineProcedureLine");
-    expect(around("advanceSpinePastGates(")).toContain("disabled={!write}");
+    expect(around("advanceSpinePastGates(")).toContain("write={write}");
     expect(around("advanceSpinePastGates(")).toContain("run(async () =>");
   });
 
