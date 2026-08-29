@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/countries";
 import {
   Calendar,
   Armchair,
@@ -67,12 +67,14 @@ export function DashboardClient({
   kpis,
   extras,
   tenantName,
+  countryCode,
   plan,
   userRole,
 }: {
   kpis: KPIs;
   extras: Extras;
   tenantName: string;
+  countryCode: string;
   plan: SubscriptionPlan;
   userRole: UserRole;
   staffMemberId: string | null;
@@ -121,9 +123,9 @@ export function DashboardClient({
       icon: Armchair,
     },
     {
-      title: "Revenue (month)",
-      value: formatCurrency(kpis.revenueThisMonth),
-      sub: "Collected payments",
+      title: "Billed revenue (month)",
+      value: formatCurrency(kpis.revenueThisMonth, countryCode),
+      sub: "Non-void invoices this period",
       icon: DollarSign,
     },
     {
@@ -198,10 +200,12 @@ export function DashboardClient({
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Revenue (month)</CardTitle>
+              <CardTitle className="text-sm font-medium">Billed revenue (month)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(kpis.revenueThisMonth)}</div>
+              <div className="text-2xl font-bold">
+                {formatCurrency(kpis.revenueThisMonth, countryCode)}
+              </div>
             </CardContent>
           </Card>
           <Card>

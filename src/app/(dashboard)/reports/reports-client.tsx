@@ -72,7 +72,7 @@ export function ReportsClient({
       ["Today's Appointments", String(kpis.todayAppointments)],
       ["Completed Today", String(kpis.completedToday)],
       ["Pending Invoices", String(kpis.pendingInvoices)],
-      ["Revenue This Month", String(kpis.revenueThisMonth)],
+      ["Billed Revenue This Month", String(kpis.revenueThisMonth)],
       ["Chair Utilization %", String(kpis.chairUtilization)],
       ["Patient Count", String(kpis.patientCount)],
     ]);
@@ -108,7 +108,7 @@ export function ReportsClient({
       ["Invoices", String(taxSummary.invoiceCount)],
       ["Subtotal", String(taxSummary.subtotal)],
       ["Tax", String(taxSummary.tax)],
-      ["Total", String(taxSummary.total)],
+      ["Billed total", String(taxSummary.total)],
       ["CGST", String(taxSummary.cgst)],
       ["SGST", String(taxSummary.sgst)],
       ["IGST", String(taxSummary.igst)],
@@ -156,7 +156,7 @@ export function ReportsClient({
       {tab === "overview" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { label: "Revenue (MTD)", value: money(kpis.revenueThisMonth) },
+            { label: "Billed revenue (MTD)", value: money(kpis.revenueThisMonth) },
             { label: "Patients", value: kpis.patientCount },
             { label: "Chair utilization", value: `${kpis.chairUtilization}%` },
             { label: "Appointments today", value: kpis.todayAppointments },
@@ -235,7 +235,7 @@ export function ReportsClient({
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Revenue total</CardTitle>
+              <CardTitle className="text-sm">Billed total</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{money(taxSummary.total)}</p>

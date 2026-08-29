@@ -1,22 +1,16 @@
 import { db } from "@/lib/db";
 import { overdueRecallWhere } from "@/lib/recall/queue";
+import {
+  billedInvoiceParentWhere,
+  billedInvoiceWhere,
+  BILLED_INVOICE_STATUS,
+  findSameDayPatientInvoice,
+  reportRangeBounds,
+  roundMoney,
+  type ReportDateRange,
+} from "@/lib/reports/revenue";
 
-export type ReportDateRange = "week" | "month" | "custom";
-
-function rangeBounds(range: ReportDateRange, customStart?: Date, customEnd?: Date) {
-  const end = customEnd ?? new Date();
-  const start = customStart ?? new Date();
-  if (!customStart) {
-    if (range === "week") {
-      start.setDate(end.getDate() - 7);
-    } else {
-      start.setMonth(end.getMonth() - 1);
-    }
-  }
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
+export type { ReportDateRange };
 
 export async function getDoctorProductivityReport(
   tenantId: string,
@@ -24,7 +18,7 @@ export async function getDoctorProductivityReport(
   customStart?: Date,
   customEnd?: Date,
 ) {
-  const { start, end } = rangeBounds(range, customStart, customEnd);
+  const { start, end } = reportRangeBounds(range, customStart, customEnd);
 
   const appointments = await db.appointment.findMany({
     where: {
@@ -98,7 +92,7 @@ export async function getDoctorProductivityReport(
       tenantId,
       id: { in: invoiceIds },
       deletedAt: null,
-      status: { not: "VOID" },
+      status: BILLED_INVOICE_STATUS,
     },
     select: {
       id: true,
@@ -129,10 +123,7 @@ export async function getDoctorProductivityReport(
   /** Fallback for invoices without a chairside session link (same patient + clinic day). */
   const fallbackInvoices = await db.invoice.findMany({
     where: {
-      tenantId,
-      deletedAt: null,
-      createdAt: { gte: start, lte: end },
-      status: { in: ["PAID", "PARTIAL", "SENT"] },
+      ...billedInvoiceWhere(tenantId, start, end),
       id: { notIn: [...attributedInvoiceIds] },
     },
     select: { id: true, total: true, patientId: true, createdAt: true },
@@ -140,13 +131,7 @@ export async function getDoctorProductivityReport(
 
   for (const appt of appointments) {
     const doctorId = appt.doctorId!;
-    const apptDay = appt.startTime.toDateString();
-    const match = fallbackInvoices.find(
-      (inv) =>
-        inv.patientId === appt.patientId &&
-        !attributedInvoiceIds.has(inv.id) &&
-        inv.createdAt.toDateString() === apptDay,
-    );
+    const match = findSameDayPatientInvoice(fallbackInvoices, appt, attributedInvoiceIds);
     if (match) {
       attributedInvoiceIds.add(match.id);
       revenueByDoctor.set(
@@ -168,15 +153,10 @@ export async function getRevenueTaxSummaryReport(
   tenantId: string,
   range: ReportDateRange = "month",
 ) {
-  const { start, end } = rangeBounds(range);
+  const { start, end } = reportRangeBounds(range);
 
   const invoices = await db.invoice.findMany({
-    where: {
-      tenantId,
-      deletedAt: null,
-      createdAt: { gte: start, lte: end },
-      status: { not: "VOID" },
-    },
+    where: billedInvoiceWhere(tenantId, start, end),
     select: {
       total: true,
       subtotal: true,
@@ -220,14 +200,14 @@ export async function getRevenueTaxSummaryReport(
 
   return {
     ...totals,
-    subtotal: Math.round(totals.subtotal * 100) / 100,
-    tax: Math.round(totals.tax * 100) / 100,
-    total: Math.round(totals.total * 100) / 100,
-    cgst: Math.round(totals.cgst * 100) / 100,
-    sgst: Math.round(totals.sgst * 100) / 100,
-    igst: Math.round(totals.igst * 100) / 100,
-    exemptSubtotal: Math.round(totals.exemptSubtotal * 100) / 100,
-    taxableSubtotal: Math.round(totals.taxableSubtotal * 100) / 100,
+    subtotal: roundMoney(totals.subtotal),
+    tax: roundMoney(totals.tax),
+    total: roundMoney(totals.total),
+    cgst: roundMoney(totals.cgst),
+    sgst: roundMoney(totals.sgst),
+    igst: roundMoney(totals.igst),
+    exemptSubtotal: roundMoney(totals.exemptSubtotal),
+    taxableSubtotal: roundMoney(totals.taxableSubtotal),
     hasGstBreakdown,
   };
 }
@@ -236,16 +216,12 @@ export async function getRevenueByProcedureReport(
   tenantId: string,
   range: ReportDateRange = "month",
 ) {
-  const { start, end } = rangeBounds(range);
+  const { start, end } = reportRangeBounds(range);
 
   const items = await db.invoiceItem.findMany({
     where: {
       tenantId,
-      invoice: {
-        deletedAt: null,
-        createdAt: { gte: start, lte: end },
-        status: { not: "VOID" },
-      },
+      invoice: billedInvoiceParentWhere(start, end),
     },
     select: {
       description: true,
@@ -295,7 +271,7 @@ export async function getRevenueByProcedureReport(
 }
 
 export async function getPatientRetentionReport(tenantId: string, range: ReportDateRange = "month") {
-  const { start, end } = rangeBounds(range);
+  const { start, end } = reportRangeBounds(range);
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -347,7 +323,7 @@ export async function getPatientRetentionReport(tenantId: string, range: ReportD
 }
 
 export async function getChairUtilizationReport(tenantId: string, range: ReportDateRange = "week") {
-  const { start, end } = rangeBounds(range);
+  const { start, end } = reportRangeBounds(range);
 
   const [chairs, appointments, settings] = await Promise.all([
     db.chair.findMany({ where: { tenantId, isActive: true } }),

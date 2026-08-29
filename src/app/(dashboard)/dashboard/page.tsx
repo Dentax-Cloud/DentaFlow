@@ -92,6 +92,7 @@ export default async function DashboardPage() {
         kpis={serializeDecimal(kpis)}
         extras={extras}
         tenantName={ctx.tenant.name}
+        countryCode={ctx.tenant.countryCode}
         plan={ctx.tenant.subscriptionPlan}
         userRole={userRole}
         staffMemberId={staffMemberId}
