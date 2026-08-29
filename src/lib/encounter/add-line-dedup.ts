@@ -1,4 +1,7 @@
-/** Same catalog + teeth + surfaces within this window is treated as one Add line intent. */
+/** Statuses that still represent the in-flight Add line intent (not a new procedure). */
+export const ACTIVE_ADD_LINE_STATUSES = ["planned", "in_progress"] as const;
+
+/** Client cooldown after a successful add; server identity check does not use a timer. */
 export const ADD_LINE_DEDUP_WINDOW_MS = 10_000;
 
 function fingerprint(parts: {
@@ -26,17 +29,21 @@ export function sameAddLineIntent(
   return fingerprint(a) === fingerprint(b);
 }
 
+export function isActiveAddLineStatus(status: string) {
+  return (ACTIVE_ADD_LINE_STATUSES as readonly string[]).includes(status);
+}
+
 /**
  * Accidental double-submit / re-select+add of the same catalog.
- * Declined lines and older rows are not duplicates (a later intentional add is allowed).
+ * A second add is allowed after the matching line is completed, declined, or
+ * given different teeth/surfaces.
  */
-export function findRecentDuplicateAddLine<
+export function findActiveDuplicateAddLine<
   T extends {
     procedureCatalogId: string;
     toothNumbers: string[];
     surfaces: string[];
     status: string;
-    createdAt: Date;
   },
 >(
   lines: T[],
@@ -45,13 +52,29 @@ export function findRecentDuplicateAddLine<
     toothNumbers?: string[] | null;
     surfaces?: string[] | null;
   },
-  now = new Date(),
-  windowMs = ADD_LINE_DEDUP_WINDOW_MS,
 ): T | undefined {
   return lines.find(
     (line) =>
-      line.status !== "declined" &&
-      now.getTime() - line.createdAt.getTime() <= windowMs &&
-      sameAddLineIntent(line, intent),
+      isActiveAddLineStatus(line.status) && sameAddLineIntent(line, intent),
   );
+}
+
+/** @deprecated Use findActiveDuplicateAddLine — kept as alias for existing imports. */
+export function findRecentDuplicateAddLine<
+  T extends {
+    procedureCatalogId: string;
+    toothNumbers: string[];
+    surfaces: string[];
+    status: string;
+    createdAt?: Date;
+  },
+>(
+  lines: T[],
+  intent: {
+    procedureCatalogId: string;
+    toothNumbers?: string[] | null;
+    surfaces?: string[] | null;
+  },
+): T | undefined {
+  return findActiveDuplicateAddLine(lines, intent);
 }

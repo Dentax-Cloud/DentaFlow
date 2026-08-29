@@ -62,7 +62,7 @@ import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-d
 import { SpineToolOverlay } from "./spine-tool-overlay";
 import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
 import { useSpineMutation } from "./use-spine-mutation";
-import { ADD_LINE_DEDUP_WINDOW_MS } from "@/lib/encounter/add-line-dedup";
+import { ADD_LINE_DEDUP_WINDOW_MS, findActiveDuplicateAddLine } from "@/lib/encounter/add-line-dedup";
 
 type DraftState = {
   asaClass: string;
@@ -274,6 +274,18 @@ export function SpineWorkspaceClient({
   const closed = Boolean(encounter.closedAt) || status === "recall_scheduled";
   const write = canWrite && !closed && !pending;
   const assistWrite = canAssist && !closed && !pending;
+  const addLineBlockedAsDuplicate = Boolean(
+    draft.catalogId &&
+      findActiveDuplicateAddLine(
+        encounter.procedureLines.map((line) => ({
+          procedureCatalogId: line.procedureCatalogId,
+          toothNumbers: line.toothNumbers ?? [],
+          surfaces: line.surfaces ?? [],
+          status: line.status,
+        })),
+        { procedureCatalogId: draft.catalogId, toothNumbers: [], surfaces: [] },
+      ),
+  );
 
   const insuranceVerification = encounter.insuranceVerifications[0] ?? null;
   const billingPreview = useMemo(
@@ -1140,11 +1152,18 @@ export function SpineWorkspaceClient({
                   !write ||
                   !draft.catalogId ||
                   !preCheckOk ||
-                  draft.catalogId === addLineCooldownCatalogId
+                  draft.catalogId === addLineCooldownCatalogId ||
+                  addLineBlockedAsDuplicate
                 }
                 onClick={() => {
                   const catalogId = draft.catalogId;
-                  if (!catalogId || catalogId === addLineCooldownCatalogId) return;
+                  if (
+                    !catalogId ||
+                    catalogId === addLineCooldownCatalogId ||
+                    addLineBlockedAsDuplicate
+                  ) {
+                    return;
+                  }
                   run(
                     () =>
                       addSpineProcedureLine({

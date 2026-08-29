@@ -15,8 +15,7 @@ import type { EncounterProcedureLineStatus, PlannedVsPerformed } from "./types";
 import { isProcedureLineTerminal } from "./state-machine";
 import { treatmentItemIdsForWriteBack } from "./close-out";
 import {
-  ADD_LINE_DEDUP_WINDOW_MS,
-  findRecentDuplicateAddLine,
+  findActiveDuplicateAddLine,
 } from "./add-line-dedup";
 
 const LINE_TRANSITIONS: Record<
@@ -93,11 +92,10 @@ export async function addEncounterProcedureLine(params: {
         tenantId: params.tenantId,
         encounterId: params.encounterId,
         procedureCatalogId: catalog.id,
-        status: { not: "declined" },
-        createdAt: { gte: new Date(Date.now() - ADD_LINE_DEDUP_WINDOW_MS) },
+        status: { in: ["planned", "in_progress"] },
       },
     });
-    const duplicate = findRecentDuplicateAddLine(recent, intent);
+    const duplicate = findActiveDuplicateAddLine(recent, intent);
     if (duplicate) return { row: duplicate, created: false as const };
 
     const createdRow = await tx.encounterProcedureLine.create({
