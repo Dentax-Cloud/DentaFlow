@@ -62,6 +62,7 @@ import { SpineBillingDrawer, type SpinePendingPriceRow } from "./spine-billing-d
 import { SpineToolOverlay } from "./spine-tool-overlay";
 import { insuranceDraftFromVerification } from "@/lib/encounter/insurance-draft";
 import { useSpineMutation } from "./use-spine-mutation";
+import { ADD_LINE_DEDUP_WINDOW_MS } from "@/lib/encounter/add-line-dedup";
 
 type DraftState = {
   asaClass: string;
@@ -179,6 +180,9 @@ export function SpineWorkspaceClient({
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
   const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
   const [preCheckOk, setPreCheckOk] = useState(true);
+  const [addLineCooldownCatalogId, setAddLineCooldownCatalogId] = useState<
+    string | null
+  >(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<SpineNavPanelId>(() =>
@@ -210,6 +214,14 @@ export function SpineWorkspaceClient({
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (!addLineCooldownCatalogId) return;
+    const timer = window.setTimeout(() => {
+      setAddLineCooldownCatalogId(null);
+    }, ADD_LINE_DEDUP_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [addLineCooldownCatalogId]);
 
   useEffect(() => {
     setActivePanel(statusToNavStage(encounter.status));
@@ -1124,18 +1136,28 @@ export function SpineWorkspaceClient({
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={!write || !draft.catalogId || !preCheckOk}
-                onClick={() =>
+                disabled={
+                  !write ||
+                  !draft.catalogId ||
+                  !preCheckOk ||
+                  draft.catalogId === addLineCooldownCatalogId
+                }
+                onClick={() => {
+                  const catalogId = draft.catalogId;
+                  if (!catalogId || catalogId === addLineCooldownCatalogId) return;
                   run(
                     () =>
                       addSpineProcedureLine({
                         encounterId: encounter.id,
-                        procedureCatalogId: draft.catalogId,
+                        procedureCatalogId: catalogId,
                       }),
                     "Procedure line added",
-                    () => patchDraft({ catalogId: "" }),
-                  )
-                }
+                    () => {
+                      setAddLineCooldownCatalogId(catalogId);
+                      patchDraft({ catalogId: "" });
+                    },
+                  );
+                }}
               >
                 Add line
               </button>

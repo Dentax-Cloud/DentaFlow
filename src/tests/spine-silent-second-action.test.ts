@@ -53,11 +53,20 @@ describe("spine silent second-action (shared run helper)", () => {
     };
 
     expect(around("grantSpineConsent({")).toContain("disabled={!write}");
-    expect(around("addSpineProcedureLine({")).toContain("disabled={!write");
+    expect(clientSource).toMatch(
+      /disabled=\{\s*!write \|\|[\s\S]{0,400}addLineCooldownCatalogId[\s\S]{0,400}addSpineProcedureLine\(/,
+    );
     expect(around('toStatus: "completed"')).toContain("disabled={!write}");
     expect(around('toStatus: "completed"')).toContain("transitionSpineProcedureLine");
     expect(around("advanceSpinePastGates(")).toContain("disabled={!write}");
     expect(around("advanceSpinePastGates(")).toContain("run(async () =>");
+  });
+
+  it("keeps Add line disabled for the same catalog after success until the dedup window elapses", () => {
+    expect(clientSource).toContain("addLineCooldownCatalogId");
+    expect(clientSource).toContain("ADD_LINE_DEDUP_WINDOW_MS");
+    expect(clientSource).toContain("setAddLineCooldownCatalogId(catalogId)");
+    expect(clientSource).toContain("draft.catalogId === addLineCooldownCatalogId");
   });
 });
 
@@ -270,5 +279,50 @@ describe("useSpineMutation sequential actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Grant clinical consent" }));
     await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(loadWorkspace).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("add-line same-catalog dedup window", () => {
+  it("treats a second identical catalog add inside the window as the same intent", async () => {
+    const { findRecentDuplicateAddLine, ADD_LINE_DEDUP_WINDOW_MS } = await import(
+      "@/lib/encounter/add-line-dedup"
+    );
+    const now = new Date("2026-08-29T12:00:00.000Z");
+    const existing = {
+      id: "line-1",
+      procedureCatalogId: "cat-gpmr-p002",
+      toothNumbers: [] as string[],
+      surfaces: [] as string[],
+      status: "planned",
+      createdAt: new Date(now.getTime() - 400),
+    };
+    expect(
+      findRecentDuplicateAddLine(
+        [existing],
+        { procedureCatalogId: "cat-gpmr-p002", toothNumbers: [], surfaces: [] },
+        now,
+      )?.id,
+    ).toBe("line-1");
+    expect(
+      findRecentDuplicateAddLine(
+        [{ ...existing, createdAt: new Date(now.getTime() - ADD_LINE_DEDUP_WINDOW_MS - 1) }],
+        { procedureCatalogId: "cat-gpmr-p002" },
+        now,
+      ),
+    ).toBeUndefined();
+    expect(
+      findRecentDuplicateAddLine(
+        [{ ...existing, toothNumbers: ["16"] }],
+        { procedureCatalogId: "cat-gpmr-p002", toothNumbers: [] },
+        now,
+      ),
+    ).toBeUndefined();
+    expect(
+      findRecentDuplicateAddLine(
+        [{ ...existing, status: "declined" }],
+        { procedureCatalogId: "cat-gpmr-p002" },
+        now,
+      ),
+    ).toBeUndefined();
   });
 });
