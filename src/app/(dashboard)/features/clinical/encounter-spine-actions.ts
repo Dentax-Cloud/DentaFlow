@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomBytes } from "crypto";
 import { AuditAction, Prisma } from "@prisma/client";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { requirePermission } from "@/lib/rbac/guard";
@@ -138,12 +139,15 @@ export type SpineProcedureLineSerialized = {
   sterilizationLoggedAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  cosignAt: string | null;
+  cosignStaffId: string | null;
   createdAt: string;
   procedureCatalog: {
     id: string;
     code: string;
     name: string;
     price: number;
+    category: string;
   };
   billedInvoiceId: string | null;
   materialUsages: Array<{
@@ -285,6 +289,7 @@ export type SpineClinicalFindingsData = {
     type: string;
     fileName: string | null;
     takenAt: string | null;
+    patientShareable: boolean;
   }>;
   treatmentPlan: { id: string; title: string } | null;
 };
@@ -314,6 +319,7 @@ export type SpineWorkspaceData = {
     type: string;
     fileName: string | null;
     takenAt: string | null;
+    patientShareable: boolean;
   }>;
   clinicalFindings: SpineClinicalFindingsData;
   patient: {
@@ -344,8 +350,10 @@ function serializeProcedureLine(line: {
   sterilizationLoggedAt: Date | null;
   startedAt: Date | null;
   completedAt: Date | null;
+  cosignAt?: Date | null;
+  cosignStaffId?: string | null;
   createdAt: Date;
-  procedureCatalog: { id: string; code: string; name: string; price: unknown };
+  procedureCatalog: { id: string; code: string; name: string; price: unknown; category?: string | null };
   materialUsages: Array<{
     id: string;
     itemId: string;
@@ -379,12 +387,15 @@ function serializeProcedureLine(line: {
     sterilizationLoggedAt: toIso(line.sterilizationLoggedAt),
     startedAt: toIso(line.startedAt),
     completedAt: toIso(line.completedAt),
+    cosignAt: toIso(line.cosignAt ?? null),
+    cosignStaffId: line.cosignStaffId ?? null,
     createdAt: toIso(line.createdAt)!,
     procedureCatalog: {
       id: line.procedureCatalog.id,
       code: line.procedureCatalog.code,
       name: line.procedureCatalog.name,
       price: asNumber(catalog.price),
+      category: line.procedureCatalog.category ?? "",
     },
     materialUsages: line.materialUsages.map((u) => {
       const s = serializeDecimal(u as Record<string, unknown>);
@@ -854,6 +865,8 @@ export async function createSpineBundle(input: {
 export async function transitionSpineProcedureLine(input: {
   lineId: string;
   toStatus: EncounterProcedureLineStatus;
+  cosignEmail?: string;
+  cosignPassword?: string;
 }): Promise<SpineActionResult<Record<string, unknown>>> {
   const ctx = await requireSpineWrite();
   const line = await db.encounterProcedureLine.findFirst({
@@ -862,6 +875,11 @@ export async function transitionSpineProcedureLine(input: {
   });
   if (!line) return { ok: false, error: "Procedure line not found." };
 
+  const cosign =
+    input.cosignEmail || input.cosignPassword
+      ? { email: input.cosignEmail ?? "", password: input.cosignPassword ?? "" }
+      : null;
+
   return withSpineExpectedFailureCatch(async () => {
     const updated = await transitionProcedureLineStatus({
       tenantId: ctx.tenantId,
@@ -869,6 +887,7 @@ export async function transitionSpineProcedureLine(input: {
       toStatus: input.toStatus,
       providerId: ctx.staffMember?.id ?? null,
       userId: ctx.staffMember?.id,
+      cosign,
     });
     revalidateSpinePaths(line.encounter.appointmentId);
     return serializeDecimal(updated as Record<string, unknown>);
@@ -1189,7 +1208,7 @@ export async function loadSpineWorkspaceData(
       },
       orderBy: { takenAt: "desc" },
       take: 24,
-      select: { id: true, url: true, type: true, fileName: true, takenAt: true },
+      select: { id: true, url: true, type: true, fileName: true, takenAt: true, patientShareable: true },
     }),
     // Read-only clinical findings for Phase 2b cockpit (no write paths).
     getPatientChart(patientId).catch(() => ({})),
@@ -1256,6 +1275,7 @@ export async function loadSpineWorkspaceData(
     type: img.type,
     fileName: img.fileName,
     takenAt: img.takenAt?.toISOString() ?? null,
+    patientShareable: img.patientShareable === true,
   }));
   const radiographs = media.filter((m) => m.type !== "PHOTO").slice(0, 12);
   const photos = media.filter((m) => m.type === "PHOTO").slice(0, 12);
@@ -1513,4 +1533,46 @@ export async function saveSpineCloseOutNote(input: {
 
   revalidateSpinePaths(owned.appointmentId);
   return { noteId: note.id, allergyConflicts: conflicts };
+}
+
+export async function createVisitShareLink(encounterId: string) {
+  const ctx = await requireSpineWrite();
+  const owned = await assertEncounterOwned(ctx.tenantId, encounterId);
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await db.encounterVisitShare.create({
+    data: {
+      encounterId: owned.id,
+      tenantId: ctx.tenantId,
+      token,
+      expiresAt,
+    },
+  });
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const shareUrl = `${baseUrl}/visit/${token}`;
+  revalidateSpinePaths(owned.appointmentId);
+  return { shareUrl, token, expiresAt: expiresAt.toISOString() };
+}
+
+export async function setImagePatientShareable(input: {
+  imageId: string;
+  patientShareable: boolean;
+}) {
+  const ctx = await requireSpineWrite();
+  const image = await db.clinicalImage.findFirst({
+    where: { id: input.imageId, tenantId: ctx.tenantId },
+    select: { id: true, patientId: true },
+  });
+  if (!image) throw new Error("Image not found.");
+
+  await db.clinicalImage.updateMany({
+    where: { id: image.id, tenantId: ctx.tenantId },
+    data: { patientShareable: input.patientShareable },
+  });
+
+  revalidatePath("/clinical");
+  return { id: image.id, patientShareable: input.patientShareable };
 }

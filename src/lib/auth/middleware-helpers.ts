@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   "/invite/accept",
   "/verify-email",
   "/plan",
+  "/visit",
   "/case",
   "/consent",
   "/education",

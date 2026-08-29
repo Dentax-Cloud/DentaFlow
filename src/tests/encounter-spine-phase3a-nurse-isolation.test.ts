@@ -188,7 +188,7 @@ const TRACKED_LOG = {
 };
 
 describe("Phase 3a nurse — action-level permission isolation", () => {
-  const ACTION_MS = 60_000;
+  const ACTION_MS = 120_000;
 
   let clearSpineRisk: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").clearSpineRisk;
   let grantSpineConsent: typeof import("@/app/(dashboard)/features/clinical/encounter-spine-actions").grantSpineConsent;

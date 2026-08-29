@@ -1,4 +1,4 @@
-import { GateAssertionError } from "@/lib/encounter/errors";
+import { AnaesthesiaCosignError, GateAssertionError } from "@/lib/encounter/errors";
 import {
   EncounterBillingGateError,
   EncounterDoubleInvoiceError,
@@ -17,6 +17,7 @@ export type SpineActionResult<T> =
 export function catchSpineExpectedFailure(e: unknown): SpineActionResult<never> {
   if (
     e instanceof GateAssertionError ||
+    e instanceof AnaesthesiaCosignError ||
     e instanceof EncounterBillingGateError ||
     e instanceof EncounterDoubleInvoiceError ||
     e instanceof InsufficientStockError ||

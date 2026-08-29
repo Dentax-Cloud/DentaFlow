@@ -1,0 +1,52 @@
+{
+  "ok": true,
+  "base": "http://localhost:3652",
+  "startedAt": "2026-08-16T10:44:33.738Z",
+  "finishedAt": "2026-08-16T11:31:40.231Z",
+  "stack": {
+    "compose": "docker-compose.phase3b-clicktest.yml",
+    "db": "dentaflow-phase3b-clicktest-db",
+    "port": "127.0.0.1:5438"
+  },
+  "hydration": {
+    "visit": [],
+    "flagOff": [],
+    "spine": []
+  },
+  "checks": {
+    "expiredVisitStatus": 404,
+    "flagOffVisitStatus": 404,
+    "flagOffVisitUnreachable": true,
+    "visitShowsPatient": true,
+    "visitShowsConsent": true,
+    "visitShowsEstimate": true,
+    "visitHidesPrivatePhoto": true,
+    "visitHidesOtherPatient": true,
+    "visitShowsShareablePhoto": true,
+    "flagOffSpineRedirected": true,
+    "flagOffSpineUrl": "http://localhost:3652/clinical/encounter/appt_p3b_off",
+    "visitShareButtonVisible": true,
+    "cosignDialogVisible": true,
+    "sameUserRejected": true,
+    "twoPersonSucceeded": true,
+    "auditRow": {
+      "id": "cmsvq5ilb00037kkceywbwoyx",
+      "action": "PERMISSION_CHANGE",
+      "entity": "EncounterProcedureLine",
+      "entityId": "line_p3b_anaes_1",
+      "metadata": {
+        "kind": "anaesthesia_cosign",
+        "encounterId": "enc_p3b_on",
+        "actorStaffId": "staff_p3b_owner",
+        "cosignStaffId": "staff_p3b_doc_b"
+      }
+    },
+    "completedLine": {
+      "id": "line_p3b_anaes_1",
+      "status": "completed",
+      "cosignStaffId": "staff_p3b_doc_b",
+      "cosignActorStaffId": "staff_p3b_owner",
+      "cosignAt": "2026-08-16T11:31:34.339Z"
+    }
+  }
+}

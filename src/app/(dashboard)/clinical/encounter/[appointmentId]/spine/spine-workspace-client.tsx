@@ -41,8 +41,12 @@ import {
   saveSpineCloseOutNote,
   completeSpineExam,
   recordSpineNursePresence,
+  createVisitShareLink,
+  setImagePatientShareable,
 } from "@/app/(dashboard)/features/clinical/encounter-spine-actions";
 import { NURSE_PRESENCE_STAGES } from "@/lib/encounter/types";
+import { isAnaesthesiaOrSedationCategory } from "@/lib/encounter/anaesthesia";
+import { AnaesthesiaCosignDialog } from "./anaesthesia-cosign-dialog";
 import { findPrescriptionAllergyConflicts } from "@/lib/encounter/close-out";
 import { PreClinicalChecks } from "@/components/clinical/pre-clinical-checks";
 import { ImageGallery } from "@/components/clinical/image-gallery";
@@ -166,6 +170,12 @@ export function SpineWorkspaceClient({
   const [message, setMessage] = useState<string | null>(null);
   const [encounter, setEncounter] = useState<SpineEncounterSerialized>(initial.encounter);
   const [gates, setGates] = useState<GateSummary>(initial.gates);
+  const [clinicalFindings, setClinicalFindings] = useState(initial.clinicalFindings);
+  const [visitShareUrl, setVisitShareUrl] = useState<string | null>(null);
+  const [cosignLine, setCosignLine] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
   const [procedures] = useState<SpineCatalogSnippet[]>(initial.procedures);
   const [inventoryItems] = useState<SpineInventorySnippet[]>(initial.inventoryItems);
   const [bomByProcedureId] = useState(initial.bomByProcedureId ?? {});
@@ -251,6 +261,7 @@ export function SpineWorkspaceClient({
     const data = await loadSpineWorkspaceData(appointmentId);
     setEncounter(data.encounter);
     setGates(data.gates);
+    setClinicalFindings(data.clinicalFindings);
     router.refresh();
   }
 
@@ -378,7 +389,7 @@ export function SpineWorkspaceClient({
     return "Insurance";
   }, [hasMounted, insuranceVerification]);
 
-  const findings = initial.clinicalFindings;
+  const findings = clinicalFindings;
   const chartData = (findings?.chartData ?? {}) as ToothChartData;
   const stageProgress = (panel: SpineNavPanelId): "current" | "completed" | "upcoming" => {
     const order: SpineNavPanelId[] = [
@@ -753,6 +764,37 @@ export function SpineWorkspaceClient({
             Timeline
           </Link>
         </div>
+        {canWrite ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={btnSecondary}
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  const result = await createVisitShareLink(encounter.id);
+                  setVisitShareUrl(result.shareUrl);
+                  if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    await navigator.clipboard.writeText(result.shareUrl).catch(() => null);
+                  }
+                  return result;
+                }, "Patient visit link ready")
+              }
+            >
+              Patient visit view
+            </button>
+            {visitShareUrl ? (
+              <a
+                href={visitShareUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-teal-800 underline-offset-4 hover:underline"
+              >
+                Open visit link
+              </a>
+            ) : null}
+          </div>
+        ) : null}
         {error ? (
           <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-900 ring-1 ring-rose-200">
             {error}
@@ -1210,6 +1252,7 @@ export function SpineWorkspaceClient({
                       ? ` · sterilized ${formatTime(line.sterilizationLoggedAt, hasMounted)}`
                       : " · sterilization pending"}
                     {line.unitPrice != null ? ` · ${line.unitPrice}` : ""}
+                    {line.cosignAt ? " · co-signed" : ""}
                   </p>
                 </div>
                 {canWrite && !closed ? (
@@ -1256,14 +1299,23 @@ export function SpineWorkspaceClient({
                           type="button"
                           className={btnPrimary}
                           disabled={!write}
-                          onClick={() =>
+                          onClick={() => {
+                            const label = `${line.procedureCatalog.code} · ${line.procedureCatalog.name}`;
+                            if (
+                              isAnaesthesiaOrSedationCategory(
+                                line.procedureCatalog.category,
+                              )
+                            ) {
+                              setCosignLine({ id: line.id, label });
+                              return;
+                            }
                             run(() =>
                               transitionSpineProcedureLine({
                                 lineId: line.id,
                                 toStatus: "completed",
                               }),
-                            )
-                          }
+                            );
+                          }}
                         >
                           Complete
                         </button>
@@ -1781,6 +1833,39 @@ export function SpineWorkspaceClient({
         appointmentId={appointmentId}
         treatmentPlan={findings?.treatmentPlan ?? null}
         perioMeasurements={(findings?.perioMeasurements ?? []) as PerioMeasurement[]}
+        canMarkPatientShareable={canWrite}
+        onTogglePatientShareable={
+          canWrite
+            ? (imageId, patientShareable) =>
+                run(
+                  () => setImagePatientShareable({ imageId, patientShareable }),
+                  patientShareable
+                    ? "Photo marked shareable for visit view"
+                    : "Photo hidden from visit view",
+                )
+            : undefined
+        }
+      />
+      <AnaesthesiaCosignDialog
+        open={cosignLine != null}
+        procedureLabel={cosignLine?.label ?? "this anaesthesia procedure"}
+        pending={pending}
+        error={error}
+        onCancel={() => setCosignLine(null)}
+        onConfirm={(email, password) => {
+          if (!cosignLine) return;
+          run(
+            () =>
+              transitionSpineProcedureLine({
+                lineId: cosignLine.id,
+                toStatus: "completed",
+                cosignEmail: email,
+                cosignPassword: password,
+              }),
+            "Procedure completed with co-sign",
+            () => setCosignLine(null),
+          );
+        }}
       />
     </div>
   );

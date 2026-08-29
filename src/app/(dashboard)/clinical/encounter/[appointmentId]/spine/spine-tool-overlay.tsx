@@ -25,6 +25,7 @@ type MediaItem = {
   fileName: string | null;
   takenAt: string | null;
   type?: string;
+  patientShareable?: boolean;
 };
 
 function toImageRecords(
@@ -74,6 +75,8 @@ export function SpineToolOverlay({
   appointmentId,
   treatmentPlan,
   perioMeasurements,
+  canMarkPatientShareable = false,
+  onTogglePatientShareable,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +90,8 @@ export function SpineToolOverlay({
   appointmentId?: string;
   treatmentPlan?: { id: string; title: string } | null;
   perioMeasurements?: PerioMeasurement[];
+  canMarkPatientShareable?: boolean;
+  onTogglePatientShareable?: (imageId: string, patientShareable: boolean) => void;
 }) {
   const router = useRouter();
   const activeTool = tool ?? "odontogram";
@@ -229,6 +234,28 @@ export function SpineToolOverlay({
               />
             ) : null}
             <ImageGallery images={toImageRecords(photos, "PHOTO")} canDelete={false} />
+            {canMarkPatientShareable && photos.length > 0 ? (
+              <ul className="space-y-2 rounded-md border border-slate-200 p-3">
+                <li className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Patient visit view
+                </li>
+                {photos.map((photo) => (
+                  <li key={photo.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      id={`shareable-${photo.id}`}
+                      type="checkbox"
+                      checked={photo.patientShareable === true}
+                      onChange={(event) =>
+                        onTogglePatientShareable?.(photo.id, event.target.checked)
+                      }
+                    />
+                    <label htmlFor={`shareable-${photo.id}`} className="text-slate-700">
+                      Show {photo.fileName ?? "photo"} on the patient visit link
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         )}
 
