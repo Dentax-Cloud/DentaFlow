@@ -542,6 +542,7 @@ export async function completeSpineExam(input: {
 }): Promise<SpineActionResult<{ noteId: string }>> {
   const ctx = await requireSpineWrite();
   if (!ctx.staffMember?.id) throw new Error("Staff member required to complete exam.");
+  const staffId = ctx.staffMember.id;
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
   return withSpineExpectedFailureCatch(async () => {
     const { chiefComplaint, findings, provisionalDiagnosis } =
@@ -550,7 +551,7 @@ export async function completeSpineExam(input: {
       data: {
         tenantId: ctx.tenantId,
         patientId: owned.patientId,
-        providerId: ctx.staffMember.id,
+        providerId: staffId,
         appointmentId: owned.appointmentId,
         noteType: "EXAM",
         title: "Chief complaint / exam",
@@ -564,14 +565,14 @@ export async function completeSpineExam(input: {
       where: { id: input.encounterId },
       data: {
         examCompletedAt: new Date(),
-        examinedByStaffId: ctx.staffMember.id,
+        examinedByStaffId: staffId,
         examClinicalNoteId: note.id,
       },
     });
     const { createAuditLog } = await import("@/lib/actions/safe-action");
     await createAuditLog({
       tenantId: ctx.tenantId,
-      userId: ctx.staffMember.id,
+      userId: staffId,
       action: AuditAction.CREATE,
       entity: "EncounterExam",
       entityId: input.encounterId,
