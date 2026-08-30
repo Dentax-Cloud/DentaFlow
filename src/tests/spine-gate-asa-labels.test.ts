@@ -4,7 +4,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { GateAssertionError } from "@/lib/encounter/errors";
-import { assertExamCompleteForGatesTransition } from "@/lib/encounter/exam";
+import {
+  assertExamCompleteForGatesTransition,
+  assertExamDocumentationComplete,
+} from "@/lib/encounter/exam";
 import {
   ASA_CLASS_VALUES,
   isValidAsaClass,
@@ -93,6 +96,57 @@ describe("wrapped gate / stage-transition failures", () => {
 
     const plain = new Error(
       "Risk, consent, and insurance gates must all be clear before procedures.",
+    );
+    expect(() => catchSpineExpectedFailure(plain)).toThrow(plain);
+  });
+
+  it("lists missing exam fields as GateAssertionError, not a plain Error", async () => {
+    expect(() =>
+      assertExamDocumentationComplete({
+        chiefComplaint: "Pain",
+        findings: "  ",
+        provisionalDiagnosis: "",
+      }),
+    ).toThrow(GateAssertionError);
+
+    const missingBoth = await withSpineExpectedFailureCatch(async () => {
+      assertExamDocumentationComplete({
+        chiefComplaint: "Pain",
+        findings: "",
+        provisionalDiagnosis: "",
+      });
+    });
+    expect(missingBoth).toEqual({
+      ok: false,
+      error: "Findings and Provisional diagnosis are required to complete the exam.",
+    });
+
+    const missingFindings = await withSpineExpectedFailureCatch(async () => {
+      assertExamDocumentationComplete({
+        chiefComplaint: "",
+        findings: "Caries",
+        provisionalDiagnosis: "",
+      });
+    });
+    expect(missingFindings).toEqual({
+      ok: false,
+      error: "Chief complaint and Provisional diagnosis are required to complete the exam.",
+    });
+
+    const missingDiagnosis = await withSpineExpectedFailureCatch(async () => {
+      assertExamDocumentationComplete({
+        chiefComplaint: "",
+        findings: "",
+        provisionalDiagnosis: "K02.9",
+      });
+    });
+    expect(missingDiagnosis).toEqual({
+      ok: false,
+      error: "Chief complaint and Findings are required to complete the exam.",
+    });
+
+    const plain = new Error(
+      "Chief complaint, findings, and provisional diagnosis are required to complete the exam.",
     );
     expect(() => catchSpineExpectedFailure(plain)).toThrow(plain);
   });

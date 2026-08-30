@@ -49,6 +49,7 @@ import {
   type SpineActionResult,
 } from "@/lib/encounter/spine-action-result";
 import { requireAsaClassForRiskClear } from "@/lib/encounter/asa-class";
+import { assertExamDocumentationComplete } from "@/lib/encounter/exam";
 import type { EncounterStatus, EncounterProcedureLineStatus, PlannedVsPerformed } from "@/lib/encounter/types";
 import type { InterruptOutcome } from "@/lib/encounter/state-machine";
 import type { GateSummary } from "@/lib/encounter/types";
@@ -538,51 +539,48 @@ export async function completeSpineExam(input: {
   chiefComplaint: string;
   findings: string;
   provisionalDiagnosis: string;
-}) {
+}): Promise<SpineActionResult<{ noteId: string }>> {
   const ctx = await requireSpineWrite();
   if (!ctx.staffMember?.id) throw new Error("Staff member required to complete exam.");
-  const chiefComplaint = input.chiefComplaint.trim();
-  const findings = input.findings.trim();
-  const provisionalDiagnosis = input.provisionalDiagnosis.trim();
-  if (!chiefComplaint || !findings || !provisionalDiagnosis) {
-    throw new Error(
-      "Chief complaint, findings, and provisional diagnosis are required to complete the exam.",
-    );
-  }
+  const staffId = ctx.staffMember.id;
   const owned = await assertEncounterOwned(ctx.tenantId, input.encounterId);
-  const note = await db.clinicalNote.create({
-    data: {
+  return withSpineExpectedFailureCatch(async () => {
+    const { chiefComplaint, findings, provisionalDiagnosis } =
+      assertExamDocumentationComplete(input);
+    const note = await db.clinicalNote.create({
+      data: {
+        tenantId: ctx.tenantId,
+        patientId: owned.patientId,
+        providerId: staffId,
+        appointmentId: owned.appointmentId,
+        noteType: "EXAM",
+        title: "Chief complaint / exam",
+        subjective: chiefComplaint,
+        objective: findings,
+        assessment: provisionalDiagnosis,
+        toothNumbers: [],
+      },
+    });
+    await db.encounter.update({
+      where: { id: input.encounterId },
+      data: {
+        examCompletedAt: new Date(),
+        examinedByStaffId: staffId,
+        examClinicalNoteId: note.id,
+      },
+    });
+    const { createAuditLog } = await import("@/lib/actions/safe-action");
+    await createAuditLog({
       tenantId: ctx.tenantId,
-      patientId: owned.patientId,
-      providerId: ctx.staffMember.id,
-      appointmentId: owned.appointmentId,
-      noteType: "EXAM",
-      title: "Chief complaint / exam",
-      subjective: chiefComplaint,
-      objective: findings,
-      assessment: provisionalDiagnosis,
-      toothNumbers: [],
-    },
+      userId: staffId,
+      action: AuditAction.CREATE,
+      entity: "EncounterExam",
+      entityId: input.encounterId,
+      metadata: { clinicalNoteId: note.id },
+    });
+    revalidateSpinePaths(owned.appointmentId);
+    return { noteId: note.id };
   });
-  await db.encounter.update({
-    where: { id: input.encounterId },
-    data: {
-      examCompletedAt: new Date(),
-      examinedByStaffId: ctx.staffMember.id,
-      examClinicalNoteId: note.id,
-    },
-  });
-  const { createAuditLog } = await import("@/lib/actions/safe-action");
-  await createAuditLog({
-    tenantId: ctx.tenantId,
-    userId: ctx.staffMember.id,
-    action: AuditAction.CREATE,
-    entity: "EncounterExam",
-    entityId: input.encounterId,
-    metadata: { clinicalNoteId: note.id },
-  });
-  revalidateSpinePaths(owned.appointmentId);
-  return { noteId: note.id };
 }
 
 export async function interruptSpineEncounter(input: {

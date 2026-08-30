@@ -317,7 +317,10 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
       ok: true,
       data: { id: "consent_1" },
     });
-    await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({ noteId: "note_exam" });
+    await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({
+      ok: true,
+      data: { noteId: "note_exam" },
+    });
     await expect(
       overrideSpinePreAuth({
         encounterId: "enc_test",
@@ -330,6 +333,23 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
     expect(mockCreateConsent).toHaveBeenCalled();
     expect(mockClinicalNoteCreate).toHaveBeenCalled();
     expect(mockApplyPreAuthOverride).toHaveBeenCalled();
+  }, ACTION_MS);
+
+  it("returns { ok: false } listing missing exam fields instead of throwing", async () => {
+    mockRequireTenantContext.mockResolvedValue(dentistContext());
+    await expect(
+      completeSpineExam({
+        encounterId: "enc_test",
+        chiefComplaint: "Pain",
+        findings: "",
+        provisionalDiagnosis: "  ",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "Findings and Provisional diagnosis are required to complete the exam.",
+    });
+    expect(mockClinicalNoteCreate).not.toHaveBeenCalled();
+    expect(mockEncounterUpdate).not.toHaveBeenCalled();
   }, ACTION_MS);
 
   it("allows both material tiers for DENTIST (control)", async () => {
@@ -350,7 +370,10 @@ describe("Phase 3a nurse — action-level permission isolation", () => {
       ok: true,
       data: { id: "consent_1" },
     });
-    await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({ noteId: "note_exam" });
+    await expect(completeSpineExam(EXAM_INPUT)).resolves.toEqual({
+      ok: true,
+      data: { noteId: "note_exam" },
+    });
     await expect(
       overrideSpinePreAuth({
         encounterId: "enc_test",
