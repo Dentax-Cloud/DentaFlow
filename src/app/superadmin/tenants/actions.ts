@@ -2,6 +2,7 @@
 
 import { requireSuperAdmin } from "@/lib/auth";
 import { setTenantActive } from "@/lib/super-admin/queries";
+import { deleteTenantAccount } from "@/lib/tenant/delete-account";
 import {
   SubscriptionPlan,
   SubscriptionStatus,
@@ -143,6 +144,40 @@ export async function reinstateTenantAction(
 You can now log in at: ${baseUrl}/login`,
     }).catch((err) => console.error("[reinstateTenant] email failed:", err));
   }
+
+  revalidatePath("/superadmin/tenants");
+  revalidatePath(`/superadmin/tenants/${tenantId}`);
+}
+
+/**
+ * Permanently closes a tenant/clinic account (soft delete): hides it from
+ * every normal query, deactivates its staff/memberships, and frees its
+ * owner's registration email so the same address can sign up again. See
+ * `deleteTenantAccount` for exactly what this does and does not remove.
+ */
+export async function deleteTenantAccountAction(
+  tenantId: string,
+  _formData?: FormData,
+): Promise<void> {
+  await requireSuperAdmin();
+
+  const tenant = await deleteTenantAccount(tenantId);
+
+  await db.auditLog
+    .create({
+      data: {
+        tenantId,
+        action: "DELETE",
+        entity: "Tenant",
+        entityId: tenantId,
+        metadata: {
+          type: "TENANT_ACCOUNT_DELETED",
+          tenantName: tenant.name,
+          reason: "Deleted by superadmin — account closed, owner email freed for re-registration",
+        },
+      },
+    })
+    .catch(() => null);
 
   revalidatePath("/superadmin/tenants");
   revalidatePath(`/superadmin/tenants/${tenantId}`);

@@ -24,9 +24,11 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { DetailField, DetailSection } from "./detail-field";
 import { TenantAuditLogSection } from "./tenant-audit-log-section";
 import {
+  deleteTenantAccountAction,
   reinstateTenantAction,
   suspendTenantAction,
 } from "@/app/superadmin/tenants/actions";
+import { DeleteTenantAccountButton } from "@/components/super-admin/delete-tenant-account-button";
 
 type OwnerInfo = {
   name: string;
@@ -458,6 +460,11 @@ export function TenantDetailView({
               </Button>
             </form>
           )}
+          <DeleteTenantAccountButton
+            tenantId={tenant.id}
+            tenantName={tenant.name}
+            action={deleteTenantAccountAction}
+          />
         </div>
       </section>
     </div>
