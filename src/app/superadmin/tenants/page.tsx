@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   approveTenantAction,
+  deleteTenantAccountAction,
   rejectTenantAction,
   reinstateTenantAction,
   suspendTenantAction,
 } from "./actions";
 import { TenantStatusBadge } from "@/components/super-admin/tenant-status-badge";
+import { DeleteTenantAccountButton } from "@/components/super-admin/delete-tenant-account-button";
 import { TenantPlanQuickSelect } from "@/components/super-admin/tenant-plan-quick-select";
 import { listTenantsWithStats } from "@/lib/super-admin/queries";
 import { formatCurrency } from "@/lib/utils";
@@ -147,6 +149,12 @@ export default async function SuperadminTenantsPage() {
                         </Button>
                       </form>
                     )}
+                    <DeleteTenantAccountButton
+                      tenantId={tenant.id}
+                      tenantName={tenant.name}
+                      action={deleteTenantAccountAction}
+                      size="sm"
+                    />
                   </div>
                 </td>
               </tr>
