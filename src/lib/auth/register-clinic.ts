@@ -186,7 +186,9 @@ async function finalizeClinicSetup(
 
   await ensureStripeCustomer(updatedTenant);
 
-  await syncTenantCountryProfile(tenantId, input.country);
+  await syncTenantCountryProfile(tenantId, input.country, {
+    secondaryLanguage: input.secondaryLanguage ?? null,
+  });
 
   await db.settings.update({
     where: { tenantId },

@@ -5,8 +5,18 @@ import type { Prisma } from "@prisma/client";
 export async function syncTenantCountryProfile(
   tenantId: string,
   countryCode: string,
+  overrides?: { secondaryLanguage?: string | null },
 ): Promise<void> {
   const profile = getCountryProfile(countryCode);
+
+  // An explicit choice (e.g. from clinic registration) takes precedence over
+  // the country pack's default secondary language. Passing an explicit
+  // empty string / null clears it; omitting the override entirely falls
+  // back to the country default, same as before this parameter existed.
+  const resolvedSecondaryLanguage =
+    overrides && "secondaryLanguage" in overrides
+      ? overrides.secondaryLanguage || null
+      : profile.secondaryLanguage ?? null;
 
   await db.tenant.update({
     where: { id: tenantId },
@@ -20,7 +30,7 @@ export async function syncTenantCountryProfile(
       regulatoryBody: profile.regulatoryBody,
       toothNumbering: profile.toothNumbering,
       defaultLanguage: profile.defaultLanguage,
-      secondaryLanguage: profile.secondaryLanguage ?? null,
+      secondaryLanguage: resolvedSecondaryLanguage,
       dateFormat: profile.dateFormat,
       workingDays: profile.workingDays.join(","),
       primaryCodeSystem: profile.primaryCodeSystem,

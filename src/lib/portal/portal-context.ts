@@ -37,6 +37,7 @@ export type PortalContext = {
     bookingBufferMins: number;
     portalWelcomeMsg: string | null;
     timezone: string;
+    secondaryLanguage: string | null;
   };
 };
 
@@ -89,6 +90,7 @@ export async function requirePortalContext(slug: string): Promise<PortalContext>
         bookingBufferMins: true,
         portalWelcomeMsg: true,
         timezone: true,
+        secondaryLanguage: true,
         subscriptionPlan: true,
       },
     }),
@@ -134,6 +136,7 @@ export async function getPortalTenant(slug: string) {
       countryCode: true,
       portalLogoUrl: true,
       subscriptionPlan: true,
+      secondaryLanguage: true,
     },
   });
 }

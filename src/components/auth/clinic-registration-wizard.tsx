@@ -29,6 +29,7 @@ import {
   TIMEZONE_OPTIONS,
 } from "@/lib/auth/countries";
 import { SUPPORTED_COUNTRIES, getCountryProfile } from "@/lib/countries";
+import { SECONDARY_LANGUAGES, normalizeSecondaryLanguage } from "@/lib/i18n/secondary-languages";
 import {
   DOCTOR_COUNT_OPTIONS,
   formatAdminName,
@@ -97,6 +98,7 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
       doctorCountBand: "1",
       chairCount: 1,
       doctorCount: 1,
+      secondaryLanguage: "",
     },
   });
 
@@ -118,6 +120,14 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
       step2Form.setValue("currency", countryMeta.currency);
     }
   }, [countryMeta, step2Form]);
+
+  useEffect(() => {
+    // Suggest the country's typical second language, but only among the
+    // curated options we actually have translations for — the clinic can
+    // still override it or clear it before submitting.
+    const suggested = normalizeSecondaryLanguage(countryProfile.secondaryLanguage) ?? "";
+    step2Form.setValue("secondaryLanguage", suggested);
+  }, [countryProfile, step2Form]);
 
   useEffect(() => {
     if (!authLoaded || !userLoaded) return;
@@ -175,6 +185,7 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
         doctorCountBand: data.doctorCountBand,
         chairCount: data.chairCount,
         doctorCount: data.doctorCount,
+        secondaryLanguage: data.secondaryLanguage || undefined,
         specialties: data.specialty ? [data.specialty] : ["General Dentistry"],
         expectedMonthlyPatients: "1-50",
         referralSource: "Website",
@@ -380,6 +391,28 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
               <Label htmlFor="clinicPhone">Phone number (optional)</Label>
               <Input id="clinicPhone" className={inputClass} {...step2Form.register("phone")} />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="secondaryLanguage">Preferred second language (optional)</Label>
+            <select
+              id="secondaryLanguage"
+              className={selectClass}
+              {...step2Form.register("secondaryLanguage")}
+            >
+              <option value="" className="bg-zinc-900">
+                None — English only
+              </option>
+              {SECONDARY_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code} className="bg-zinc-900">
+                  {lang.label} ({lang.nativeLabel})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500">
+              Patient-facing forms (registration, consent, booking) will show this language
+              alongside English for your patients.
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

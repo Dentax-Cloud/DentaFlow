@@ -21,7 +21,7 @@ export default async function PortalRegisterPage({
   const formFields = await buildPatientFormFields(
     tenant.id,
     tenant.countryCode ?? "AE",
-    { portalOnly: true },
+    { portalOnly: true, secondaryLanguage: tenant.secondaryLanguage },
   );
 
   return (

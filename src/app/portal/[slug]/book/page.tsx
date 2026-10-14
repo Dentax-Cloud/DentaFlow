@@ -16,5 +16,5 @@ export default async function BookPage({
     redirect(`/portal/${slug}/dashboard`);
   }
 
-  return <BookClient slug={slug} />;
+  return <BookClient slug={slug} secondaryLanguage={ctx.tenant.secondaryLanguage} />;
 }

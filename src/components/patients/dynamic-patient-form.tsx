@@ -21,7 +21,7 @@ export function DynamicPatientForm({
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [networkOptions, setNetworkOptions] = useState<
-    Array<{ value: string; label: string }>
+    Array<{ value: string; label: string; labelAr?: string; secondaryLabel?: string }>
   >([]);
 
   useEffect(() => {
@@ -76,11 +76,15 @@ export function DynamicPatientForm({
             onChange={(e) => handleChange(field.key, e.target.value)}
           >
             <option value="">— Select —</option>
-            {opts.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {opts.map((opt) => {
+              const optSecondary = opt.secondaryLabel ?? opt.labelAr;
+              return (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                  {optSecondary ? ` / ${optSecondary}` : ""}
+                </option>
+              );
+            })}
           </select>
         );
 
@@ -142,9 +146,12 @@ export function DynamicPatientForm({
                     className="flex items-center gap-1 text-sm font-medium"
                   >
                     {field.label}
-                    {field.labelAr && (
-                      <span className="text-xs text-muted-foreground">/ {field.labelAr}</span>
-                    )}
+                    {(() => {
+                      const secondary = field.secondaryLabel ?? field.labelAr;
+                      return secondary ? (
+                        <span className="text-xs text-muted-foreground">/ {secondary}</span>
+                      ) : null;
+                    })()}
                     {field.mandatory && <span className="text-xs text-red-500">*</span>}
                     {field.isCustom && (
                       <span className="rounded border border-blue-200 px-1 text-[10px] text-blue-400">

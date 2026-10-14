@@ -9,6 +9,9 @@ import {
   submitBookingRequest,
 } from "./booking-actions";
 import { PortalNav, PortalDesktopNav } from "@/components/portal/portal-nav";
+import { Bilingual } from "@/components/i18n/bilingual-text";
+import { translateUi } from "@/lib/i18n/translations";
+import { normalizeSecondaryLanguage } from "@/lib/i18n/secondary-languages";
 
 type Service = {
   id: string;
@@ -27,7 +30,14 @@ type Doctor = {
 
 type Slot = { time: string; available: boolean };
 
-export default function BookClient({ slug }: { slug: string }) {
+export default function BookClient({
+  slug,
+  secondaryLanguage,
+}: {
+  slug: string;
+  secondaryLanguage?: string | null;
+}) {
+  const lang = normalizeSecondaryLanguage(secondaryLanguage);
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
@@ -45,6 +55,11 @@ export default function BookClient({ slug }: { slug: string }) {
 
   const selectedService = services.find((s) => s.id === serviceId);
   const durationMins = selectedService?.durationMins ?? 30;
+  const anyDoctorSecondary = translateUi("Any available doctor", lang);
+  const notesPlaceholderSecondary = translateUi("Notes for the clinic (optional)", lang);
+  const notesPlaceholder = notesPlaceholderSecondary
+    ? `Notes for the clinic (optional) / ${notesPlaceholderSecondary}`
+    : "Notes for the clinic (optional)";
 
   useEffect(() => {
     void getBookingServices(slug).then(setServices);
@@ -82,19 +97,25 @@ export default function BookClient({ slug }: { slug: string }) {
       <div className="py-12 text-center">
         <p className="mb-4 text-4xl">✓</p>
         <h1 className="text-xl font-bold">
-          {success.confirmed ? "Appointment confirmed!" : "Booking request received"}
+          {success.confirmed ? (
+            <Bilingual text="Appointment confirmed!" lang={lang} />
+          ) : (
+            <Bilingual text="Booking request received" lang={lang} />
+          )}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          {success.confirmed
-            ? `See you on ${date} at ${time}`
-            : "We'll confirm by email within 24 hours"}
+          {success.confirmed ? (
+            `See you on ${date} at ${time}`
+          ) : (
+            <Bilingual text="We'll confirm by email within 24 hours" lang={lang} />
+          )}
         </p>
         <button
           type="button"
           onClick={() => router.push(`/portal/${slug}/appointments`)}
           className="mt-6 rounded-lg bg-blue-600 px-6 py-2 text-white"
         >
-          View appointments
+          <Bilingual text="View appointments" lang={lang} className="text-xs text-white/70" />
         </button>
       </div>
     );
@@ -103,7 +124,9 @@ export default function BookClient({ slug }: { slug: string }) {
   return (
     <div className="space-y-6">
       <PortalDesktopNav slug={slug} />
-      <h1 className="text-xl font-bold">Book an appointment</h1>
+      <h1 className="text-xl font-bold">
+        <Bilingual text="Book an appointment" lang={lang} />
+      </h1>
 
       <div className="flex gap-2 text-xs">
         {[1, 2, 3, 4].map((s) => (
@@ -111,14 +134,16 @@ export default function BookClient({ slug }: { slug: string }) {
             key={s}
             className={`rounded-full px-2 py-1 ${step === s ? "bg-blue-600 text-white" : "bg-gray-200"}`}
           >
-            Step {s}
+            <Bilingual text="Step" lang={lang} className="text-[10px]" /> {s}
           </span>
         ))}
       </div>
 
       {step === 1 && (
         <div className="space-y-3">
-          <h2 className="font-semibold">Select a service</h2>
+          <h2 className="font-semibold">
+            <Bilingual text="Select a service" lang={lang} />
+          </h2>
           {services.map((s) => (
             <button
               key={s.id}
@@ -138,20 +163,25 @@ export default function BookClient({ slug }: { slug: string }) {
             </button>
           ))}
           <button type="button" onClick={() => setStep(2)} className="text-sm text-blue-600">
-            Skip — general appointment →
+            <Bilingual text="Skip — general appointment" lang={lang} className="text-xs" /> →
           </button>
         </div>
       )}
 
       {step === 2 && (
         <div className="space-y-3">
-          <h2 className="font-semibold">Select doctor & date</h2>
+          <h2 className="font-semibold">
+            <Bilingual text="Select doctor & date" lang={lang} />
+          </h2>
           <select
             value={doctorId ?? ""}
             onChange={(e) => setDoctorId(e.target.value || undefined)}
             className="w-full rounded-lg border px-3 py-2 text-sm"
           >
-            <option value="">Any available doctor</option>
+            <option value="">
+              Any available doctor
+              {anyDoctorSecondary ? ` / ${anyDoctorSecondary}` : ""}
+            </option>
             {doctors.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.firstName} {d.lastName} ({d.role})
@@ -171,14 +201,16 @@ export default function BookClient({ slug }: { slug: string }) {
             onClick={() => setStep(3)}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
           >
-            Next
+            <Bilingual text="Next" lang={lang} className="text-xs text-white/70" />
           </button>
         </div>
       )}
 
       {step === 3 && (
         <div className="space-y-3">
-          <h2 className="font-semibold">Select time</h2>
+          <h2 className="font-semibold">
+            <Bilingual text="Select time" lang={lang} />
+          </h2>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {slots.map((slot) => (
               <button
@@ -204,7 +236,9 @@ export default function BookClient({ slug }: { slug: string }) {
 
       {step === 4 && (
         <div className="space-y-3">
-          <h2 className="font-semibold">Confirm booking</h2>
+          <h2 className="font-semibold">
+            <Bilingual text="Confirm booking" lang={lang} />
+          </h2>
           <div className="rounded-xl border bg-gray-50 p-4 text-sm space-y-1">
             {selectedService && <p>Service: {selectedService.name}</p>}
             <p>Date: {date}</p>
@@ -217,7 +251,7 @@ export default function BookClient({ slug }: { slug: string }) {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes for the clinic (optional)"
+            placeholder={notesPlaceholder}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             rows={3}
           />
@@ -228,7 +262,11 @@ export default function BookClient({ slug }: { slug: string }) {
             disabled={isPending}
             className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {isPending ? "Submitting..." : "Confirm booking"}
+            {isPending ? (
+              <Bilingual text="Submitting..." lang={lang} className="text-xs text-white/70" />
+            ) : (
+              <Bilingual text="Confirm booking" lang={lang} className="text-xs text-white/70" />
+            )}
           </button>
         </div>
       )}

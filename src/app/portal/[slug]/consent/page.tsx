@@ -67,6 +67,7 @@ export default async function PortalConsentPage({
         forms={forms}
         patientName={`${ctx.patient.firstName} ${ctx.patient.lastName}`}
         slug={slug}
+        secondaryLanguage={ctx.tenant.secondaryLanguage}
       />
       <PortalNav slug={slug} />
     </div>

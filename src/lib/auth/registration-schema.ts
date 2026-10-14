@@ -27,6 +27,8 @@ export const registrationStep2Schema = z.object({
   country: z.string().min(2, "Select a country"),
   timezone: z.string().min(1, "Select a timezone"),
   currency: z.string().min(3, "Currency is required"),
+  /** Curated code from SECONDARY_LANGUAGES (src/lib/i18n/secondary-languages.ts); empty = none chosen. */
+  secondaryLanguage: z.string().optional(),
   phone: z.string().optional(),
   specialty: z.string().optional(),
   doctorCountBand: z.enum(DOCTOR_COUNT_OPTIONS).optional(),

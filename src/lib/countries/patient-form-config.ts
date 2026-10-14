@@ -1,25 +1,42 @@
 import { db } from "@/lib/db";
 import { getCountryProfile, SUPPORTED_COUNTRIES } from "./index";
 import type { CountryProfile } from "./types";
+import { translateField } from "@/lib/i18n/translations";
+import { normalizeSecondaryLanguage } from "@/lib/i18n/secondary-languages";
 
 export type PatientFormField = {
   key: string;
   label: string;
   labelAr?: string;
+  /** Resolved label in the tenant's chosen secondary language (if any), for
+   * bilingual side-by-side rendering. Falls back to `labelAr` for Arabic
+   * when no dictionary entry exists, so legacy Arabic-only behavior is
+   * unaffected when no secondary language is passed in. */
+  secondaryLabel?: string;
   type: "text" | "select" | "date" | "phone" | "email" | "textarea";
   mandatory: boolean;
   placeholder?: string;
-  options?: Array<{ value: string; label: string; labelAr?: string }>;
+  options?: Array<{ value: string; label: string; labelAr?: string; secondaryLabel?: string }>;
   validation?: { regex?: string; message?: string };
   section: "IDENTITY" | "CONTACT" | "INSURANCE" | "MEDICAL" | "ADDITIONAL";
   isCustom: boolean;
   helpText?: string;
 };
 
+function resolveSecondaryLabel(
+  label: string,
+  labelAr: string | undefined,
+  lang: ReturnType<typeof normalizeSecondaryLanguage>,
+): string | undefined {
+  if (!lang) return undefined;
+  if (lang === "ar" && labelAr) return labelAr;
+  return translateField(label, lang);
+}
+
 export async function buildPatientFormFields(
   tenantId: string,
   countryCode: string,
-  options?: { portalOnly?: boolean },
+  options?: { portalOnly?: boolean; secondaryLanguage?: string | null },
 ): Promise<PatientFormField[]> {
   const profile = getCountryProfile(countryCode);
   const fields: PatientFormField[] = [];
@@ -279,6 +296,18 @@ export async function buildPatientFormFields(
       section: cf.section as PatientFormField["section"],
       isCustom: true,
     });
+  }
+
+  const secondaryLanguage = normalizeSecondaryLanguage(options?.secondaryLanguage);
+  if (secondaryLanguage) {
+    for (const field of fields) {
+      field.secondaryLabel = resolveSecondaryLabel(field.label, field.labelAr, secondaryLanguage);
+      if (field.options) {
+        for (const opt of field.options) {
+          opt.secondaryLabel = resolveSecondaryLabel(opt.label, opt.labelAr, secondaryLanguage);
+        }
+      }
+    }
   }
 
   return fields;
