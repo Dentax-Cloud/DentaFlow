@@ -5,12 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PlanDisplay } from "@/lib/subscription/plans-display";
+import type { CountryProfile } from "@/lib/countries";
+import { PricingCurrencySelect } from "@/components/marketing/pricing-currency-select";
 
 type Props = {
   plans: PlanDisplay[];
+  countries: CountryProfile[];
+  currentCountry: string;
+  isOverride: boolean;
 };
 
-export function PricingSection({ plans }: Props) {
+export function PricingSection({ plans, countries, currentCountry, isOverride }: Props) {
   return (
     <section id="pricing" className="border-y border-white/5 bg-zinc-900/20 px-4 py-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -25,6 +30,11 @@ export function PricingSection({ plans }: Props) {
             Start with a 14-day free trial on Starter. Upgrade anytime as your team and patient
             volume grow.
           </p>
+          <PricingCurrencySelect
+            countries={countries}
+            currentCountry={currentCountry}
+            isOverride={isOverride}
+          />
         </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-3">

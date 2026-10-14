@@ -16,9 +16,12 @@ import { PricingSection } from "@/components/marketing/pricing-section";
 import { FEATURE_SUMMARIES } from "@/lib/marketing/features";
 import { HIGHLIGHTS, TRUST_LOGOS } from "@/lib/marketing/site";
 import { getPublicSubscriptionPlans } from "@/lib/subscription/plans-display";
+import { resolvePricingCountry } from "@/lib/geo/pricing-country";
+import { SUPPORTED_COUNTRIES } from "@/lib/countries";
 
 export default async function LandingPage() {
-  const plans = await getPublicSubscriptionPlans();
+  const pricingCountry = await resolvePricingCountry();
+  const plans = await getPublicSubscriptionPlans(pricingCountry.code);
   return (
     <MarketingShell>
       <main>
@@ -105,7 +108,12 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        <PricingSection plans={plans} />
+        <PricingSection
+          plans={plans}
+          countries={SUPPORTED_COUNTRIES}
+          currentCountry={pricingCountry.code}
+          isOverride={pricingCountry.isOverride}
+        />
 
         {/* Features grid */}
         <section id="features" className="px-4 py-24 sm:px-6 lg:px-8">

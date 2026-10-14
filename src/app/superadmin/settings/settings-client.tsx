@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORIES } from "@/lib/settings/platform-settings";
+import { PricingPanel } from "./pricing-panel";
 import type { SettingDisplay } from "@/lib/settings/platform-settings";
 import {
   getSettingsByCategory,
@@ -632,12 +633,15 @@ export default function PlatformSettingsClient() {
       </div>
 
       <Tabs defaultValue="AI">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           {CATEGORIES.map((cat) => (
             <TabsTrigger key={cat.key} value={cat.key} className="text-xs">
               {cat.icon} {cat.label}
             </TabsTrigger>
           ))}
+          <TabsTrigger value="PRICING" className="text-xs">
+            💰 Pricing
+          </TabsTrigger>
         </TabsList>
 
         {CATEGORIES.map((cat) => (
@@ -645,6 +649,9 @@ export default function PlatformSettingsClient() {
             <CategoryPanel category={cat.key} onSettingsChange={loadOverview} />
           </TabsContent>
         ))}
+        <TabsContent value="PRICING" className="mt-4">
+          <PricingPanel />
+        </TabsContent>
       </Tabs>
     </div>
   );

@@ -1,6 +1,11 @@
 import { SubscriptionPlan } from "@/lib/subscription/plan-types";
 import { PLAN_FEATURES } from "@/lib/features/plans";
-import { formatPlanPriceLabel, getPlanPricingConfig } from "@/lib/subscription/plan-pricing";
+import {
+  DEFAULT_PRICING_COUNTRY,
+  formatPlanPriceLabel,
+  getPlanPricingConfig,
+} from "@/lib/subscription/plan-pricing";
+import { getCurrency } from "@/lib/countries";
 
 export type PlanDisplay = {
   id: SubscriptionPlan;
@@ -101,15 +106,23 @@ export const FEATURE_COMPARISON: ComparisonRow[] = [
   { category: "Limits", feature: "Team members", starter: "3", professional: "15", enterprise: "Unlimited" },
 ];
 
-export async function getPublicSubscriptionPlans(): Promise<PlanDisplay[]> {
-  const pricing = await getPlanPricingConfig();
+/**
+ * Public plan cards, priced for one country/currency. Defaults to
+ * DEFAULT_PRICING_COUNTRY (AE) when no country is given, matching this
+ * function's pre-existing single-currency behavior exactly — the billing
+ * page call site relies on that default and is out of scope for this change.
+ */
+export async function getPublicSubscriptionPlans(countryCode?: string): Promise<PlanDisplay[]> {
+  const code = (countryCode ?? DEFAULT_PRICING_COUNTRY).toUpperCase();
+  const pricing = await getPlanPricingConfig(code);
+  const currency = getCurrency(code);
   return PLAN_DISPLAY.map((plan) => {
     const entry = pricing[plan.id];
     return {
       ...plan,
       priceMonthly: entry.priceMonthly,
-      currency: entry.currency,
-      priceLabel: formatPlanPriceLabel(entry),
+      currency,
+      priceLabel: formatPlanPriceLabel(entry, code),
     };
   });
 }
