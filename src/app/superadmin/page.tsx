@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { SubscriptionStatus, TenantStatus } from "@prisma/client";
+import { SubscriptionStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getPlatformAnalytics } from "@/lib/super-admin/queries";
+import { listTenantsWithStats } from "@/lib/super-admin/queries";
 import { formatCurrency } from "@/lib/utils";
+import { OverviewCharts } from "@/components/super-admin/dashboard/overview-charts";
+
+export const runtime = "nodejs";
 
 const PLAN_MRR: Record<string, number> = {
   STARTER: 49,
@@ -14,45 +17,38 @@ const PLAN_MRR: Record<string, number> = {
 };
 
 export default async function SuperadminDashboardPage() {
-  const analytics = await getPlatformAnalytics();
+  const tenants = await listTenantsWithStats();
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const [recentSignups, overduePayments, trialingCount] = await Promise.all([
-    db.tenant.count({
-      where: { deletedAt: null, createdAt: { gte: sevenDaysAgo } },
-    }),
-    db.tenant.count({
-      where: {
-        deletedAt: null,
-        subscriptionStatus: SubscriptionStatus.PAST_DUE,
-      },
-    }),
-    db.tenant.count({
-      where: {
-        deletedAt: null,
-        subscriptionStatus: SubscriptionStatus.TRIALING,
-      },
-    }),
-  ]);
 
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const appointmentsThisMonth = await db.appointment.count({
-    where: { deletedAt: null, startTime: { gte: monthStart } },
-  });
+  const [overduePayments, appointmentsThisMonth] = await Promise.all([
+    db.tenant.count({
+      where: { deletedAt: null, subscriptionStatus: SubscriptionStatus.PAST_DUE },
+    }),
+    db.appointment.count({
+      where: { deletedAt: null, startTime: { gte: monthStart } },
+    }),
+  ]);
 
-  const mrrEstimate = Object.entries(analytics.planBreakdown).reduce(
+  const activeTenants = tenants.filter((t) => t.status === "ACTIVE").length;
+  const pendingApprovals = tenants.filter((t) => t.status === "PENDING").length;
+  const trialingCount = tenants.filter((t) => t.subscriptionStatus === "TRIALING").length;
+  const recentSignups = tenants.filter((t) => t.createdAt >= sevenDaysAgo).length;
+  const totalPatients = tenants.reduce((sum, t) => sum + t.totalPatients, 0);
+
+  const planCounts = tenants.reduce<Record<string, number>>((acc, t) => {
+    acc[t.subscriptionPlan] = (acc[t.subscriptionPlan] ?? 0) + 1;
+    return acc;
+  }, {});
+  const mrrEstimate = Object.entries(planCounts).reduce(
     (sum, [plan, count]) => sum + (PLAN_MRR[plan] ?? 0) * count,
     0,
   );
-
-  const pendingApprovals = await db.tenant.count({
-    where: { deletedAt: null, status: TenantStatus.PENDING },
-  });
 
   return (
     <div className="space-y-8">
@@ -70,10 +66,10 @@ export default async function SuperadminDashboardPage() {
         {[
           {
             label: "Active tenants",
-            value: analytics.activeTenants,
+            value: activeTenants,
             sub: `${trialingCount} trialing`,
           },
-          { label: "Total patients", value: analytics.totalPatients },
+          { label: "Total patients", value: totalPatients },
           { label: "Appointments (MTD)", value: appointmentsThisMonth },
           { label: "Est. MRR", value: formatCurrency(mrrEstimate) },
         ].map((item) => (
@@ -98,17 +94,17 @@ export default async function SuperadminDashboardPage() {
             <p className="text-3xl font-bold">{recentSignups}</p>
           </CardContent>
         </Card>
-        <Card className="border-white/10 bg-zinc-900/50">
-          <CardHeader>
-            <CardTitle className="text-sm">Pending approval</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <p className="text-3xl font-bold">{pendingApprovals}</p>
-            {pendingApprovals > 0 && (
-              <Badge variant="warning">{pendingApprovals} waiting</Badge>
-            )}
-          </CardContent>
-        </Card>
+        <Link href="/superadmin/tenants?status=PENDING" className="block">
+          <Card className="h-full border-white/10 bg-zinc-900/50 transition-colors hover:border-amber-500/30">
+            <CardHeader>
+              <CardTitle className="text-sm">Pending approval</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+              <p className="text-3xl font-bold">{pendingApprovals}</p>
+              {pendingApprovals > 0 && <Badge variant="warning">{pendingApprovals} waiting</Badge>}
+            </CardContent>
+          </Card>
+        </Link>
         <Card className="border-white/10 bg-zinc-900/50">
           <CardHeader>
             <CardTitle className="text-sm">Overdue payments</CardTitle>
@@ -119,19 +115,10 @@ export default async function SuperadminDashboardPage() {
         </Card>
       </div>
 
-      <Card className="border-white/10 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle>Plan distribution</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          {Object.entries(analytics.planBreakdown).map(([plan, count]) => (
-            <div key={plan} className="rounded-lg border border-white/10 px-4 py-2">
-              <p className="text-xs text-zinc-500">{plan}</p>
-              <p className="text-xl font-bold">{count}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <div>
+        <h3 className="mb-4 text-lg font-semibold">Platform analytics</h3>
+        <OverviewCharts tenants={tenants} />
+      </div>
     </div>
   );
 }
