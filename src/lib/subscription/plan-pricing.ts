@@ -1,6 +1,7 @@
 import { SubscriptionPlan } from "@/lib/subscription/plan-types";
-import { formatCurrency } from "@/lib/countries";
+import { formatCurrency, getCurrency } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { getFxRates, type FxRatesSnapshot } from "@/lib/subscription/fx-rates";
 
 /** Key used when super admin persists pricing to the platform settings store. */
 export const SUBSCRIPTION_PRICING_SETTING_KEY = "subscription_pricing";
@@ -29,87 +30,68 @@ export type PricingOverrideRow = {
 export type PricingOverrides = Record<string, PricingOverrideRow>;
 
 /**
- * Local monthly price per plan, per country. One row per country this app has a country
- * profile for (`src/lib/countries`) — currency, symbol, decimals, and locale formatting for
- * display all come from that same profile via `formatCurrency`, so a price shown here always
- * matches the same country-aware formatting used everywhere else in the app.
+ * Static fallback table — one row per country this app has a country profile for. This used to
+ * be the primary source for every non-AE country's price (all copied from AE as a placeholder).
+ * It is now ONLY a fallback, used when live FX conversion is unavailable (the rate API is down
+ * and there's no cached snapshot yet — see fx-rates.ts). In normal operation, a non-AE country
+ * with no super-admin override gets its price computed live from the AE baseline via
+ * `computeCountryPricing` below, not from this table.
  *
- * IMPORTANT: only AE carries a real, confirmed baseline price (AED 179 / 549 — the pre-existing
- * price, unchanged). Every other row below is a PLACEHOLDER — the same numeric value as AE,
- * just re-labeled under that country's currency — and is NOT a real local price. GCC currencies
- * in particular are not 1:1 with AED (e.g. 1 BHD/KWD/OMR is worth several AED), so copying the
- * number across currencies is deliberately a visible placeholder, not a quiet approximation
- * anyone could mistake for a real one.
- *
- * This static table is the fallback floor. The super admin's "Pricing" tab
- * (`/superadmin/settings` → Pricing) lets a real admin set a real per-country price without any
- * code change — see `getPricingOverrides`/`savePricingOverrides` below — and an override always
- * wins over the placeholder for that country. Replace or override each placeholder row before
- * trusting it for an actual visitor.
+ * AE itself is the real baseline (AED 179 / 549, unchanged). The super admin's "Pricing" tab
+ * (`/superadmin/settings` → Pricing) can still set an explicit override for any country,
+ * including AE — an override always wins over both FX conversion and this fallback table.
  */
 export const PLAN_PRICING_BY_COUNTRY: Record<string, CountryPlanPricing> = {
-  // Real, confirmed pricing.
   AE: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   SA: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   QA: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   BH: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   KW: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   OM: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   GB: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   US: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   IN: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   SG: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
     ENTERPRISE: { priceMonthly: 0, priceLabel: "Custom" },
   },
-  // TODO — placeholder only, pending confirmed local pricing (see note above).
   AU: {
     STARTER: { priceMonthly: 179 },
     PROFESSIONAL: { priceMonthly: 549 },
@@ -130,10 +112,8 @@ function parseEnvPrice(value: string | undefined): number | undefined {
  * so applying these vars to every country now would silently change prices nobody asked to
  * change. If `.env.production` sets SUBSCRIPTION_PRICE_STARTER_MONTHLY /
  * SUBSCRIPTION_PRICE_PROFESSIONAL_MONTHLY, double-check they still mean what they meant before.
- * This is now the highest-precedence override for AE — above both the static table and the
- * super-admin-editable DB override below — purely for backward compatibility with any ops
- * tooling that still sets it; new pricing changes should go through the superadmin Pricing tab
- * instead.
+ * This is the highest-precedence override for AE's baseline price — above the super-admin DB
+ * override, since AE is also where every other country's auto-converted price derives from.
  */
 function applyEnvOverrides(config: CountryPlanPricing): CountryPlanPricing {
   const starter = parseEnvPrice(process.env.SUBSCRIPTION_PRICE_STARTER_MONTHLY);
@@ -215,32 +195,108 @@ export async function savePricingOverrides(
 }
 
 /**
+ * Pure pricing calculation for one country, given already-fetched overrides and FX snapshot.
+ * Precedence, highest first:
+ *   1. AE's legacy env-var override (back-compat) — folded into the "AE baseline" below.
+ *   2. An explicit super-admin DB override for this exact country (wins over auto-conversion).
+ *   3. For AE itself: the baseline (static 179/549, plus any of the above).
+ *   4. For any other country: auto-converted from the AE baseline using the live AED->currency
+ *      FX rate, rounded to a whole number in that currency.
+ *   5. If FX conversion isn't possible (no rate / rates unavailable): the static fallback table.
+ * Enterprise is never overridden or converted — always "Custom" / contact sales, taken from the
+ * AE baseline's Enterprise entry (so a label change there would propagate, though none exists).
+ */
+function computeCountryPricing(
+  code: string,
+  overrides: PricingOverrides,
+  fx: FxRatesSnapshot | null,
+): CountryPlanPricing {
+  const aeStatic = PLAN_PRICING_BY_COUNTRY[DEFAULT_PRICING_COUNTRY];
+  const aeOverride = overrides[DEFAULT_PRICING_COUNTRY];
+  const aeBaseline = applyEnvOverrides({
+    [SubscriptionPlan.STARTER]: {
+      ...aeStatic[SubscriptionPlan.STARTER],
+      ...(aeOverride ? { priceMonthly: aeOverride.starterMonthly } : {}),
+    },
+    [SubscriptionPlan.PROFESSIONAL]: {
+      ...aeStatic[SubscriptionPlan.PROFESSIONAL],
+      ...(aeOverride ? { priceMonthly: aeOverride.professionalMonthly } : {}),
+    },
+    [SubscriptionPlan.ENTERPRISE]: aeStatic[SubscriptionPlan.ENTERPRISE],
+  });
+
+  if (code === DEFAULT_PRICING_COUNTRY) return aeBaseline;
+
+  const override = overrides[code];
+  if (override) {
+    const base = PLAN_PRICING_BY_COUNTRY[code] ?? aeStatic;
+    return {
+      [SubscriptionPlan.STARTER]: {
+        ...base[SubscriptionPlan.STARTER],
+        priceMonthly: override.starterMonthly,
+      },
+      [SubscriptionPlan.PROFESSIONAL]: {
+        ...base[SubscriptionPlan.PROFESSIONAL],
+        priceMonthly: override.professionalMonthly,
+      },
+      [SubscriptionPlan.ENTERPRISE]: aeBaseline[SubscriptionPlan.ENTERPRISE],
+    };
+  }
+
+  const currency = getCurrency(code);
+  const rate = fx?.rates?.[currency];
+  if (rate && Number.isFinite(rate) && rate > 0) {
+    return {
+      [SubscriptionPlan.STARTER]: {
+        priceMonthly: Math.round(aeBaseline[SubscriptionPlan.STARTER].priceMonthly * rate),
+      },
+      [SubscriptionPlan.PROFESSIONAL]: {
+        priceMonthly: Math.round(aeBaseline[SubscriptionPlan.PROFESSIONAL].priceMonthly * rate),
+      },
+      [SubscriptionPlan.ENTERPRISE]: aeBaseline[SubscriptionPlan.ENTERPRISE],
+    };
+  }
+
+  // FX unavailable (API unreachable and no cached snapshot yet) — fall back to the static table
+  // rather than showing nothing.
+  const fallback = PLAN_PRICING_BY_COUNTRY[code] ?? aeStatic;
+  return {
+    [SubscriptionPlan.STARTER]: fallback[SubscriptionPlan.STARTER],
+    [SubscriptionPlan.PROFESSIONAL]: fallback[SubscriptionPlan.PROFESSIONAL],
+    [SubscriptionPlan.ENTERPRISE]: aeBaseline[SubscriptionPlan.ENTERPRISE],
+  };
+}
+
+/**
  * Resolves public subscription pricing for one country (defaults to DEFAULT_PRICING_COUNTRY
  * when omitted, matching this function's pre-existing single-currency behavior exactly).
- * Precedence, highest first: the legacy AE-only env vars (back-compat), then the super admin's
- * DB override for that country (if any), then the static placeholder table.
+ * Skips the FX fetch entirely when resolving AE itself, since AE never needs conversion — keeps
+ * the in-app billing page (which always prices in AE) from ever making an outbound FX call.
  */
 export async function getPlanPricingConfig(countryCode?: string): Promise<CountryPlanPricing> {
   const code = (countryCode ?? DEFAULT_PRICING_COUNTRY).toUpperCase();
-  const base = PLAN_PRICING_BY_COUNTRY[code] ?? PLAN_PRICING_BY_COUNTRY[DEFAULT_PRICING_COUNTRY];
-
   const overrides = await getPricingOverrides();
-  const override = overrides[code];
+  const fx = code === DEFAULT_PRICING_COUNTRY ? null : await getFxRates();
+  return computeCountryPricing(code, overrides, fx);
+}
 
-  const merged: CountryPlanPricing = {
-    [SubscriptionPlan.STARTER]: {
-      ...base[SubscriptionPlan.STARTER],
-      ...(override ? { priceMonthly: override.starterMonthly } : {}),
-    },
-    [SubscriptionPlan.PROFESSIONAL]: {
-      ...base[SubscriptionPlan.PROFESSIONAL],
-      ...(override ? { priceMonthly: override.professionalMonthly } : {}),
-    },
-    // Enterprise is never overridden — always "Custom" / contact sales.
-    [SubscriptionPlan.ENTERPRISE]: base[SubscriptionPlan.ENTERPRISE],
-  };
-
-  return code === DEFAULT_PRICING_COUNTRY ? applyEnvOverrides(merged) : merged;
+/**
+ * Computes pricing for every country this app has a profile for in one pass (one overrides
+ * read, one FX snapshot fetch, reused across all countries) — used by the superadmin Pricing
+ * tab so it doesn't do a DB/API round-trip per row.
+ */
+export async function getFullPricingTable(): Promise<{
+  pricing: Record<string, CountryPlanPricing>;
+  overrides: PricingOverrides;
+  fx: FxRatesSnapshot | null;
+}> {
+  const overrides = await getPricingOverrides();
+  const fx = await getFxRates();
+  const pricing: Record<string, CountryPlanPricing> = {};
+  for (const code of Object.keys(PLAN_PRICING_BY_COUNTRY)) {
+    pricing[code] = computeCountryPricing(code, overrides, fx);
+  }
+  return { pricing, overrides, fx };
 }
 
 export function formatPlanPriceLabel(entry: PlanPricingEntry, countryCode: string): string {

@@ -7,14 +7,29 @@ import {
   getPricingTableData,
   savePricingRow,
   clearPricingRow,
+  refreshPricingFxRates,
   type PricingTableRow,
+  type PricingTableData,
 } from "./pricing-settings-actions";
 
+const EMPTY_DATA: PricingTableData = { rows: [], fxUpdatedAt: null, fxSource: "unavailable" };
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
 function RowStatusBadge({ row }: { row: PricingTableRow }) {
-  if (row.isPlaceholder) {
+  if (row.isBaseline) {
     return (
-      <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-700">
-        Placeholder ⚠
+      <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+        Baseline
       </span>
     );
   }
@@ -26,8 +41,8 @@ function RowStatusBadge({ row }: { row: PricingTableRow }) {
     );
   }
   return (
-    <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800">
-      Baseline
+    <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+      Converted (auto)
     </span>
   );
 }
@@ -71,7 +86,8 @@ function PricingRowEditor({
   }
 
   function handleReset() {
-    if (!confirm(`Revert ${row.name} to the default placeholder price?`)) return;
+    const revertTo = row.isBaseline ? "its static baseline" : "live exchange-rate conversion";
+    if (!confirm(`Revert ${row.name} to ${revertTo}?`)) return;
     startTransition(async () => {
       try {
         await clearPricingRow(row.code);
@@ -93,7 +109,14 @@ function PricingRowEditor({
         <span className="mr-1.5">{row.flag}</span>
         <span className="text-sm font-medium">{row.name}</span>
       </td>
-      <td className="py-2 pr-3 text-sm text-muted-foreground">{row.currency}</td>
+      <td className="py-2 pr-3 text-sm text-muted-foreground">
+        {row.currency}
+        {row.isConverted && row.fxRate && (
+          <div className="text-[10px] text-muted-foreground/70">
+            1 AED ≈ {row.fxRate.toFixed(row.fxRate < 1 ? 3 : 2)}
+          </div>
+        )}
+      </td>
       <td className="py-2 pr-3">
         <input
           type="number"
@@ -147,12 +170,14 @@ function PricingRowEditor({
 }
 
 export function PricingPanel() {
-  const [rows, setRows] = useState<PricingTableRow[]>([]);
+  const [data, setData] = useState<PricingTableData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, startRefresh] = useTransition();
+  const [refreshStatus, setRefreshStatus] = useState<string | null>(null);
 
   function load() {
     getPricingTableData()
-      .then(setRows)
+      .then(setData)
       .finally(() => setLoading(false));
   }
 
@@ -160,21 +185,57 @@ export function PricingPanel() {
     load();
   }, []);
 
-  const placeholderCount = rows.filter((r) => r.isPlaceholder).length;
+  function handleRefreshRates() {
+    startRefresh(async () => {
+      try {
+        await refreshPricingFxRates();
+        setRefreshStatus("Rates refreshed");
+        load();
+        setTimeout(() => setRefreshStatus(null), 2500);
+      } catch (err: unknown) {
+        setRefreshStatus(err instanceof Error ? err.message : "Refresh failed");
+      }
+    });
+  }
+
+  const convertedCount = data.rows.filter((r) => r.isConverted).length;
 
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        Sets the Starter/Professional monthly price shown on the public pricing page for each
-        country, in that country&apos;s own currency. A visitor&apos;s country is auto-detected
-        from their IP (with a manual override on the page itself) — whatever price is saved here
-        for their country is what they&apos;ll see. Enterprise always stays &ldquo;Custom&rdquo;.
-        {placeholderCount > 0 && (
-          <p className="mt-2 font-medium text-orange-700">
-            {placeholderCount} {placeholderCount === 1 ? "currency" : "currencies"} still showing
-            a placeholder price (copied from AED) — set a real price below before relying on it.
+        Starter/Professional pricing for every country is converted live from the AED baseline
+        (the AE row) using current exchange rates — a visitor&apos;s country is auto-detected
+        from their IP (with a manual override on the page itself), and whatever this table shows
+        for their country is what they&apos;ll see. Save a row below to pin a fixed price for
+        that country instead of auto-converting it; Enterprise always stays &ldquo;Custom&rdquo;.
+        {convertedCount > 0 && (
+          <p className="mt-2">
+            {convertedCount} {convertedCount === 1 ? "country is" : "countries are"} currently
+            auto-converted from the baseline.
           </p>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-4 py-2.5 text-sm">
+        <div>
+          {data.fxSource === "live" && data.fxUpdatedAt ? (
+            <span>
+              Exchange rates last updated{" "}
+              <span className="font-medium">{formatRelativeTime(data.fxUpdatedAt)}</span>
+            </span>
+          ) : (
+            <span className="text-orange-700">
+              Exchange rate service unreachable — converted prices below are using the static
+              fallback table until it&apos;s back.
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleRefreshRates} disabled={isRefreshing}>
+            {isRefreshing ? "Refreshing…" : "Refresh rates"}
+          </Button>
+          {refreshStatus && <span className="text-xs text-muted-foreground">{refreshStatus}</span>}
+        </div>
       </div>
 
       <Card>
@@ -202,7 +263,7 @@ export function PricingPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {data.rows.map((row) => (
                     <PricingRowEditor key={row.code} row={row} onSaved={load} />
                   ))}
                 </tbody>
