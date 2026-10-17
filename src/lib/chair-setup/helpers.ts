@@ -137,11 +137,11 @@ export function buildCategorySummaries(
 }
 
 export function canOpenDay(role: string) {
-  return ["OWNER", "ADMIN", "RECEPTIONIST"].includes(role);
+  return ["OWNER", "ADMIN", "RECEPTIONIST", "NURSE"].includes(role);
 }
 
 export function canCloseDay(role: string) {
-  return ["OWNER", "ADMIN", "RECEPTIONIST"].includes(role);
+  return ["OWNER", "ADMIN", "RECEPTIONIST", "NURSE"].includes(role);
 }
 
 export function canSetupTray(role: string) {

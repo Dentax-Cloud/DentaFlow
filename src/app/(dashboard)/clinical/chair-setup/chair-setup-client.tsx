@@ -29,6 +29,10 @@ import {
 import { DayStatusBar } from "@/components/chair-setup/day-status-bar";
 import { ChairCard } from "@/components/chair-setup/chair-card";
 import { ScheduleTable } from "@/components/chair-setup/schedule-table";
+import {
+  AppointmentScheduleTable,
+  type AppointmentScheduleRow,
+} from "@/components/chair-setup/appointment-schedule-table";
 import { TraySetupAccordion } from "@/components/chair-setup/tray-setup-accordion";
 import { TemplateCards } from "@/components/chair-setup/template-cards";
 import { TraySetupModal } from "@/components/chair-setup/tray-setup-modal";
@@ -142,6 +146,7 @@ type Props = {
   session: SessionRow | null;
   templates: TemplateRow[];
   doctorSchedules: ScheduleRow[];
+  appointmentSchedule: AppointmentScheduleRow[];
   chairs: ChairRow[];
   doctors: DoctorRow[];
   inventoryItems: InventoryRow[];
@@ -162,6 +167,7 @@ export default function ChairSetupClient({
   session,
   templates,
   doctorSchedules,
+  appointmentSchedule,
   chairs,
   doctors,
   inventoryItems,
@@ -613,7 +619,22 @@ export default function ChairSetupClient({
           )}
 
           {!storeOnly && !isViewOnly && (
-            <TabsContent value="schedule">
+            <TabsContent value="schedule" className="space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Today&apos;s schedule (from appointments)</h3>
+                <p className="text-xs text-muted-foreground">
+                  Who&apos;s actually booked where today, derived automatically from the
+                  appointment book — nothing to enter here.
+                </p>
+                <AppointmentScheduleTable chairs={chairs} appointments={appointmentSchedule} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Manual shift assignment</h3>
+                <p className="text-xs text-muted-foreground">
+                  Use this for walk-ins or shifts that aren&apos;t tied to a specific
+                  appointment yet.
+                </p>
+              </div>
               <ScheduleTable
                 chairs={chairs}
                 schedules={doctorSchedules}

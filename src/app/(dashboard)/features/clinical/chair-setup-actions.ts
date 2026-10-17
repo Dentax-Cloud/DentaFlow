@@ -4,7 +4,7 @@ import { requireTenantContext } from "@/lib/tenant/context";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
-import { StockTransactionType } from "@prisma/client";
+import { AppointmentStatus, StockTransactionType } from "@prisma/client";
 import { createNotification } from "@/lib/notifications/notification-service";
 import { generateStockRef } from "@/lib/ids/generate-ids";
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
@@ -101,6 +101,28 @@ export async function closeDaySession(sessionId: string) {
   if (!session) throw new Error("Session not found");
   if (session.status !== "OPEN") throw new Error("Session is not open");
 
+  const chairIdsInSession = session.chairSetups.map((s) => s.chairId);
+  if (chairIdsInSession.length > 0) {
+    const today = todayIso();
+    const dayStart = new Date(`${today}T00:00:00`);
+    const dayEnd = new Date(`${today}T23:59:59.999`);
+    const inUseAppt = await db.appointment.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        chairId: { in: chairIdsInSession },
+        status: AppointmentStatus.IN_CHAIR,
+        startTime: { gte: dayStart, lte: dayEnd },
+        deletedAt: null,
+      },
+      select: { id: true, chair: { select: { name: true } } },
+    });
+    if (inUseAppt) {
+      throw new Error(
+        `Cannot close the day while ${inUseAppt.chair?.name ?? "a chair"} still has a patient in chair. Finish or move that visit first.`,
+      );
+    }
+  }
+
   const summary = {
     totalSetups: session.chairSetups.length,
     totalSetupCost: session.chairSetups.reduce((sum, s) => sum + Number(s.setupCost), 0),
@@ -156,6 +178,63 @@ export async function getDoctorChairSchedule(date?: string) {
     },
     orderBy: [{ chairId: "asc" }, { startTime: "asc" }],
   });
+}
+
+/**
+ * Derives today's chair schedule directly from booked Appointments, rather than
+ * the manually-entered DoctorChairSchedule table. Appointment.providerId is the
+ * staff member assigned on the appointment itself; Appointment.doctorId points at
+ * the separate Doctor record, resolved back to its StaffMember via doctor.user.
+ */
+export async function getAppointmentChairSchedule(date?: string) {
+  const ctx = await requireTenantContext();
+  const targetDate = date ?? todayIso();
+  const dayStart = new Date(`${targetDate}T00:00:00`);
+  const dayEnd = new Date(`${targetDate}T23:59:59.999`);
+
+  const appointments = await db.appointment.findMany({
+    where: {
+      tenantId: ctx.tenantId,
+      chairId: { not: null },
+      deletedAt: null,
+      isBlock: false,
+      startTime: { gte: dayStart, lte: dayEnd },
+      status: { notIn: ["CANCELED", "NO_SHOW"] },
+    },
+    select: {
+      id: true,
+      chairId: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      patient: { select: { firstName: true, lastName: true } },
+      provider: { select: { id: true, firstName: true, lastName: true } },
+      doctor: {
+        select: { user: { select: { id: true, firstName: true, lastName: true } } },
+      },
+    },
+    orderBy: { startTime: "asc" },
+  });
+
+  return appointments
+    .filter((a): a is typeof a & { chairId: string } => Boolean(a.chairId))
+    .map((a) => {
+      const staff = a.provider ?? a.doctor?.user ?? null;
+      return {
+        id: a.id,
+        chairId: a.chairId,
+        startTime: a.startTime.toISOString(),
+        endTime: a.endTime.toISOString(),
+        status: a.status as string,
+        doctorId: staff?.id ?? null,
+        doctorName: staff
+          ? [staff.firstName, staff.lastName].filter(Boolean).join(" ")
+          : null,
+        patientName: a.patient
+          ? [a.patient.firstName, a.patient.lastName].filter(Boolean).join(" ")
+          : "Walk-in",
+      };
+    });
 }
 
 export async function assignDoctorToChair(input: {

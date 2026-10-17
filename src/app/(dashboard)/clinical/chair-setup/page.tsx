@@ -8,6 +8,7 @@ import {
   getTodaySession,
   getTrayTemplates,
   getDoctorChairSchedule,
+  getAppointmentChairSchedule,
 } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import { isDoctorRole } from "@/lib/chair-setup/helpers";
@@ -30,6 +31,7 @@ export default async function ChairSetupPage() {
     session,
     templates,
     doctorSchedules,
+    appointmentSchedule,
     chairs,
     doctors,
     inventoryItems,
@@ -39,6 +41,7 @@ export default async function ChairSetupPage() {
     getTodaySession(),
     getTrayTemplates(),
     getDoctorChairSchedule(today),
+    getAppointmentChairSchedule(today),
     db.chair.findMany({
       where: { tenantId: ctx.tenantId },
       orderBy: { number: "asc" },
@@ -221,6 +224,7 @@ export default async function ChairSetupPage() {
         category: i.category,
       }))}
       apptStatsByChair={Object.fromEntries(apptStatsByChair)}
+      appointmentSchedule={appointmentSchedule}
       today={today}
     />
   );
