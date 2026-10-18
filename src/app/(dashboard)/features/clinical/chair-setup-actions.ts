@@ -540,6 +540,7 @@ export async function setupChairForDay(input: {
         daySessionId: input.sessionId,
         doctorId: input.doctorId ?? null,
         templateId: input.templateId ?? null,
+        setupById: ctx.staffMember?.id ?? null,
         setupItems: input.items,
         setupCost,
         status: "ACTIVE",

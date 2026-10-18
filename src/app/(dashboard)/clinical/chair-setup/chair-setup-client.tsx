@@ -124,6 +124,7 @@ type ChairSetupRow = {
   returnedItems: Array<{ inventoryItemId: string; qty: number }>;
   createdAt: string;
   updatedAt: string;
+  setupByName: string | null;
   chair: { id: string; name: string; number: number; chairType?: string; roomName?: string | null; colorCode?: string; status?: string };
   template: { id: string; name: string } | null;
 };
@@ -600,6 +601,8 @@ export default function ChairSetupClient({
                               returnedItems: setup.returnedItems,
                               setupCost: setup.setupCost,
                               template: setup.template,
+                              setupByName: setup.setupByName,
+                              createdAt: setup.createdAt,
                             }
                           : null
                       }

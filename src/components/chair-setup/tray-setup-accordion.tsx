@@ -32,6 +32,8 @@ type SetupRow = {
   returnedItems: Array<{ inventoryItemId: string; qty: number }>;
   setupCost: number;
   status: string;
+  setupByName?: string | null;
+  createdAt?: string;
 };
 
 type Props = {
@@ -196,12 +198,24 @@ export function TraySetupAccordion({
                 })}
 
                 <div className="flex items-center justify-between bg-white px-5 py-3 text-sm">
-                  <span className="text-muted-foreground">
-                    Setup cost:{" "}
-                    <strong>
-                      {currency} {Number(setup.setupCost).toFixed(2)}
-                    </strong>
-                  </span>
+                  <div className="space-y-0.5">
+                    <span className="text-muted-foreground">
+                      Setup cost:{" "}
+                      <strong>
+                        {currency} {Number(setup.setupCost).toFixed(2)}
+                      </strong>
+                    </span>
+                    {(setup.setupByName || setup.createdAt) && (
+                      <p className="text-xs text-muted-foreground">
+                        {setup.setupByName ? `Set up by ${setup.setupByName}` : "Set up"}
+                        {setup.createdAt &&
+                          ` at ${new Date(setup.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`}
+                      </p>
+                    )}
+                  </div>
                   {sessionOpen && canSetupTray(userRole) && (
                     <Button
                       variant="outline"

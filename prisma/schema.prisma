@@ -1672,6 +1672,7 @@ model ChairDaySetup {
   daySessionId  String
   doctorId      String?
   templateId    String?
+  setupById     String?
   setupItems    Json               @default("[]")
   returnedItems Json               @default("[]")
   consumedItems Json               @default("[]")

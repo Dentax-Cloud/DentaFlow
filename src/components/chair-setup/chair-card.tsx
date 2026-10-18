@@ -28,6 +28,8 @@ type ChairSetupInfo = {
   returnedItems: Array<{ inventoryItemId: string; qty: number }>;
   setupCost: number;
   template: { name: string } | null;
+  setupByName?: string | null;
+  createdAt?: string;
 };
 
 type Props = {
@@ -161,6 +163,7 @@ export function ChairCard({
             </div>
             <p className="text-xs text-muted-foreground">
               📋 {setup.template?.name ?? "Custom setup"}
+              {setup.setupByName && ` · Set up by ${setup.setupByName}`}
             </p>
           </div>
         ) : (
