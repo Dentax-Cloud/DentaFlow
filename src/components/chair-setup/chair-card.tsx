@@ -30,6 +30,9 @@ type ChairSetupInfo = {
   template: { name: string } | null;
   setupByName?: string | null;
   createdAt?: string;
+  checkedItemIds?: string[];
+  readyAt?: string | null;
+  readyByName?: string | null;
 };
 
 type Props = {
@@ -104,7 +107,14 @@ export function ChairCard({
             </p>
           </div>
         </div>
-        <StatusBadge status={chairStatus} />
+        <div className="flex items-center gap-2">
+          {setup?.readyAt && (
+            <span className="rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-green-700">
+              ✓ Prepped
+            </span>
+          )}
+          <StatusBadge status={chairStatus} />
+        </div>
       </div>
 
       <div className="border-b bg-gray-50 px-4 py-3">
@@ -165,6 +175,16 @@ export function ChairCard({
               📋 {setup.template?.name ?? "Custom setup"}
               {setup.setupByName && ` · Set up by ${setup.setupByName}`}
             </p>
+            {setup.readyAt ? (
+              <p className="text-xs font-medium text-green-700">
+                ✓ Chair ready{setup.readyByName && ` — confirmed by ${setup.readyByName}`}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Prep checklist: {(setup.checkedItemIds ?? []).length}/{setup.setupItems.length}{" "}
+                checked
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-xs font-medium text-orange-600">⚠ Tray not set up</p>

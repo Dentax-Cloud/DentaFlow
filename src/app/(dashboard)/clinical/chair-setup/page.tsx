@@ -121,6 +121,24 @@ export default async function ChairSetupPage() {
     }
   }
 
+  const readyByIds = Array.from(
+    new Set(
+      (session?.chairSetups ?? [])
+        .map((s) => s.readyById)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const readyByNameMap = new Map<string, string>();
+  if (readyByIds.length > 0) {
+    const readyByStaff = await db.staffMember.findMany({
+      where: { id: { in: readyByIds }, tenantId: ctx.tenantId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    for (const s of readyByStaff) {
+      readyByNameMap.set(s.id, [s.firstName, s.lastName].filter(Boolean).join(" "));
+    }
+  }
+
   let visibleChairs = chairs.filter((c) => c.isActive || c.status !== "INACTIVE");
   if (isDoctorRole(userRole) && staffId) {
     const assignedChairIds = new Set(
@@ -186,6 +204,9 @@ export default async function ChairSetupPage() {
                   createdAt: s.createdAt.toISOString(),
                   updatedAt: s.updatedAt.toISOString(),
                   setupByName: s.setupById ? setupByNameMap.get(s.setupById) ?? null : null,
+                  checkedItemIds: (s.checkedItemIds as string[] | null) ?? [],
+                  readyAt: s.readyAt?.toISOString() ?? null,
+                  readyByName: s.readyById ? readyByNameMap.get(s.readyById) ?? null : null,
                   chair: s.chair,
                   template: s.template,
                 };

@@ -806,6 +806,58 @@ export async function returnChairItems(input: {
   return { success: true };
 }
 
+export async function toggleChairPrepItem(input: {
+  chairSetupId: string;
+  inventoryItemId: string;
+  checked: boolean;
+}) {
+  const ctx = await requireTenantContext();
+
+  const setup = await db.chairDaySetup.findFirst({
+    where: { id: input.chairSetupId, tenantId: ctx.tenantId },
+  });
+  if (!setup) throw new Error("Chair setup not found");
+
+  const current = new Set((setup.checkedItemIds as string[]) ?? []);
+  if (input.checked) {
+    current.add(input.inventoryItemId);
+  } else {
+    current.delete(input.inventoryItemId);
+  }
+
+  await db.chairDaySetup.update({
+    where: { id: input.chairSetupId },
+    data: { checkedItemIds: [...current] },
+  });
+
+  revalidatePath("/clinical/chair-setup");
+  revalidatePath("/appointments");
+  return { success: true };
+}
+
+export async function setChairPrepReady(input: {
+  chairSetupId: string;
+  ready: boolean;
+}) {
+  const ctx = await requireTenantContext();
+
+  const setup = await db.chairDaySetup.findFirst({
+    where: { id: input.chairSetupId, tenantId: ctx.tenantId },
+  });
+  if (!setup) throw new Error("Chair setup not found");
+
+  await db.chairDaySetup.update({
+    where: { id: input.chairSetupId },
+    data: input.ready
+      ? { readyAt: new Date(), readyById: ctx.staffMember?.id ?? null }
+      : { readyAt: null, readyById: null },
+  });
+
+  revalidatePath("/clinical/chair-setup");
+  revalidatePath("/appointments");
+  return { success: true };
+}
+
 export async function getChairDaySummary(sessionId: string) {
   const ctx = await requireTenantContext();
 

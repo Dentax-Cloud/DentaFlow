@@ -16,6 +16,8 @@ import {
   returnChairItems,
   getChairDaySummary,
   updateChair,
+  toggleChairPrepItem,
+  setChairPrepReady,
 } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import {
@@ -125,6 +127,9 @@ type ChairSetupRow = {
   createdAt: string;
   updatedAt: string;
   setupByName: string | null;
+  checkedItemIds: string[];
+  readyAt: string | null;
+  readyByName: string | null;
   chair: { id: string; name: string; number: number; chairType?: string; roomName?: string | null; colorCode?: string; status?: string };
   template: { id: string; name: string } | null;
 };
@@ -449,6 +454,29 @@ export default function ChairSetupClient({
     });
   }
 
+  function handleToggleItem(chairSetupId: string, inventoryItemId: string, checked: boolean) {
+    startTransition(async () => {
+      try {
+        await toggleChairPrepItem({ chairSetupId, inventoryItemId, checked });
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to update checklist");
+      }
+    });
+  }
+
+  function handleToggleReady(chairSetupId: string, ready: boolean) {
+    startTransition(async () => {
+      try {
+        await setChairPrepReady({ chairSetupId, ready });
+        toast.success(ready ? "Chair marked ready" : "Chair marked not ready");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to update chair status");
+      }
+    });
+  }
+
   function handleSaveTemplate() {
     startTransition(async () => {
       try {
@@ -603,6 +631,9 @@ export default function ChairSetupClient({
                               template: setup.template,
                               setupByName: setup.setupByName,
                               createdAt: setup.createdAt,
+                              checkedItemIds: setup.checkedItemIds,
+                              readyAt: setup.readyAt,
+                              readyByName: setup.readyByName,
                             }
                           : null
                       }
@@ -673,6 +704,8 @@ export default function ChairSetupClient({
               userRole={userRole}
               onSetup={openSetupForChair}
               onReturn={openReturnForChair}
+              onToggleItem={handleToggleItem}
+              onToggleReady={handleToggleReady}
             />
           </TabsContent>
 
@@ -844,6 +877,8 @@ export default function ChairSetupClient({
               userRole={userRole}
               onSetup={() => {}}
               onReturn={openReturnForChair}
+              onToggleItem={handleToggleItem}
+              onToggleReady={handleToggleReady}
             />
           )}
         </DialogContent>

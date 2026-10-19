@@ -15,24 +15,44 @@ export default async function AppointmentsPage({ searchParams }: Props) {
   const { appointmentId } = await searchParams;
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const today = now.toISOString().split("T")[0];
 
-  const [appointments, chairs, doctors, emergencyStats, insuranceStatusMap] = await Promise.all([
-    getAppointments({
-      start: weekStart,
-      end: endOfWeek(now, { weekStartsOn: 1 }),
-    }),
-    getChairs(),
-    getDoctors(),
-    db.emergencyIntake.findMany({
-      where: {
-        tenantId: ctx.tenant.id,
-        createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
-        status: { notIn: ["COMPLETED", "REFERRED"] },
-      },
-      select: { status: true, triageLevel: true },
-    }),
-    getPrimaryInsuranceStatusMap(),
-  ]);
+  const [appointments, chairs, doctors, emergencyStats, insuranceStatusMap, chairDaySetups] =
+    await Promise.all([
+      getAppointments({
+        start: weekStart,
+        end: endOfWeek(now, { weekStartsOn: 1 }),
+      }),
+      getChairs(),
+      getDoctors(),
+      db.emergencyIntake.findMany({
+        where: {
+          tenantId: ctx.tenant.id,
+          createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
+          status: { notIn: ["COMPLETED", "REFERRED"] },
+        },
+        select: { status: true, triageLevel: true },
+      }),
+      getPrimaryInsuranceStatusMap(),
+      db.chairDaySetup.findMany({
+        where: { tenantId: ctx.tenant.id, session: { sessionDate: today } },
+        select: { chairId: true, readyAt: true, checkedItemIds: true, setupItems: true },
+      }),
+    ]);
+
+  const chairReadiness: Record<
+    string,
+    { readyAt: string | null; checked: number; total: number }
+  > = {};
+  for (const setup of chairDaySetups) {
+    const items = (setup.setupItems as Array<{ inventoryItemId: string }> | null) ?? [];
+    const checkedIds = (setup.checkedItemIds as string[] | null) ?? [];
+    chairReadiness[setup.chairId] = {
+      readyAt: setup.readyAt?.toISOString() ?? null,
+      checked: items.filter((i) => checkedIds.includes(i.inventoryItemId)).length,
+      total: items.length,
+    };
+  }
 
   const serializedAppointments = appointments.map((appointment) => {
     const serialized = serializeEntity(appointment, {
@@ -60,6 +80,7 @@ export default async function AppointmentsPage({ searchParams }: Props) {
       insuranceStatusMap={insuranceStatusMap}
       staffRole={ctx.staffMember?.role}
       loadedWeekStart={weekStart.toISOString()}
+      chairReadiness={chairReadiness}
     />
   );
 }

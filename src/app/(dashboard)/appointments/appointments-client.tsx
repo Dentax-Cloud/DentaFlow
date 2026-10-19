@@ -117,6 +117,7 @@ export function AppointmentsClient({
   insuranceStatusMap = {},
   staffRole,
   loadedWeekStart,
+  chairReadiness = {},
 }: {
   initialAppointments: AppointmentWithRelations[];
   chairs: ChairWithRelations[];
@@ -129,6 +130,7 @@ export function AppointmentsClient({
   insuranceStatusMap?: Record<string, InsuranceVerificationStatus>;
   staffRole?: UserRole;
   loadedWeekStart: string;
+  chairReadiness?: Record<string, { readyAt: string | null; checked: number; total: number }>;
 }) {
   const resolvedTimezone = resolveClinicTimezone(clinicTimezone);
   const router = useRouter();
@@ -552,6 +554,7 @@ export function AppointmentsClient({
               const active = liveAppointments.find((a) =>
                 ["IN_CHAIR", "ARRIVED"].includes(a.status),
               );
+              const readiness = chairReadiness[chair.id];
               return (
                 <Card
                   key={chair.id}
@@ -574,11 +577,20 @@ export function AppointmentsClient({
                     )}
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {active ? (
-                      <Badge variant="warning">{active.status.replace("_", " ")}</Badge>
-                    ) : (
-                      <Badge variant="success">Available</Badge>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {active ? (
+                        <Badge variant="warning">{active.status.replace("_", " ")}</Badge>
+                      ) : (
+                        <Badge variant="success">Available</Badge>
+                      )}
+                      {readiness?.readyAt ? (
+                        <Badge variant="success">✓ Prepped</Badge>
+                      ) : readiness && readiness.total > 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          Prep: {readiness.checked}/{readiness.total}
+                        </span>
+                      ) : null}
+                    </div>
 
                     <div className="pt-2 space-y-2">
                       {liveAppointments.length === 0 ? (
