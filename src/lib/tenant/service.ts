@@ -10,6 +10,7 @@ import { slugify } from "@/lib/utils/slugify";
 import { tenantConfig } from "./config";
 import { ensureStripeCustomer } from "./billing";
 import { seedTenantDefaults } from "./defaults";
+import { seedDefaultStaffUsers } from "./seed-default-staff";
 import { getDefaultTrialSubscriptionFields, shouldExpireTrial } from "./trial";
 import {
   generateTenantCode,
@@ -131,6 +132,7 @@ export async function provisionTenant(input: {
 
   await ensureMinioBucket(tenant);
   await seedTenantDefaults(tenant);
+  await seedDefaultStaffUsers(tenant);
   const tenantWithBilling = await ensureStripeCustomer(tenant);
 
   return { tenant: tenantWithBilling, membership, staffMember, branch };
