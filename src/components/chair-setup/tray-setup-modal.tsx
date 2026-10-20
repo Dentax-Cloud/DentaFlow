@@ -42,6 +42,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   chairName: string;
   templates: TemplateRow[];
+  suggestion?: { items: SetupItem[]; procedureNames: string[] } | null;
   inventoryItems: InventoryRow[];
   currency: string;
   items: SetupItem[];
@@ -55,6 +56,7 @@ export function TraySetupModal({
   onOpenChange,
   chairName,
   templates,
+  suggestion,
   inventoryItems,
   currency,
   items,
@@ -64,6 +66,7 @@ export function TraySetupModal({
 }: Props) {
   const [step, setStep] = useState(1);
   const [templateId, setTemplateId] = useState("");
+  const [usedSuggestion, setUsedSuggestion] = useState(false);
 
   const inventoryMap = useMemo(
     () => new Map(inventoryItems.map((i) => [i.id, i])),
@@ -100,6 +103,7 @@ export function TraySetupModal({
 
   function applyTemplate(id: string) {
     setTemplateId(id);
+    setUsedSuggestion(false);
     const template = templates.find((t) => t.id === id);
     if (!template) return;
     onItemsChange(
@@ -108,6 +112,14 @@ export function TraySetupModal({
         category: item.category ?? "CONSUMABLE",
       })),
     );
+    setStep(2);
+  }
+
+  function applySuggestion() {
+    if (!suggestion || suggestion.items.length === 0) return;
+    setTemplateId("");
+    setUsedSuggestion(true);
+    onItemsChange(suggestion.items);
     setStep(2);
   }
 
@@ -148,6 +160,7 @@ export function TraySetupModal({
         if (!o) {
           setStep(1);
           setTemplateId("");
+          setUsedSuggestion(false);
         }
       }}
     >
@@ -161,6 +174,26 @@ export function TraySetupModal({
             <p className="text-sm text-muted-foreground">
               Step 1: Select a template or start with a manual setup.
             </p>
+            {suggestion && suggestion.items.length > 0 && (
+              <button
+                type="button"
+                onClick={applySuggestion}
+                className="w-full rounded-lg border border-sky-300 bg-sky-50/60 p-3 text-left transition-colors hover:border-sky-400 hover:bg-sky-100/60"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-sky-900">✨ Suggested for today</p>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {suggestion.items.length} items
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Based on today&apos;s scheduled procedures:{" "}
+                  {suggestion.procedureNames.slice(0, 3).join(", ")}
+                  {suggestion.procedureNames.length > 3 &&
+                    ` +${suggestion.procedureNames.length - 3} more`}
+                </p>
+              </button>
+            )}
             <div className="grid gap-2">
               {templates.length === 0 && (
                 <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -318,6 +351,11 @@ export function TraySetupModal({
             {templateId && (
               <p className="text-xs text-muted-foreground">
                 Template: {templates.find((t) => t.id === templateId)?.name}
+              </p>
+            )}
+            {usedSuggestion && (
+              <p className="text-xs text-muted-foreground">
+                ✨ Based on today&apos;s scheduled procedures
               </p>
             )}
           </div>

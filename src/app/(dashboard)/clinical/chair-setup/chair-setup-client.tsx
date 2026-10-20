@@ -18,6 +18,7 @@ import {
   updateChair,
   toggleChairPrepItem,
   setChairPrepReady,
+  getTraySuggestionForChair,
 } from "@/app/(dashboard)/features/clinical/chair-setup-actions";
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import {
@@ -203,6 +204,10 @@ export default function ChairSetupClient({
   const [setupChairId, setSetupChairId] = useState("");
   const [setupTemplateId, setSetupTemplateId] = useState("");
   const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
+  const [setupSuggestion, setSetupSuggestion] = useState<{
+    items: SetupItem[];
+    procedureNames: string[];
+  } | null>(null);
 
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [returnSetupId, setReturnSetupId] = useState("");
@@ -299,7 +304,16 @@ export default function ChairSetupClient({
     setSetupChairId(chairId);
     setSetupTemplateId("");
     setSetupItems([]);
+    setSetupSuggestion(null);
     setSetupOpen(true);
+    startTransition(async () => {
+      try {
+        const suggestion = await getTraySuggestionForChair(chairId);
+        setSetupSuggestion(suggestion.items.length > 0 ? suggestion : null);
+      } catch {
+        setSetupSuggestion(null);
+      }
+    });
   }
 
   function openReturnForChair(chairId: string, setupId: string) {
@@ -784,6 +798,7 @@ export default function ChairSetupClient({
         onOpenChange={setSetupOpen}
         chairName={chairs.find((c) => c.id === setupChairId)?.name ?? "Chair"}
         templates={templates}
+        suggestion={setupSuggestion}
         inventoryItems={inventoryItems}
         currency={currency}
         items={setupItems}

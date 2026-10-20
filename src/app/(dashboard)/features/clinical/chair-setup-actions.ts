@@ -9,6 +9,7 @@ import { createNotification } from "@/lib/notifications/notification-service";
 import { generateStockRef } from "@/lib/ids/generate-ids";
 import type { SetupItem, TrayTemplateItem } from "@/lib/chair-setup/types";
 import { defaultColorForType, inferTrayCategory } from "@/lib/chair-setup/helpers";
+import { aggregateChairPrepMaterials } from "@/lib/encounter/chair-prep";
 
 function todayIso() {
   return new Date().toISOString().split("T")[0];
@@ -235,6 +236,100 @@ export async function getAppointmentChairSchedule(date?: string) {
           : "Walk-in",
       };
     });
+}
+
+export async function getTraySuggestionForChair(chairId: string, date?: string) {
+  const ctx = await requireTenantContext();
+  const targetDate = date ?? todayIso();
+  const dayStart = new Date(`${targetDate}T00:00:00`);
+  const dayEnd = new Date(`${targetDate}T23:59:59.999`);
+
+  const appointments = await db.appointment.findMany({
+    where: {
+      tenantId: ctx.tenantId,
+      chairId,
+      deletedAt: null,
+      isBlock: false,
+      startTime: { gte: dayStart, lte: dayEnd },
+      status: { notIn: ["CANCELED", "NO_SHOW"] },
+    },
+    select: { id: true, procedureId: true },
+  });
+
+  if (appointments.length === 0) {
+    return { items: [] as SetupItem[], procedureNames: [] as string[] };
+  }
+
+  const appointmentIds = appointments.map((a) => a.id);
+  const treatmentItems = await db.treatmentItem.findMany({
+    where: { tenantId: ctx.tenantId, linkedAppointmentId: { in: appointmentIds } },
+    select: { procedureCatalogId: true, quantity: true, linkedAppointmentId: true },
+  });
+
+  const procedures = [
+    ...appointments
+      .filter((a): a is typeof a & { procedureId: string } => Boolean(a.procedureId))
+      .map((a) => ({ chairId, procedureCatalogId: a.procedureId })),
+    ...treatmentItems
+      .filter((t) => t.procedureCatalogId)
+      .map((t) => ({
+        chairId,
+        procedureCatalogId: t.procedureCatalogId as string,
+        quantity: t.quantity,
+      })),
+  ];
+
+  const procedureIds = [...new Set(procedures.map((p) => p.procedureCatalogId))];
+  if (procedureIds.length === 0) {
+    return { items: [] as SetupItem[], procedureNames: [] as string[] };
+  }
+
+  const [bomItems, procedureCatalogRows] = await Promise.all([
+    db.procedureBomItem.findMany({
+      where: { tenantId: ctx.tenantId, procedureCatalogId: { in: procedureIds } },
+      select: {
+        procedureCatalogId: true,
+        defaultQuantity: true,
+        inventoryItem: {
+          select: { id: true, name: true, unit: true, cost: true, category: true, deletedAt: true },
+        },
+      },
+    }),
+    db.procedureCatalog.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: procedureIds } },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  const checklist = aggregateChairPrepMaterials(
+    procedures,
+    bomItems
+      .filter((b) => !b.inventoryItem.deletedAt)
+      .map((b) => ({
+        procedureCatalogId: b.procedureCatalogId,
+        inventoryItemId: b.inventoryItem.id,
+        itemName: b.inventoryItem.name,
+        unit: b.inventoryItem.unit,
+        quantity: Number(b.defaultQuantity),
+      })),
+  );
+
+  const costByItemId = new Map(bomItems.map((b) => [b.inventoryItem.id, b.inventoryItem.cost]));
+  const categoryByItemId = new Map(bomItems.map((b) => [b.inventoryItem.id, b.inventoryItem.category]));
+
+  const items: SetupItem[] = (checklist[chairId] ?? []).map((line) => ({
+    inventoryItemId: line.inventoryItemId,
+    itemName: line.itemName,
+    qty: Math.max(1, Math.round(line.quantity)),
+    unit: line.unit,
+    category: inferTrayCategory(categoryByItemId.get(line.inventoryItemId) ?? null),
+    costPrice: costByItemId.get(line.inventoryItemId) ? Number(costByItemId.get(line.inventoryItemId)) : undefined,
+  }));
+
+  return {
+    items,
+    procedureNames: procedureCatalogRows.map((p) => p.name),
+  };
 }
 
 export async function assignDoctorToChair(input: {
