@@ -73,6 +73,7 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
   const [oauthConnected, setOauthConnected] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [registeredClinic, setRegisteredClinic] = useState("");
+  const [requiresEmailVerification, setRequiresEmailVerification] = useState(false);
 
   const step1Form = useForm<RegistrationStep1>({
     resolver: zodResolver(registrationStep1Schema),
@@ -147,12 +148,12 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
   }, [authLoaded, userLoaded, isSignedIn, user, searchParams, step1Form]);
 
   useEffect(() => {
-    if (step !== 3 || !registeredEmail) return;
+    if (step !== 3 || !registeredEmail || requiresEmailVerification) return;
     const timer = window.setTimeout(() => {
       window.location.assign("/dashboard");
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [step, registeredEmail]);
+  }, [step, registeredEmail, requiresEmailVerification]);
 
   function onStep1Submit() {
     setStep(2);
@@ -199,8 +200,9 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
 
       setRegisteredEmail(step1.email);
       setRegisteredClinic(data.clinicName);
+      setRequiresEmailVerification(result.requiresEmailVerification);
 
-      if (!isSignedIn && step1.password) {
+      if (!isSignedIn && step1.password && !result.requiresEmailVerification) {
         const signInResult = await signIn("credentials", {
           email: step1.email,
           password: step1.password,
@@ -475,16 +477,32 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
               <strong className="text-white">{registeredClinic}</strong> is live on DentaFlow.
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-400">
-            <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-400" />
-            We&apos;ve sent a verification email to{" "}
-            <span className="font-medium text-white">{registeredEmail}</span>. You can verify in the
-            background — no need to wait before using your dashboard.
-          </div>
-          <p className="text-sm text-zinc-500">Redirecting to your dashboard...</p>
-          <Button asChild className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500">
-            <Link href="/dashboard">Go to dashboard now</Link>
-          </Button>
+          {requiresEmailVerification ? (
+            <>
+              <div className="rounded-xl border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-400" />
+                We&apos;ve sent a verification email to{" "}
+                <span className="font-medium text-white">{registeredEmail}</span>. Please verify
+                your address before signing in.
+              </div>
+              <Button asChild className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500">
+                <Link href="/login">Go to login</Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-400" />
+                We&apos;ve sent a verification email to{" "}
+                <span className="font-medium text-white">{registeredEmail}</span>. You can verify in
+                the background — no need to wait before using your dashboard.
+              </div>
+              <p className="text-sm text-zinc-500">Redirecting to your dashboard...</p>
+              <Button asChild className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500">
+                <Link href="/dashboard">Go to dashboard now</Link>
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>

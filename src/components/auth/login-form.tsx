@@ -8,21 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 import { resolvePostLoginRedirectAction } from "@/app/login/actions";
+import { resendVerificationEmailAction } from "@/app/(auth)/features/registration/resend-verification-action";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
+  const justVerified = searchParams.get("verified") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setNeedsVerification(false);
+    setResendState("idle");
 
     const result = await signIn("credentials", {
       email,
@@ -33,7 +39,12 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      if (result.error === "EMAIL_NOT_VERIFIED") {
+        setNeedsVerification(true);
+        setError("Please verify your email before signing in.");
+      } else {
+        setError("Invalid email or password.");
+      }
       return;
     }
 
@@ -75,7 +86,28 @@ export function LoginForm() {
           required
         />
       </div>
+      {justVerified && !error && (
+        <p className="text-sm text-emerald-600">Email verified — you can now sign in.</p>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {needsVerification && (
+        <div className="space-y-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={resendState === "sending" || resendState === "sent"}
+            onClick={async () => {
+              setResendState("sending");
+              await resendVerificationEmailAction(email);
+              setResendState("sent");
+            }}
+          >
+            {resendState === "sent" ? "Verification email sent" : "Resend verification email"}
+          </Button>
+        </div>
+      )}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </Button>

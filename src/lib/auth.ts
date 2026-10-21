@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { db } from "@/lib/db";
+import { isEmailVerificationRequired } from "@/lib/auth/email-verification-config";
 
 export function resolveIsSuperAdmin(userId: string): boolean {
   const envIds = (process.env.SUPER_ADMIN_AUTH_USER_IDS ?? "")
@@ -71,6 +72,10 @@ const providers: NextAuthOptions["providers"] = [
 
       const valid = await compare(credentials.password, user.passwordHash);
       if (!valid) return null;
+
+      if (isEmailVerificationRequired() && !user.emailVerified) {
+        throw new Error("EMAIL_NOT_VERIFIED");
+      }
 
       return {
         id: user.id,

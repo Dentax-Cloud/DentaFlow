@@ -16,6 +16,7 @@ import { ensureStripeCustomer } from "@/lib/tenant/billing";
 import { provisionTenant } from "@/lib/tenant/service";
 import { syncTenantCountryProfile } from "@/lib/tenant/sync-country-profile";
 import { getDefaultTrialSubscriptionFields } from "@/lib/tenant/trial";
+import { isEmailVerificationRequired } from "@/lib/auth/email-verification-config";
 
 export type RegisterClinicResult =
   | {
@@ -24,6 +25,8 @@ export type RegisterClinicResult =
       tenantSlug: string;
       authUserId: string;
       redirectUrl: "/dashboard";
+      /** True when the credentials sign-in gate will block this account until it verifies its email. */
+      requiresEmailVerification: boolean;
     }
   | { success: false; error: string; field?: string };
 
@@ -39,7 +42,7 @@ function buildFullAddress(input: ClinicRegistrationSubmit) {
     .join(", ");
 }
 
-async function sendEmailVerification(email: string) {
+export async function sendEmailVerification(email: string) {
   const verificationToken = randomUUID();
   await db.verification_tokens.create({
     data: {
@@ -283,6 +286,7 @@ async function registerClinicNextAuth(
       tenantSlug: updatedTenant.slug,
       authUserId: authUser.id,
       redirectUrl: "/dashboard",
+      requiresEmailVerification: isEmailVerificationRequired(),
     };
   } catch (err) {
     console.error("[registerClinic] finalize failed:", err);
@@ -338,6 +342,7 @@ async function registerClinicForExistingUser(
       tenantSlug: updatedTenant.slug,
       authUserId,
       redirectUrl: "/dashboard",
+      requiresEmailVerification: false,
     };
   } catch (err) {
     console.error("[registerClinic] finalize failed:", err);
