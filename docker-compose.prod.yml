@@ -1,7 +1,10 @@
-# TEMPORARY: web/worker share the dev database via external network
-# (dentaflow-dev_dentalflow_net) to preserve existing test data.
-# This must be split into a fully separate production database/server
-# before onboarding real pilot clinics with real patient data.
+# Production database: standalone dentaflow-db-prod (split 2026-10-21 from the
+# database previously shared with the dev stack, after a dev-container restart
+# briefly killed prod's live DB connections — see
+# production-database-split-cursor-prompt.md for the full incident writeup and
+# migration plan). web/worker still reference the external dev network below
+# until the cutover step completes; once cutover is verified this comment and
+# the external `dentalflow_net` block can be removed.
 
 name: dentaflow
 
@@ -9,8 +12,31 @@ networks:
   dentalflow_net:
     external: true
     name: dentaflow-dev_dentalflow_net
+  dentalflow_prod_net:
+    driver: bridge
+
+volumes:
+  prod_postgres_data:
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: dentaflow-db-prod
+    restart: always
+    environment:
+      POSTGRES_DB: dentaflow
+      POSTGRES_USER: dentaflow
+      POSTGRES_PASSWORD: dentaflow
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentaflow -d dentaflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - dentalflow_prod_net
+
   web:
     build:
       context: .
