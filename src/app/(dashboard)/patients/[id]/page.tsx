@@ -78,7 +78,9 @@ export default async function PatientDetailPage({
       },
     }),
     canWrite
-      ? buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE")
+      ? buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE", {
+          secondaryLanguage: ctx.tenant.secondaryLanguage,
+        })
       : Promise.resolve([]),
     getPatientInsurancePolicies(id),
     getTenantInsuranceProviders(),

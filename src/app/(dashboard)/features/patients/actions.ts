@@ -21,7 +21,9 @@ import { sendPatientWelcomeEmail } from "@/lib/email/send-patient-welcome";
 
 export async function getPatientFormFieldsForTenant(countryCode: string) {
   const ctx = await requireTenantContext();
-  return buildPatientFormFields(ctx.tenantId, countryCode);
+  return buildPatientFormFields(ctx.tenantId, countryCode, {
+    secondaryLanguage: ctx.tenant.secondaryLanguage,
+  });
 }
 
 const createPatientDynamicSchema = z.object({

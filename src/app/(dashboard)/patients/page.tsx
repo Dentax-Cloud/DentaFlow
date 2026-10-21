@@ -14,7 +14,9 @@ export default async function PatientsPage() {
 
   const [patients, formFields, insuranceStatusMap] = await Promise.all([
     getPatients(),
-    buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE"),
+    buildPatientFormFields(ctx.tenant.id, ctx.tenant.countryCode ?? "AE", {
+      secondaryLanguage: ctx.tenant.secondaryLanguage,
+    }),
     getPrimaryInsuranceStatusMap(),
   ]);
 
