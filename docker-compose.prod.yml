@@ -1,17 +1,13 @@
-# Production database: standalone dentaflow-db-prod (split 2026-10-21 from the
-# database previously shared with the dev stack, after a dev-container restart
-# briefly killed prod's live DB connections — see
-# production-database-split-cursor-prompt.md for the full incident writeup and
-# migration plan). web/worker still reference the external dev network below
-# until the cutover step completes; once cutover is verified this comment and
-# the external `dentalflow_net` block can be removed.
+# Standalone production database, split 2026-10-21 from the database
+# previously shared with the dev stack (see
+# production-database-split-cursor-prompt.md for the incident writeup and
+# migration plan). web/worker now point at dentaflow-db-prod on their own
+# dedicated network -- no dependency on the dev stack's network or database
+# remains.
 
 name: dentaflow
 
 networks:
-  dentalflow_net:
-    external: true
-    name: dentaflow-dev_dentalflow_net
   dentalflow_prod_net:
     driver: bridge
 
@@ -49,7 +45,10 @@ services:
       # Bind to localhost only — nginx on the host terminates TLS on 443.
       - "127.0.0.1:${WEB_PORT:-3100}:3000"
     networks:
-      - dentalflow_net
+      - dentalflow_prod_net
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
@@ -66,7 +65,10 @@ services:
     env_file:
       - .env.production
     environment:
-      DB_HOST: dentaflow-db
+      DB_HOST: dentaflow-db-prod
     command: ["/bin/sh", "/app/scripts/entrypoint-worker-prod.sh"]
     networks:
-      - dentalflow_net
+      - dentalflow_prod_net
+    depends_on:
+      db:
+        condition: service_healthy
