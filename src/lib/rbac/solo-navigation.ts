@@ -8,6 +8,7 @@ import {
   Package,
   Settings,
   Calendar,
+  CalendarPlus,
 } from "lucide-react";
 
 /** Simplified navigation for solo-doctor clinics. */
@@ -33,6 +34,13 @@ export const SOLO_NAV_ITEMS: NavItem[] = [
     icon: Calendar,
     resource: "appointments",
     action: "read",
+  },
+  {
+    href: "/appointments/book",
+    label: "Book Appointment",
+    icon: CalendarPlus,
+    resource: "appointments",
+    action: "write",
   },
   {
     href: "/clinical",
