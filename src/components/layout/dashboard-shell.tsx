@@ -20,6 +20,7 @@ export function DashboardShell({
   showHrSelfService = false,
   showHrNav = false,
   spineEnabled = true,
+  clinicMode = null,
 }: {
   children: React.ReactNode;
   userRole: UserRole;
@@ -30,6 +31,7 @@ export function DashboardShell({
   showHrSelfService?: boolean;
   showHrNav?: boolean;
   spineEnabled?: boolean;
+  clinicMode?: string | null;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -70,6 +72,7 @@ export function DashboardShell({
           showHrSelfService={showHrSelfService}
           showHrNav={showHrNav}
           spineEnabled={spineEnabled}
+          clinicMode={clinicMode}
         />
       </div>
 

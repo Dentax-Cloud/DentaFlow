@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { can, normalizeDashboardRole, type Action, type Resource } from "./permissions";
+import { isSoloMode } from "@/lib/clinic-mode";
+import { SOLO_NAV_ITEMS } from "./solo-navigation";
 
 export type NavItem = {
   href: string;
@@ -34,7 +36,6 @@ export type NavItem = {
   icon: LucideIcon;
   resource: Resource;
   action?: Action;
-  /** Match nested routes (default true except dashboard). */
   matchPrefix?: boolean;
 };
 
@@ -93,7 +94,6 @@ const aiItem: NavItem = {
   action: "use",
 };
 
-/** Flat list of all navigable items (Chairside excluded — contextual entry only). */
 export const MAIN_NAV_ITEMS: NavItem[] = [
   dashboardItem,
   patientsItem,
@@ -338,9 +338,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Clinical",
-    items: MAIN_NAV_ITEMS.filter((item) =>
-      item.href.startsWith("/clinical"),
-    ),
+    items: MAIN_NAV_ITEMS.filter((item) => item.href.startsWith("/clinical")),
   },
   {
     label: "Billing",
@@ -362,8 +360,6 @@ export const NAV_GROUPS: NavGroup[] = [
 
 function filterItemsForRole(role: UserRole, items: NavItem[]): NavItem[] {
   const allowed = items.filter((item) => can(role, item.action ?? "read", item.resource));
-  // STORE keeps reports:limited so /dashboard stays reachable; the clinic-wide
-  // Reports page is still PHI-adjacent and is not part of the store job.
   if (normalizeDashboardRole(role) === "STORE") {
     return allowed.filter((item) => item.href !== "/reports");
   }
@@ -371,8 +367,8 @@ function filterItemsForRole(role: UserRole, items: NavItem[]): NavItem[] {
 }
 
 export type NavFilterOptions = {
-  /** When false, spine-only routes (e.g. chair prep) are omitted from the sidebar. */
   spineEnabled?: boolean;
+  clinicMode?: string | null;
 };
 
 function filterSpineItems(items: NavItem[], spineEnabled: boolean): NavItem[] {
@@ -384,6 +380,15 @@ export function getNavGroupsForRole(
   role: UserRole,
   options: NavFilterOptions = {},
 ): NavGroup[] {
+  if (isSoloMode(options.clinicMode)) {
+    return [
+      {
+        label: null,
+        items: SOLO_NAV_ITEMS,
+      },
+    ];
+  }
+
   const spineEnabled = options.spineEnabled ?? true;
   return NAV_GROUPS.map((group) => ({
     ...group,
@@ -391,7 +396,6 @@ export function getNavGroupsForRole(
   })).filter((group) => group.items.length > 0);
 }
 
-/** Flat list of permitted nav items (backward-compatible helper). */
 export function getNavItemsForRole(
   role: UserRole,
   options: NavFilterOptions = {},

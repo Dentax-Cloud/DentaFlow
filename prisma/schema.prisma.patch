@@ -1,0 +1,8 @@
+Add this line inside model Tenant { } (recommended after status field):
+
+  clinicMode           String                  @default("group") // "solo" | "practice" | "group"
+
+Then run:
+  pnpm prisma migrate dev --name add_clinic_mode
+
+Or apply the migration SQL in prisma/migrations/20261031000000_add_clinic_mode/

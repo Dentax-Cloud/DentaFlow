@@ -21,7 +21,6 @@ export default async function DashboardLayout({
   const session = await getServerAuthSession();
   if (!session?.user?.id) redirect("/login");
 
-  // Superadmin ALWAYS goes to superadmin panel — no clinic dashboard
   if (session.user.isSuperAdmin) {
     redirect("/superadmin/tenants");
   }
@@ -81,6 +80,7 @@ export default async function DashboardLayout({
       showHrSelfService={showHrSelfService}
       showHrNav={isHrModuleEnabled(ctx.tenant)}
       spineEnabled={spineEnabled}
+      clinicMode={ctx.tenant.clinicMode ?? null}
     >
       {children}
     </DashboardShell>
