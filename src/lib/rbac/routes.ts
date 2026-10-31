@@ -1,5 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { can, normalizeDashboardRole, type Action, type Resource } from "./permissions";
+import { canInSoloMode } from "./solo-permissions";
 
 export type RouteRule = {
   prefix: string;
@@ -7,7 +8,6 @@ export type RouteRule = {
   action: Action;
 };
 
-/** Longest-prefix wins when resolving access. */
 export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/admin/data-import", resource: "admin", action: "write" },
   { prefix: "/admin/tenant-approvals", resource: "admin", action: "write" },
@@ -50,12 +50,12 @@ export function resolveRouteRule(pathname: string): RouteRule | null {
   return sorted.find((rule) => pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)) ?? null;
 }
 
-export function canAccessPath(role: UserRole, pathname: string): boolean {
-  // Identity-scoped self-service: any authenticated dashboard role may open
-  // /hr/me; the page itself requires HR_MODULE_ENABLED + linked Employee.
+export function canAccessPath(
+  role: UserRole,
+  pathname: string,
+  clinicMode?: string | null,
+): boolean {
   if (pathname === "/hr/me" || pathname.startsWith("/hr/me/")) return true;
-  // STORE keeps reports:limited so /dashboard works; clinic-wide /reports is not
-  // part of the store job (PHI-adjacent KPIs).
   if (
     normalizeDashboardRole(role) === "STORE" &&
     (pathname === "/reports" || pathname.startsWith("/reports/"))
@@ -64,5 +64,5 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   }
   const rule = resolveRouteRule(pathname);
   if (!rule) return true;
-  return can(role, rule.action, rule.resource);
+  return canInSoloMode(role, rule.action, rule.resource, clinicMode);
 }
