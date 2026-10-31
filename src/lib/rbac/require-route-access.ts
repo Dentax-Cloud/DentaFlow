@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireTenantContext } from "@/lib/tenant/context";
 import { can, type Action, type Resource } from "./permissions";
+import { canInSoloMode } from "./solo-permissions";
 import { getRoleHomePath } from "./routes";
 import {
   ACCOUNT_SETUP_INCOMPLETE_PATH,
@@ -17,7 +18,10 @@ export async function requireRouteAccess(resource: Resource, action: Action = "r
     redirect(ACCOUNT_SETUP_INCOMPLETE_PATH);
   }
 
-  if (!can(role, action, resource)) {
+  const clinicMode = (ctx.tenant as { clinicMode?: string | null }).clinicMode ?? null;
+  const allowed = canInSoloMode(role, action, resource, clinicMode);
+
+  if (!allowed) {
     redirect(getRoleHomePath(role));
   }
 
