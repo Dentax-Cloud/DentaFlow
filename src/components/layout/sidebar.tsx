@@ -51,28 +51,24 @@ export function Sidebar({
   showHrSelfService = false,
   showHrNav = false,
   spineEnabled = true,
+  clinicMode = null,
 }: {
   userRole: UserRole;
   user?: SidebarUser;
   tenantName?: string;
   tenantLogoUrl?: string | null;
-  /** Linked Employee + HR module on — show My HR without hr.read. */
   showHrSelfService?: boolean;
-  /** HR_MODULE_ENABLED — show ADMIN/OWNER HR directory group. */
   showHrNav?: boolean;
-  /** When false, hide spine-gated nav (chair prep). */
   spineEnabled?: boolean;
+  clinicMode?: string | null;
 }) {
   const pathname = usePathname();
   const navGroups = useMemo(() => {
-    const groups = getNavGroupsForRole(userRole, { spineEnabled });
+    const groups = getNavGroupsForRole(userRole, { spineEnabled, clinicMode });
     if (showHrNav) return groups;
     return groups.filter((g) => g.label !== "HR");
-  }, [userRole, showHrNav, spineEnabled]);
+  }, [userRole, showHrNav, spineEnabled, clinicMode]);
 
-  // Only the user's explicit collapse/expand choices are stored here.
-  // The active-route group is expanded via derived state below, so no
-  // effect + setState pair is needed (that caused an infinite loop).
   const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
 
   function isGroupExpanded(group: NavGroup) {
