@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const CLINIC_TYPE_OPTIONS = ["solo", "practice"] as const;
+export type ClinicTypeOption = (typeof CLINIC_TYPE_OPTIONS)[number];
+
 /** Base account fields — plain ZodObject so .omit() / .merge() work. */
 export const registrationAccountBaseSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -24,10 +27,10 @@ export const DOCTOR_COUNT_OPTIONS = ["1", "2-5", "6-10", "10+"] as const;
 
 export const registrationStep2Schema = z.object({
   clinicName: z.string().min(2, "Clinic name is required"),
+  clinicType: z.enum(CLINIC_TYPE_OPTIONS).default("practice"),
   country: z.string().min(2, "Select a country"),
   timezone: z.string().min(1, "Select a timezone"),
   currency: z.string().min(3, "Currency is required"),
-  /** Curated code from SECONDARY_LANGUAGES (src/lib/i18n/secondary-languages.ts); empty = none chosen. */
   secondaryLanguage: z.string().optional(),
   phone: z.string().optional(),
   specialty: z.string().optional(),
@@ -57,7 +60,6 @@ export const clinicRegistrationSchema = registrationAccountFields
     logoUrl: z.union([z.string().url(), z.literal("")]).optional(),
   });
 
-/** Server-side — password optional when account already exists (OAuth). */
 export const clinicRegistrationServerSchema = clinicRegistrationSchema
   .omit({ password: true, specialty: true, doctorCountBand: true })
   .extend({
@@ -68,6 +70,7 @@ export const clinicRegistrationServerSchema = clinicRegistrationSchema
     addressLine1: z.string().default(""),
     city: z.string().default(""),
     phone: z.string().min(1).default(""),
+    clinicType: z.enum(CLINIC_TYPE_OPTIONS).default("practice"),
   });
 
 export type RegistrationStep1 = z.infer<typeof registrationAccountBaseSchema>;
@@ -75,7 +78,6 @@ export type RegistrationStep2 = z.infer<typeof registrationStep2Schema>;
 export type RegistrationStep3 = z.infer<typeof registrationStep3Schema>;
 export type ClinicRegistrationData = z.infer<typeof clinicRegistrationSchema>;
 
-/** Client → server payload (password optional for OAuth users). */
 export type ClinicRegistrationSubmit = Omit<
   ClinicRegistrationData,
   "password" | "specialty" | "doctorCountBand"
@@ -92,7 +94,6 @@ export type PendingRegistration = Omit<RegistrationStep1, "password" | "confirmP
     logoPreview?: string;
   };
 
-/** OAuth users skip password fields on step 1. */
 export const registrationStep1OAuthSchema = registrationAccountBaseSchema.omit({
   password: true,
   confirmPassword: true,
