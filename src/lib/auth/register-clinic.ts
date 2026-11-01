@@ -25,7 +25,6 @@ export type RegisterClinicResult =
       tenantSlug: string;
       authUserId: string;
       redirectUrl: "/dashboard";
-      /** True when the credentials sign-in gate will block this account until it verifies its email. */
       requiresEmailVerification: boolean;
     }
   | { success: false; error: string; field?: string };
@@ -60,11 +59,7 @@ export async function sendEmailVerification(email: string) {
   await sendMail({
     to: email,
     subject: "Verify your DentaFlow email address",
-    text: `Please verify your email address by clicking the link below:
-
-${baseUrl}/verify-email?token=${verificationToken}
-
-This link expires in 24 hours.`,
+    text: `Please verify your email address by clicking the link below:\n\n${baseUrl}/verify-email?token=${verificationToken}\n\nThis link expires in 24 hours.`,
   }).catch((err) => console.error("[mail:verify]", err));
 }
 
@@ -72,6 +67,7 @@ async function notifySuperAdminsOfRegistration(params: {
   clinicName: string;
   ownerName: string;
   email: string;
+  clinicType?: string;
 }) {
   const superAdmins = await db.auth_users.findMany({
     where: { isSuperAdmin: true },
@@ -88,14 +84,7 @@ async function notifySuperAdminsOfRegistration(params: {
     await sendMail({
       to: admin.email,
       subject: `New clinic registered: ${params.clinicName}`,
-      text: `A new clinic has registered on DentaFlow.
-
-Clinic: ${params.clinicName}
-Owner: ${params.ownerName} (${params.email})
-Plan: STARTER (14-day trial)
-Registered: ${new Date().toLocaleString()}
-
-Review at: ${baseUrl}/superadmin/tenants`,
+      text: `A new clinic has registered on DentaFlow.\n\nClinic: ${params.clinicName}\nType: ${params.clinicType ?? "practice"}\nOwner: ${params.ownerName} (${params.email})\nPlan: STARTER (14-day trial)\nRegistered: ${new Date().toLocaleString()}\n\nReview at: ${baseUrl}/superadmin/tenants`,
     }).catch(() => null);
   }
 }
@@ -114,6 +103,8 @@ async function finalizeClinicSetup(
       ? (tenant.metadata as Record<string, unknown>)
       : {};
 
+  const clinicType = input.clinicType === "solo" ? "solo" : "practice";
+
   const updatedTenant = await db.tenant.update({
     where: { id: tenantId },
     data: {
@@ -125,6 +116,7 @@ async function finalizeClinicSetup(
       country: input.country,
       timezone: input.timezone,
       logoUrl: input.logoUrl || undefined,
+      clinicType,
       subscriptionPlan: SubscriptionPlan.STARTER,
       subscriptionStatus: trialFields.subscriptionStatus,
       trialEndsAt: trialFields.trialEndsAt,
@@ -136,6 +128,7 @@ async function finalizeClinicSetup(
         expectedMonthlyPatients: input.expectedMonthlyPatients,
         referralSource: input.referralSource,
         doctorCount: input.doctorCount,
+        clinicType,
         addressLine1: input.addressLine1,
         addressLine2: input.addressLine2,
         state: input.state,
@@ -278,6 +271,7 @@ async function registerClinicNextAuth(
       clinicName: input.clinicName,
       ownerName,
       email,
+      clinicType: input.clinicType,
     });
 
     return {
@@ -363,6 +357,7 @@ export async function registerClinic(data: ClinicRegistrationSubmit): Promise<Re
     doctorCount: data.doctorCount ?? doctorCountFromBand(data.doctorCountBand),
     addressLine1: data.addressLine1?.trim() || "Address pending",
     city: data.city?.trim() || "City pending",
+    clinicType: data.clinicType === "solo" ? "solo" : "practice",
   };
 
   const parsed = clinicRegistrationServerSchema.safeParse(normalized);
