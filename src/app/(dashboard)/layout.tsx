@@ -12,6 +12,7 @@ import {
 import { isHrModuleEnabled } from "@/lib/hr/feature-flag";
 import { db } from "@/lib/db";
 import { isEncounterSpineEnabled } from "@/lib/encounter/feature-flag";
+import { isSoloClinic } from "@/lib/clinic-type";
 
 export default async function DashboardLayout({
   children,
@@ -38,6 +39,14 @@ export default async function DashboardLayout({
 
   if (!ctx.staffMember) {
     redirect(ACCOUNT_SETUP_INCOMPLETE_PATH);
+  }
+
+  const clinicType =
+    (ctx.tenant as { clinicType?: string | null }).clinicType ??
+    (ctx.tenant as { clinicMode?: string | null }).clinicMode;
+
+  if (isSoloClinic(clinicType)) {
+    redirect("/solo");
   }
 
   const userRole = requireStaffMemberRole(ctx);
@@ -80,7 +89,7 @@ export default async function DashboardLayout({
       showHrSelfService={showHrSelfService}
       showHrNav={isHrModuleEnabled(ctx.tenant)}
       spineEnabled={spineEnabled}
-      clinicMode={ctx.tenant.clinicMode ?? null}
+      clinicMode={clinicType ?? null}
     >
       {children}
     </DashboardShell>
