@@ -4,7 +4,7 @@ import { encounterWorkspacePath } from "@/lib/clinical/encounter-url";
 import type { UserRole } from "@prisma/client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, ChevronRight } from "lucide-react";
+import { Calendar, ChevronRight, Plus } from "lucide-react";
 import { AppointmentDrawer } from "@/components/appointments/appointment-drawer";
 
 type Appointment = {
@@ -145,13 +145,22 @@ export default function DoctorDashboardClient({
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">Today&apos;s Schedule</h2>
-          <button
-            onClick={() => router.push("/appointments")}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
-          >
-            Full calendar
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/appointments/book")}
+              className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Book Appointment
+            </button>
+            <button
+              onClick={() => router.push("/appointments")}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+            >
+              Full calendar
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {appointments.length === 0 ? (
@@ -161,6 +170,13 @@ export default function DoctorDashboardClient({
             <p className="mt-1 text-sm">
               Enjoy your free day or check the calendar
             </p>
+            <button
+              onClick={() => router.push("/appointments/book")}
+              className="mt-4 inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Book Appointment
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
