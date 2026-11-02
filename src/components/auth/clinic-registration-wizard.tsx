@@ -95,6 +95,8 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
 
   const watchedCountry = step2Form.watch("country");
   const watchedPassword = step1Form.watch("password");
+  const watchedClinicType = step2Form.watch("clinicType");
+  const isSolo = watchedClinicType === "solo";
   const countryMeta = useMemo(() => getCountryByCode(watchedCountry), [watchedCountry]);
   const countryProfile = useMemo(
     () => getCountryProfile(watchedCountry || "AE"),
@@ -116,6 +118,13 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
     const suggested = normalizeSecondaryLanguage(countryProfile.secondaryLanguage) ?? "";
     step2Form.setValue("secondaryLanguage", suggested);
   }, [countryProfile, step2Form]);
+
+  useEffect(() => {
+    if (isSolo) {
+      step2Form.setValue("doctorCountBand", "1");
+      step2Form.setValue("doctorCount", 1);
+    }
+  }, [isSolo, step2Form]);
 
   useEffect(() => {
     if (!authLoaded || !userLoaded) return;
@@ -157,6 +166,8 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
     setSubmitting(true);
     try {
       const step1 = step1Form.getValues();
+      const doctorCountBand = data.clinicType === "solo" ? "1" : data.doctorCountBand;
+      const doctorCount = data.clinicType === "solo" ? 1 : data.doctorCount;
       const result = await registerClinicAction({
         firstName: step1.firstName,
         lastName: step1.lastName,
@@ -169,9 +180,9 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
         timezone: data.timezone,
         currency: data.currency,
         specialty: data.specialty,
-        doctorCountBand: data.doctorCountBand,
+        doctorCountBand,
         chairCount: data.chairCount,
-        doctorCount: data.doctorCount,
+        doctorCount,
         secondaryLanguage: data.secondaryLanguage || undefined,
         specialties: data.specialty ? [data.specialty] : ["General Dentistry"],
         expectedMonthlyPatients: "1-50",
@@ -314,8 +325,14 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
           </div>
 
           <ClinicTypeSelector
-            value={step2Form.watch("clinicType") ?? "practice"}
-            onChange={(value) => step2Form.setValue("clinicType", value)}
+            value={watchedClinicType ?? "practice"}
+            onChange={(value) => {
+              step2Form.setValue("clinicType", value);
+              if (value === "solo") {
+                step2Form.setValue("doctorCountBand", "1");
+                step2Form.setValue("doctorCount", 1);
+              }
+            }}
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -355,12 +372,20 @@ export function ClinicRegistrationWizard({ initialStep = 1 }: Props) {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="doctorCountBand">Number of dentists (optional)</Label>
-              <select id="doctorCountBand" className={selectClass} {...step2Form.register("doctorCountBand")}>
+              <Label htmlFor="doctorCountBand">Number of dentists</Label>
+              <select
+                id="doctorCountBand"
+                className={cn(selectClass, isSolo && "cursor-not-allowed opacity-60")}
+                {...step2Form.register("doctorCountBand")}
+                disabled={isSolo}
+              >
                 {DOCTOR_COUNT_OPTIONS.map((option) => (
-                  <option key={option} value={option} className="bg-zinc-900">{option}</option>
+                  <option key={option} value={option} className="bg-zinc-900" disabled={isSolo && option !== "1"}>{option}</option>
                 ))}
               </select>
+              {isSolo && (
+                <p className="text-xs text-zinc-500">Solo Doctor clinics are limited to 1 dentist.</p>
+              )}
             </div>
           </div>
 
