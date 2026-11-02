@@ -40,13 +40,7 @@ export const registrationStep2Schema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
-}).refine(
-  (data) => data.clinicType !== "solo" || (data.doctorCountBand ?? "1") === "1",
-  {
-    message: "Solo Doctor clinics are limited to 1 dentist",
-    path: ["doctorCountBand"],
-  },
-);
+});
 
 export const registrationStep3Schema = z.object({
   taxId: z.string().optional(),
