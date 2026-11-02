@@ -1,12 +1,7 @@
-// Add this field to the Tenant model (near the top of the model):
-// clinicMode String @default("group") // "solo" | "practice" | "group"
+generator client {
+  provider = "prisma-client-js"
+}
 
-<<<<<<< Updated upstream
-// Full schema is large; the only change required is:
-// In model Tenant { ... }
-// Add:
-  clinicMode           String                  @default("group")
-=======
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -33,7 +28,6 @@ model Tenant {
   deletedAt            DateTime?
   status               TenantStatus            @default(PENDING)
   clinicType           String                  @default("practice") // "solo" | "practice" | "group"
-  clinicMode           String                  @default("group")
   locale               String                  @default("en")
   featureFlags         Json?
   metadata             Json?
@@ -2892,4 +2886,3 @@ model LeaveRequest {
   @@index([tenantId, status])
   @@index([tenantId, leaveTypeId])
 }
->>>>>>> Stashed changes
