@@ -76,14 +76,7 @@ export const clinicRegistrationServerSchema = clinicRegistrationSchema
     phone: z.string().min(1).default(""),
     clinicType: z.enum(CLINIC_TYPE_OPTIONS).default("practice"),
     doctorCount: z.coerce.number().int().min(1).max(100).default(1),
-  })
-  .refine(
-    (data) => data.clinicType !== "solo" || data.doctorCount <= 1,
-    {
-      message: "Solo Doctor clinics are limited to 1 dentist",
-      path: ["doctorCount"],
-    },
-  );
+  });
 
 export type RegistrationStep1 = z.infer<typeof registrationAccountBaseSchema>;
 export type RegistrationStep2 = z.infer<typeof registrationStep2Schema>;
