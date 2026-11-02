@@ -382,7 +382,7 @@ export async function registerClinic(data: ClinicRegistrationSubmit): Promise<Re
     };
   }
 
-  const input = parsed.data;
+  const input = parsed.data as ClinicRegistrationSubmit;
   const session = await getServerAuthSession();
   const userId = session?.user?.id ?? null;
 
