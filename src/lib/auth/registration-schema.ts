@@ -3,7 +3,6 @@ import { z } from "zod";
 export const CLINIC_TYPE_OPTIONS = ["solo", "practice"] as const;
 export type ClinicTypeOption = (typeof CLINIC_TYPE_OPTIONS)[number];
 
-/** Base account fields — plain ZodObject so .omit() / .merge() work. */
 export const registrationAccountBaseSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -17,7 +16,6 @@ export const registrationAccountBaseSchema = z.object({
   confirmPassword: z.string(),
 });
 
-/** Step 1 form schema with password confirmation check. */
 export const registrationStep1Schema = registrationAccountBaseSchema.refine(
   (data) => data.password === data.confirmPassword,
   { message: "Passwords do not match", path: ["confirmPassword"] },
@@ -42,7 +40,13 @@ export const registrationStep2Schema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
-});
+}).refine(
+  (data) => data.clinicType !== "solo" || (data.doctorCountBand ?? "1") === "1",
+  {
+    message: "Solo Doctor clinics are limited to 1 dentist",
+    path: ["doctorCountBand"],
+  },
+);
 
 export const registrationStep3Schema = z.object({
   taxId: z.string().optional(),
@@ -71,7 +75,15 @@ export const clinicRegistrationServerSchema = clinicRegistrationSchema
     city: z.string().default(""),
     phone: z.string().min(1).default(""),
     clinicType: z.enum(CLINIC_TYPE_OPTIONS).default("practice"),
-  });
+    doctorCount: z.coerce.number().int().min(1).max(100).default(1),
+  })
+  .refine(
+    (data) => data.clinicType !== "solo" || data.doctorCount <= 1,
+    {
+      message: "Solo Doctor clinics are limited to 1 dentist",
+      path: ["doctorCount"],
+    },
+  );
 
 export type RegistrationStep1 = z.infer<typeof registrationAccountBaseSchema>;
 export type RegistrationStep2 = z.infer<typeof registrationStep2Schema>;

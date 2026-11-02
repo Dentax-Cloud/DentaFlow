@@ -43,6 +43,12 @@ export function ClinicTypeSelector({ value, onChange }: Props) {
           </p>
         </button>
       </div>
+
+      {value === "solo" && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          Solo Doctor clinics are limited to <strong>1 dentist</strong>. The number of dentists will be set to 1.
+        </div>
+      )}
     </div>
   );
 }
